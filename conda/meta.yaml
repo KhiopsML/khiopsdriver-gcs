@@ -1,0 +1,34 @@
+package:
+  name: khiops-driver-gcs
+  version: 0.0.1
+
+source:
+  path: ../
+
+build:
+  number: 0
+requirements:
+  build:
+    - cmake
+    - ninja
+    - {{ compiler('cxx') }}
+  host:
+    - google-cloud-cpp
+    - spdlog
+  run:
+    - google-cloud-cpp
+    - spdlog
+
+outputs:
+  - name: khiops-driver-gcs
+    # test:
+    #   commands:
+    #     - MODL -v
+    #     - MODL_Coclustering -v
+
+about:
+  home: https://khiops.org
+  license: BSD+3-clause
+  summary: Khiops driver to access files on Google Cloud Storage
+  doc_url: https://khiops.org
+  dev_url: https://github.com/khiopsml/khiops

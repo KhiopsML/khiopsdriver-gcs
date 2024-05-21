@@ -14,18 +14,22 @@ set (CMAKE_CXX_STANDARD 17)
 
 project(khiops-gcs LANGUAGES CXX)
 
-# Find dependencies provided by vcpkg (via vcpkg.cmake)
+# Find dependencies
 find_package(fmt CONFIG REQUIRED)
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 
+# Hide symbols in the shared libraries
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+
 add_library(khiopsdriver_file_gcs MODULE src/gcsplugin.h src/gcsplugin.cpp)
-set_target_properties(khiopsdriver_file_gcs PROPERTIES LINK_FLAGS_RELEASE -s)
+target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
 add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
 target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
 
 add_executable(drivertest src/drivertest.cpp)
-target_link_libraries(drivertest)
+target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
 
