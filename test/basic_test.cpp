@@ -2,46 +2,31 @@
 
 #include <iostream>
 
-#include "../src/plugin_handler.h"
+#include "../src/gcsplugin.h"
 
-using namespace plgh;
 
-TEST(PluginHandleSimpleTest, Ctor)
+
+TEST(GCSDriverTest, GetDriverName)
 {
-	const PluginHandle gcs_handle{ "D:\\Users\\cedric.lecam\\dev\\khiopsdriver-gcs\\builds\\ninja-multi-vcpkg\\test\\Debug\\khiopsdriver_file_gcs.dll" };
-	ASSERT_TRUE(gcs_handle.IsValid());
+	ASSERT_STREQ(driver_getDriverName(), "GCS driver");
 }
 
-class PluginHandleTest : public testing::Test
+TEST(GCSDriverTest, GetVersion)
 {
-protected:
-	PluginHandleTest()
-		: gcs_handle_{ driver_path_ }
-	{}
-
-	void SetUp() override
-	{
-		ASSERT_TRUE(gcs_handle_.IsValid());
-	}
-
-	static constexpr char* driver_path_{ "D:\\Users\\cedric.lecam\\dev\\khiopsdriver-gcs\\builds\\ninja-multi-vcpkg\\test\\Debug\\khiopsdriver_file_gcs.dll" };
-	PluginHandle gcs_handle_;
-};
-
-TEST_F(PluginHandleTest, GetDriverName)
-{
-	ASSERT_STREQ(gcs_handle_.ptr_driver_getDriverName(), "GCS driver");
+	ASSERT_STREQ(driver_getVersion(), "0.1.0");
 }
 
-TEST_F(PluginHandleTest, GetVersion)
+TEST(GCSDriverTest, GetScheme)
 {
-	ASSERT_STREQ(gcs_handle_.ptr_driver_getVersion(), "0.1.0");
+	ASSERT_STREQ(driver_getScheme(), "gs");
 }
 
-TEST_F(PluginHandleTest, GetScheme)
+TEST(GCSDriverTest, IsReadOnly)
 {
-	ASSERT_STREQ(gcs_handle_.ptr_driver_getScheme(), "gs");
+	ASSERT_FALSE(driver_isReadOnly());
 }
+
+
 
 int main(int argc, char** argv)
 {

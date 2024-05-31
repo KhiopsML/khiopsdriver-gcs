@@ -27,6 +27,10 @@ add_library(khiopsdriver_file_gcs MODULE src/gcsplugin.h src/gcsplugin.cpp)
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
+add_library(khiopsdriver_file_gcs_test SHARED src/gcsplugin.h src/gcsplugin.cpp)
+set_target_properties(khiopsdriver_file_gcs_test PROPERTIES LINK_FLAGS_RELEASE -s)
+target_link_libraries(khiopsdriver_file_gcs_test PRIVATE google-cloud-cpp::storage spdlog::spdlog)
+
 add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
 target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
 
