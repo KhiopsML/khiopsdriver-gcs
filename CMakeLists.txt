@@ -54,8 +54,6 @@ target_compile_options(khiopsdriver_file_gcs
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 
-add_subdirectory(test)
-
 option(BUILD_TESTS "Build test programs" OFF)
 
 if(BUILD_TESTS)
