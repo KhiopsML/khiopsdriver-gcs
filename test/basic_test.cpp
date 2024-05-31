@@ -38,8 +38,5 @@ int main(int argc, char** argv)
 		std::cout << argv[i] << '\n';
 	}
 
-	auto arg1 = argv[1];
-	std::cout << arg1 << '\n';
-
 	return RUN_ALL_TESTS();
 }
