@@ -9,8 +9,8 @@ if(DEFINED ENV{VCPKG_DEFAULT_TRIPLET} AND NOT DEFINED VCPKG_TARGET_TRIPLET)
 endif()
 
 cmake_minimum_required(VERSION 3.20)
-# Enforce c++17 standard.
-set (CMAKE_CXX_STANDARD 17)
+# Enforce c++14 standard.
+set (CMAKE_CXX_STANDARD 14)
 
 project(khiops-gcs LANGUAGES CXX)
 
@@ -32,4 +32,6 @@ target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
 
 add_executable(drivertest src/drivertest.cpp)
 target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
+
+include(generate_tests.cmake)
 
