@@ -112,6 +112,13 @@ jobs:
         run: |
           cmake --build --preset ninja-vcpkg-release
 
+      # Retrieve google credentials through WIF
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: 'google-github-actions/auth@v2'
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
+
       # Test the whole project with CTest, again Release configuration only.
       - name: Test (Release configuration)
         run: |
