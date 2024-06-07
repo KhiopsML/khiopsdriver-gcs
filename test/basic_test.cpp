@@ -26,6 +26,27 @@ TEST(GCSDriverTest, IsReadOnly)
 	ASSERT_FALSE(driver_isReadOnly());
 }
 
+TEST(GCSDriverTest, Connect)
+{
+	//check connection state before call to connect
+	ASSERT_FALSE(driver_isConnected());
+
+	//call connect and check connection
+	ASSERT_FALSE(driver_connect());
+	ASSERT_TRUE(driver_isConnected());
+
+	//call disconnect and check connection
+	ASSERT_FALSE(driver_disconnect());
+	ASSERT_FALSE(driver_isConnected());
+}
+
+TEST(GCSDriverTest, Disconnect)
+{
+	ASSERT_FALSE(driver_connect());
+	ASSERT_FALSE(driver_disconnect());
+	ASSERT_FALSE(driver_isConnected());
+}
+
 
 
 int main(int argc, char** argv)
