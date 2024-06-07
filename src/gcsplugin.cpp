@@ -115,11 +115,40 @@ void FallbackToDefaultBucket(std::string& bucket_name) {
     spdlog::critical("No bucket specified, and GCS_BUCKET_NAME is not set!");
 }
 
+std::string ToLower(const std::string& str)
+{
+    std::string low{ str };
+    const size_t cnt = low.length();
+    for (size_t i = 0; i < cnt; i++)
+    {
+        low[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(low[i]))); // see https://en.cppreference.com/w/cpp/string/byte/tolower
+    }
+    return low;
+}
+
 std::string GetEnvironmentVariableOrDefault(const std::string& variable_name, 
                                             const std::string& default_value)
 {
-    const char* value = getenv(variable_name.c_str());
-    return value ? value : default_value;
+    char* value = getenv(variable_name.c_str());
+
+    if (value && std::strlen(value) > 0)
+    {
+        return value;
+    }
+
+    const std::string low_key = ToLower(variable_name);
+    if (low_key.find("token") || low_key.find("password") || low_key.find("key") || low_key.find("secret"))
+    {
+        spdlog::debug("No {} specified, using **REDACTED** as default.", variable_name);
+    }
+    else
+    {
+        spdlog::debug("No {} specified, using '{}' as default.", variable_name, default_value);
+    }
+
+    return default_value;
+}
+
 }
 
 // Implementation of driver functions
@@ -146,7 +175,7 @@ int driver_isReadOnly()
 
 int driver_connect()
 {
-    auto loglevel = GetEnvironmentVariableOrDefault("GCS_DRIVER_LOGLEVEL", "info");
+    const std::string loglevel = GetEnvironmentVariableOrDefault("GCS_DRIVER_LOGLEVEL", "info");
     if (loglevel == "debug")
         spdlog::set_level(spdlog::level::debug);
     else if (loglevel == "trace")
@@ -159,27 +188,40 @@ int driver_connect()
 	// Initialize variables from environment
     globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
 
-    namespace gcs = google::cloud::storage;
-    auto client_response = gcs::Client::CreateDefaultClient();
+    gc::Options options{};
 
-    if (!client_response) {
-        spdlog::error("Failed to create Storage Client: {}", (int)(client_response.status().code()), client_response.status().message());
-        return false;
+    // Add project ID if defined
+    std::string project = GetEnvironmentVariableOrDefault("CLOUD_ML_PROJECT_ID", "");
+    if (!project.empty())
+    {
+        options.set<gc::QuotaUserOption>(std::move(project));
     }
-    client = client_response.value();
+
+    std::string gcp_token_filename = GetEnvironmentVariableOrDefault("GCP_TOKEN", "");
+    //if (!gcp_token_filename.empty())
+    //{
+    //    // Initialize from token file
+    //    client = 
+    //}
+    //else
+    {
+        // Fallback to standard credentials discovery
+        client = gcs::Client{ std::move(options) };
+    }
+
     bIsConnected = true;
-	return true;
+	return kSuccess;
 }
 
 int driver_disconnect()
 {
-	int nRet = 0;
-	return nRet == 0;
+    bIsConnected = false;
+    return kSuccess;
 }
 
 int driver_isConnected()
 {
-	return bIsConnected;
+	return bIsConnected ? 1 : 0;
 }
 
 long long int driver_getSystemPreferredBufferSize()
