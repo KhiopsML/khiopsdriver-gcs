@@ -37,6 +37,9 @@ jobs:
             triplet: x64-osx
           - os: macos-14
             triplet: arm64-osx
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     env:
       # Indicates the location of the vcpkg as a Git submodule of the project repository.
       # Not using "VCPKG_ROOT" because a variable with the same name is defined in the VS's

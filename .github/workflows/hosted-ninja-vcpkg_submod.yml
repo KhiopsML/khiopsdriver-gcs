@@ -41,6 +41,9 @@ jobs:
             triplet: x64-osx
           - os: macos-14
             triplet: arm64-osx
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     env:
     #
     # [OPTIONAL] Define the vcpkg's triplet 
