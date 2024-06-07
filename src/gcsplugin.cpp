@@ -9,16 +9,26 @@
 #include <fstream>
 #include <iostream>
 
-static const char* version = "0.1.0";
-static const char* driver_name = "GCS driver";
-static const char* driver_scheme = "gs";
+constexpr char* version = "0.1.0";
+constexpr char* driver_name = "GCS driver";
+constexpr char* driver_scheme = "gs";
+constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
-int bIsConnected = false;
-google::cloud::storage::Client client;
+bool bIsConnected = false;
+
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+gcs::Client client;
 // Global bucket name
-std::string globalBucketName = "";
+std::string globalBucketName;
 
-typedef long long int tOffset;
+using tOffset = long long;
+
+constexpr int kSuccess{ 0 };
+constexpr int kFailure{ 1 };
+
+constexpr int kFalse{ 0 };
+constexpr int kTrue{ 1 };
 
 struct MultiPartFile
 {
@@ -174,7 +184,7 @@ int driver_isConnected()
 
 long long int driver_getSystemPreferredBufferSize()
 {
-	return 4 * 1024 * 1024; // 4 Mo
+	return preferred_buffer_size; // 4 Mo
 }
 
 int driver_exist(const char *filename)
