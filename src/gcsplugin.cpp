@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <google/cloud/rest_options.h>
 
 constexpr char* version = "0.1.0";
 constexpr char* driver_name = "GCS driver";
