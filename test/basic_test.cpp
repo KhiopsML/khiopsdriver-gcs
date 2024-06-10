@@ -47,6 +47,13 @@ TEST(GCSDriverTest, Disconnect)
 	ASSERT_FALSE(driver_isConnected());
 }
 
+TEST(GCSDriverTest, GetFileSize)
+{
+	ASSERT_FALSE(driver_connect());
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), 5585568);
+	ASSERT_FALSE(driver_disconnect());
+}
+
 
 
 int main(int argc, char** argv)
