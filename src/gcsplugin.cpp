@@ -11,9 +11,9 @@
 #include <iostream>
 #include <google/cloud/rest_options.h>
 
-constexpr char* version = "0.1.0";
-constexpr char* driver_name = "GCS driver";
-constexpr char* driver_scheme = "gs";
+constexpr const char* version = "0.1.0";
+constexpr const char* driver_name = "GCS driver";
+constexpr const char* driver_scheme = "gs";
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
 bool bIsConnected = false;
@@ -90,7 +90,7 @@ bool UploadBufferToGcs(const std::string& bucket_name,
 
 bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name)
 {
-    constexpr char* prefix{ "gs://" };
+    constexpr const char* prefix{ "gs://" };
     const size_t prefix_size{ std::strlen(prefix) };
     //const size_t prefix_size{prefix.}
     if (gcs_uri.compare(0, prefix_size, prefix) != 0) {
