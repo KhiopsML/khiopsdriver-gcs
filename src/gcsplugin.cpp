@@ -398,7 +398,7 @@ void *driver_fopen(const char *filename, char mode)
                 // determine if header is repeated
             } else {
                 h->filenames.push_back(object_name);
-                long long int fileSize = getFileSize(bucket_name, object_name);
+                long long int fileSize = GetFileSize(bucket_name, object_name);
                 h->cumulativeSize.push_back(fileSize);
             }
             return h;
