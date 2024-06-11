@@ -4,6 +4,7 @@
 
 #include "gcsplugin.h"
 #include "google/cloud/storage/client.h"
+#include "google/cloud/rest_options.h"
 #include "spdlog/spdlog.h"
 #include <assert.h>
 #include <fstream>
