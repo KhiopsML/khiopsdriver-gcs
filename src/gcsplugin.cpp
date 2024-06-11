@@ -289,27 +289,89 @@ int driver_dirExists(const char *sFilePathName)
     return kTrue;
 }
 
-long long int getFileSize(std::string bucket_name, std::string object_name) {
-    auto object_metadata = client.GetObjectMetadata(bucket_name, object_name);
-    if (object_metadata) {
-        return object_metadata->size();
-    } else if (object_metadata.status().code() == google::cloud::StatusCode::kNotFound) {
-        return -1; // L'objet n'existe pas
-    } else {
-        spdlog::error("Error checking object: {}", object_metadata.status().message());
-        return -1; // Une erreur s'est produite lors de la vérification
+std::string ReadHeader(const std::string& bucket_name, const std::string& filename)
+{
+    gcs::ObjectReadStream stream = client.ReadObject(bucket_name, filename);
+    std::string line;
+    std::getline(stream, line, '\n');
+    if (stream.bad())
+    {
+        return "";
     }
+    return line;
+}
+
+
+long long GetFileSize(const std::string &bucket_name, const std::string &object_name)
+{
+    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
+    auto list_it = list.begin();
+    const auto list_end = list.end();
+
+    if (list_end == list_it)
+    {
+        //no file, or not a file
+        return -1;
+    }
+
+    const auto object_metadata = std::move(*list_it);
+    if (!object_metadata)
+    {
+        //unusable data
+        return -1;
+    }
+
+    long long total_size = static_cast<long long>(object_metadata->size());
+    
+    list_it++;
+    if (list_end == list_it)
+    {
+        //unique file
+        return total_size;
+    }
+   
+    // multifile
+    // check headers
+    const std::string header = ReadHeader(bucket_name, object_metadata->name());
+    const long long header_size = static_cast<long long>(header.size());
+    int header_to_subtract{ 0 };
+    bool same_header{ true };
+
+    for (; list_it != list.end(); list_it++)
+    {
+        if (same_header)
+        {
+            const std::string curr_header = ReadHeader(bucket_name, (*list_it)->name());
+            same_header = (header == curr_header);
+            if (same_header)
+            {
+                header_to_subtract++;
+            }
+        }
+        total_size += static_cast<long long>((*list_it)->size());
+    }
+
+    if (!same_header)
+    {
+        header_to_subtract = 0;
+    }
+    return total_size - header_to_subtract * header_size;
 }
 
 long long int driver_getFileSize(const char *filename)
 {
     spdlog::debug("getFileSize {}", filename);
 
-    std::string bucket_name, object_name;
-    ParseGcsUri(filename, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);
+    std::string bucket_name;
+    std::string object_name;
+    GetBucketAndObjectNames(filename, bucket_name, object_name);
 
-    return getFileSize(bucket_name, object_name);
+    if (bucket_name.empty() || object_name.empty())
+    {
+        return -1;
+    }
+
+    return GetFileSize(bucket_name, object_name);
 }
 
 void *driver_fopen(const char *filename, char mode)
