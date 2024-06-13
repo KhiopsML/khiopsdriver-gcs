@@ -9,48 +9,48 @@ constexpr int kSuccess{ 0 };
 constexpr int kFailure{ 1 };
 
 constexpr int kFalse{ 0 };
-constexpr int kTrue{ 0 };
+constexpr int kTrue{ 1 };
 
 
 TEST(GCSDriverTest, GetDriverName)
 {
-	ASSERT_STREQ(driver_getDriverName(), "GCS driver");
+    ASSERT_STREQ(driver_getDriverName(), "GCS driver");
 }
 
 TEST(GCSDriverTest, GetVersion)
 {
-	ASSERT_STREQ(driver_getVersion(), "0.1.0");
+    ASSERT_STREQ(driver_getVersion(), "0.1.0");
 }
 
 TEST(GCSDriverTest, GetScheme)
 {
-	ASSERT_STREQ(driver_getScheme(), "gs");
+    ASSERT_STREQ(driver_getScheme(), "gs");
 }
 
 TEST(GCSDriverTest, IsReadOnly)
 {
-	ASSERT_EQ(driver_isReadOnly(), kTrue);
+    ASSERT_EQ(driver_isReadOnly(), kTrue);
 }
 
 TEST(GCSDriverTest, Connect)
 {
-	//check connection state before call to connect
-	ASSERT_EQ(driver_isConnected(), kFalse);
+    //check connection state before call to connect
+    ASSERT_EQ(driver_isConnected(), kFalse);
 
-	//call connect and check connection
-	ASSERT_EQ(driver_connect(), kSuccess);
-	ASSERT_EQ(driver_isConnected(), kTrue);
+    //call connect and check connection
+    ASSERT_EQ(driver_connect(), kSuccess);
+    ASSERT_EQ(driver_isConnected(), kTrue);
 
-	//call disconnect and check connection
-	ASSERT_EQ(driver_disconnect(), kSuccess);
-	ASSERT_EQ(driver_isConnected(), kFalse);
+    //call disconnect and check connection
+    ASSERT_EQ(driver_disconnect(), kSuccess);
+    ASSERT_EQ(driver_isConnected(), kFalse);
 }
 
 TEST(GCSDriverTest, Disconnect)
 {
-	ASSERT_EQ(driver_connect(), kSuccess);
-	ASSERT_EQ(driver_disconnect(), kSuccess);
-	ASSERT_EQ(driver_isConnected(), kFalse);
+    ASSERT_EQ(driver_connect(), kSuccess);
+    ASSERT_EQ(driver_disconnect(), kSuccess);
+    ASSERT_EQ(driver_isConnected(), kFalse);
 }
 
 TEST(GCSDriverTest, GetMultipartFileSize)
@@ -73,10 +73,10 @@ constexpr const char* test_glob_file_header_each = "gs://data-test-khiops-driver
 constexpr const char* test_double_glob_header_each = "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult_subsplit/**/Adult-split-*.txt";
 
 constexpr std::array<const char*, 4> test_files = {
-	test_single_file,
-	test_range_file_one_header,
-	test_glob_file_header_each,
-	test_double_glob_header_each
+    test_single_file,
+    test_range_file_one_header,
+    test_glob_file_header_each,
+    test_double_glob_header_each
 };
 
 
@@ -89,49 +89,49 @@ class GCSDriverTestFixture : public ::testing::Test
 
 class GCSDriverTestFixture : public ::testing::Test {
 public:
-	static void SetUpTestSuite()
-	{
-		ASSERT_EQ(driver_connect(), kSuccess);
-	}
+    static void SetUpTestSuite()
+    {
+        ASSERT_EQ(driver_connect(), kSuccess);
+    }
 
-	static void TearDownTestSuite()
-	{
-		ASSERT_EQ(driver_disconnect(), kSuccess);
-	}
+    static void TearDownTestSuite()
+    {
+        ASSERT_EQ(driver_disconnect(), kSuccess);
+    }
 };
 
 TEST_F(GCSDriverTestFixture, FileExists)
 {
-	for (const char* file : test_files)
-	{
-		ASSERT_EQ(driver_fileExists(file), kTrue);
-	}
-	
-	ASSERT_EQ(driver_fileExists(test_dir_name), kFalse);
+    for (const char* file : test_files)
+    {
+        ASSERT_EQ(driver_fileExists(file), kTrue);
+    }
 
-	ASSERT_EQ(driver_fileExists(nullptr), kFalse);
+    ASSERT_EQ(driver_fileExists(test_dir_name), kFalse);
+
+    ASSERT_EQ(driver_fileExists(nullptr), kFalse);
 }
 
 TEST_F(GCSDriverTestFixture, DirExists)
 {
-	ASSERT_EQ(driver_dirExists("any_name"), kTrue);
+    ASSERT_EQ(driver_dirExists("any_name"), kTrue);
 
-	ASSERT_EQ(driver_dirExists(nullptr), kFalse);
+    ASSERT_EQ(driver_dirExists(nullptr), kFalse);
 }
 
 TEST_F(GCSDriverTestFixture, GetFileSize)
 {
-	constexpr std::array<long long, 4> expected_sizes = {
-		5585568,	// samples/Adult/Adult.txt
-		5634411,	// split/Adult/Adult-split-0[0-5].txt
-		5585576,	// bq_export/Adult/*.txt
-		5634411		// split/Adult_subsplit/**/Adult-split-*.txt
-	};
+    constexpr std::array<long long, 4> expected_sizes = {
+        5585568,	// samples/Adult/Adult.txt
+        5634411,	// split/Adult/Adult-split-0[0-5].txt
+        5585576,	// bq_export/Adult/*.txt
+        5634411		// split/Adult_subsplit/**/Adult-split-*.txt
+    };
 
-	for (size_t i = 0; i < test_files.size(); i++)
-	{
-		ASSERT_EQ(driver_getFileSize(test_files[i]), expected_sizes[i]);
-	}
+    for (size_t i = 0; i < test_files.size(); i++)
+    {
+        ASSERT_EQ(driver_getFileSize(test_files[i]), expected_sizes[i]);
+    }
 
 	//multifile _ header line at each file
 	constexpr const char* test_multifile_glob = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/*.txt";
@@ -144,15 +144,18 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
 	ASSERT_EQ(driver_getFileSize(test_doublestar_glob), expected_size_range);
 }
 
-int main(int argc, char** argv)
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose)
 {
-	::testing::InitGoogleTest(&argc, argv);
+    for (const char* file : test_files)
+    {
+        void* stream = driver_fopen(file, 'r');
+        ASSERT_NE(stream, nullptr);
+        ASSERT_EQ(driver_fclose(stream), kSuccess);
+    }
 
-	//check that the arguments are effectively passed from ctest
-	for (int i = 0; i < argc; i++)
-	{
-		std::cout << argv[i] << '\n';
-	}
+    //fail on dir
+    ASSERT_EQ(driver_fopen(test_dir_name, 'r'), nullptr);
 
-	return RUN_ALL_TESTS();
+    //fail close on null ptr
+    ASSERT_EQ(driver_fclose(nullptr), kFailure);
 }
