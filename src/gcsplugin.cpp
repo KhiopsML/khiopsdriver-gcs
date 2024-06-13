@@ -6,9 +6,12 @@
 #include "google/cloud/storage/client.h"
 #include "google/cloud/rest_options.h"
 #include "spdlog/spdlog.h"
+
+#include <algorithm>
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <google/cloud/rest_options.h>
 
 #include <limits.h>
@@ -36,22 +39,23 @@ constexpr int kTrue{ 1 };
 
 struct MultiPartFile
 {
-    std::string bucketname;
-	std::string filename;
-	tOffset offset;
+    std::string bucketname_;
+    std::string filename_;
+    tOffset offset_{ 0 };
     // Added for multifile support
-    tOffset commonHeaderLength;
-    std::vector<std::string> filenames;
-    std::vector<long long int> cumulativeSize;
+    tOffset commonHeaderLength_{ 0 };
+    std::vector<std::string> filenames_;
+    std::vector<long long int> cumulativeSize_;
+    tOffset total_size_{ 0 };
 };
 
 // Definition of helper functions
 long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
-                               const std::string& object_name,
-                               char* buffer,
-                               std::size_t buffer_length,
-                               std::int64_t start_range,
-                               std::int64_t end_range) {
+    const std::string& object_name,
+    char* buffer,
+    //std::size_t buffer_length,
+    std::int64_t start_range,
+    std::int64_t end_range) {
     namespace gcs = google::cloud::storage;
 
     auto reader = client.ReadObject(bucket_name, object_name, gcs::ReadRange(start_range, end_range));
@@ -59,23 +63,23 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
         spdlog::error("Error reading object: {}", reader.status().message());
         return -1;
     }
-    
-    reader.read(buffer, buffer_length);
-    long long int num_read = reader.gcount();
-    spdlog::debug("read = {}", num_read);
 
+    reader.read(buffer, end_range - start_range);
     if (reader.bad()/* || reader.fail()*/) {
         spdlog::error("Error during read: {} {}", (int)(reader.status().code()), reader.status().message());
         return -1;
     }
 
+    long long int num_read = static_cast<long long>(reader.gcount());
+    spdlog::debug("read = {}", num_read);
+
     return num_read;
 }
 
 bool UploadBufferToGcs(const std::string& bucket_name,
-                       const std::string& object_name,
-                       const char* buffer,
-                       std::size_t buffer_size) {
+    const std::string& object_name,
+    const char* buffer,
+    std::size_t buffer_size) {
 
     auto writer = client.WriteObject(bucket_name, object_name);
     writer.write(buffer, buffer_size);
@@ -122,7 +126,7 @@ void FallbackToDefaultBucket(std::string& bucket_name) {
     spdlog::critical("No bucket specified, and GCS_BUCKET_NAME is not set!");
 }
 
-void GetBucketAndObjectNames(const char *sFilePathName, std::string& bucket, std::string& object)
+void GetBucketAndObjectNames(const char* sFilePathName, std::string& bucket, std::string& object)
 {
     ParseGcsUri(sFilePathName, bucket, object);
     FallbackToDefaultBucket(bucket);
@@ -139,8 +143,8 @@ std::string ToLower(const std::string& str)
     return low;
 }
 
-std::string GetEnvironmentVariableOrDefault(const std::string& variable_name, 
-                                            const std::string& default_value)
+std::string GetEnvironmentVariableOrDefault(const std::string& variable_name,
+    const std::string& default_value)
 {
     char* value = getenv(variable_name.c_str());
 
@@ -163,7 +167,7 @@ std::string GetEnvironmentVariableOrDefault(const std::string& variable_name,
 }
 
 
-void HandleNoObjectError(const gc::Status &status)
+void HandleNoObjectError(const gc::Status& status)
 {
     if (status.code() != google::cloud::StatusCode::kNotFound)
     {
@@ -173,24 +177,24 @@ void HandleNoObjectError(const gc::Status &status)
 
 // Implementation of driver functions
 
-const char *driver_getDriverName()
+const char* driver_getDriverName()
 {
-	return driver_name;
+    return driver_name;
 }
 
-const char *driver_getVersion()
+const char* driver_getVersion()
 {
-	return version;
+    return version;
 }
 
-const char *driver_getScheme()
+const char* driver_getScheme()
 {
-	return driver_scheme;
+    return driver_scheme;
 }
 
 int driver_isReadOnly()
 {
-	return 0;
+    return 0;
 }
 
 int driver_connect()
@@ -205,7 +209,7 @@ int driver_connect()
 
     spdlog::debug("Connect {}", loglevel);
 
-	// Initialize variables from environment
+    // Initialize variables from environment
     globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
 
     gc::Options options{};
@@ -230,7 +234,7 @@ int driver_connect()
     }
 
     bIsConnected = true;
-	return kSuccess;
+    return kSuccess;
 }
 
 int driver_disconnect()
@@ -241,16 +245,22 @@ int driver_disconnect()
 
 int driver_isConnected()
 {
-	return bIsConnected ? 1 : 0;
+    return bIsConnected ? 1 : 0;
 }
 
 long long int driver_getSystemPreferredBufferSize()
 {
-	return preferred_buffer_size; // 4 Mo
+    return preferred_buffer_size; // 4 Mo
 }
 
-int driver_exist(const char *filename)
+int driver_exist(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to exist");
+        return kFalse;
+    }
+
     spdlog::debug("exist {}", filename);
 
     std::string file_uri = filename;
@@ -259,13 +269,20 @@ int driver_exist(const char *filename)
 
     if (file_uri.back() == '/') {
         return driver_dirExists(filename);
-    } else {
+    }
+    else {
         return driver_fileExists(filename);
     }
 }
 
-int driver_fileExists(const char *sFilePathName)
+int driver_fileExists(const char* sFilePathName)
 {
+    if (!sFilePathName)
+    {
+        spdlog::error("Error passing null pointer to fileExists.");
+        return kFalse;
+    }
+
     spdlog::debug("fileExist {}", sFilePathName);
 
     std::string bucket_name;
@@ -283,8 +300,14 @@ int driver_fileExists(const char *sFilePathName)
     return kTrue; // L'objet existe
 }
 
-int driver_dirExists(const char *sFilePathName)
+int driver_dirExists(const char* sFilePathName)
 {
+    if (!sFilePathName)
+    {
+        spdlog::error("Error passing null pointer to dirExists");
+        return kFalse;
+    }
+
     spdlog::debug("dirExist {}", sFilePathName);
     return kTrue;
 }
@@ -302,7 +325,7 @@ std::string ReadHeader(const std::string& bucket_name, const std::string& filena
 }
 
 
-long long GetFileSize(const std::string &bucket_name, const std::string &object_name)
+long long GetFileSize(const std::string& bucket_name, const std::string& object_name)
 {
     auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
     auto list_it = list.begin();
@@ -322,14 +345,14 @@ long long GetFileSize(const std::string &bucket_name, const std::string &object_
     }
 
     long long total_size = static_cast<long long>(object_metadata->size());
-    
+
     list_it++;
     if (list_end == list_it)
     {
         //unique file
         return total_size;
     }
-   
+
     // multifile
     // check headers
     const std::string header = ReadHeader(bucket_name, object_metadata->name());
@@ -358,8 +381,14 @@ long long GetFileSize(const std::string &bucket_name, const std::string &object_
     return total_size - header_to_subtract * header_size;
 }
 
-long long int driver_getFileSize(const char *filename)
+long long int driver_getFileSize(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to getFileSize.");
+        return -1;
+    }
+
     spdlog::debug("getFileSize {}", filename);
 
     std::string bucket_name;
@@ -374,153 +403,308 @@ long long int driver_getFileSize(const char *filename)
     return GetFileSize(bucket_name, object_name);
 }
 
-void *driver_fopen(const char *filename, char mode)
+int AccumulateNamesAndSizes(MultiPartFile& h)
 {
+    auto push_back_data = [](MultiPartFile& h, gcs::ListObjectsIterator& list_it) {
+        h.filenames_.push_back(std::move((*list_it)->name()));
+        h.cumulativeSize_.push_back(static_cast<long long>((*list_it)->size()));
+        };
+
+    const std::string& bucket_name{ h.bucketname_ };
+    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ h.filename_ });
+    auto list_it = list.begin();
+    const auto list_end = list.end();
+
+    if (list_end == list_it)
+    {
+        //no file, or not a file
+        return kFailure;
+    }
+
+    if (!(*list_it))
+    {
+        //unusable data
+        return kFailure;
+    }
+
+    push_back_data(h, list_it);
+
+    list_it++;
+    if (list_end == list_it)
+    {
+        //unique file
+        h.total_size_ = h.cumulativeSize_[0];
+        return kSuccess;
+    }
+
+    // multifile
+    // check headers
+    const std::string header = ReadHeader(bucket_name, h.filenames_[0]);
+    const long long header_size = static_cast<long long>(header.size());
+    bool same_header{ true };
+
+    for (; list_it != list.end(); list_it++)
+    {
+        if (!(*list_it))
+        {
+            //unusable data
+            return kFailure;
+        }
+
+        push_back_data(h, list_it);
+        auto last_size_it = h.cumulativeSize_.rbegin();
+        const auto size_before_last_it = last_size_it + 1;
+        *last_size_it += *size_before_last_it;
+
+        if (same_header)
+        {
+            const std::string curr_header = ReadHeader(bucket_name, *(h.filenames_.crbegin()));
+            same_header = (header == curr_header);
+            if (same_header)
+            {
+                *last_size_it -= header_size;
+            }
+        }
+    }
+
+    h.total_size_ = *(h.cumulativeSize_.rbegin());
+
+    return kSuccess;
+}
+
+void* driver_fopen(const char* filename, char mode)
+{
+    assert(driver_isConnected());
+
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to fopen.");
+        return nullptr;
+    }
+
     spdlog::debug("fopen {} {}", filename, mode);
 
-    std::string bucket_name, object_name;
-    ParseGcsUri(filename, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);
-	assert(driver_isConnected());
-
     auto h = new MultiPartFile;
-    h->bucketname = bucket_name;
-    h->filename = object_name;
-    h->offset = 0;
+    GetBucketAndObjectNames(filename, h->bucketname_, h->filename_);
 
-	switch (mode) {
-        case 'r':
+    switch (mode) {
+    case 'r':
+    {
+        if (kFailure == AccumulateNamesAndSizes(*h))
         {
-            if (false) /* isMultifile(object_name)*/ {
-                // TODO
-                // identify files part of multifile glob pattern
-                // initialize cumulative size array
-                // determine if header is repeated
-            } else {
-                h->filenames.push_back(object_name);
-                long long int fileSize = GetFileSize(bucket_name, object_name);
-                h->cumulativeSize.push_back(fileSize);
-            }
-            return h;
-
+            //h is unusable
+            delete h;
+            return nullptr;
         }
-        case 'w':
-            return h;
+        return h;
+    }
+    case 'w':
+        return h;
 
-        case 'a':
+    case 'a':
 
-        default:
-            spdlog::error("Invalid open mode {}", mode);
-            return 0;
+    default:
+        spdlog::error("Invalid open mode {}", mode);
+        return 0;
     }
 }
 
-int driver_fclose(void *stream)
+int driver_fclose(void* stream)
 {
+    assert(driver_isConnected());
+
+    if (!stream)
+    {
+        return kFailure;
+    }
+
     spdlog::debug("fclose {}", (void*)stream);
-
-    MultiPartFile *multiFile;
-
-	assert(driver_isConnected());
-	assert(stream != NULL);
-	multiFile = (MultiPartFile *)stream;
-    delete ((MultiPartFile *)stream);
-    return 0;
+    delete (reinterpret_cast<MultiPartFile*>(stream));
+    return kSuccess;
 }
 
-long long int totalSize(MultiPartFile *h) {
-    return h->cumulativeSize[h->cumulativeSize.size()-1];
-}
+//long long int totalSize(MultiPartFile* h) {
+//	return h->cumulativeSize[h->cumulativeSize.size() - 1];
+//}
 
-int driver_fseek(void *stream, long long int offset, int whence)
+int driver_fseek(void* stream, long long int offset, int whence)
 {
     spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
     assert(stream != NULL);
-	MultiPartFile *h = (MultiPartFile *)stream;
+    MultiPartFile* h = (MultiPartFile*)stream;
 
     switch (whence) {
-        case std::ios::beg:
-            h->offset = offset;
-            return 0;
-        case std::ios::cur:
-        {
-            auto computedOffset = h->offset + offset;
-            if (computedOffset < 0) {
-                spdlog::critical("Invalid seek offset {}", computedOffset);
-                return -1;
-            }
-            h->offset = computedOffset;
-            return 0;
-        }
-        case std::ios::end:
-        {
-            auto computedOffset = totalSize(h) + offset;
-            if (computedOffset < 0) {
-                spdlog::critical("Invalid seek offset {}", computedOffset);
-                return -1;
-            }
-            h->offset = computedOffset;
-            return 0;
-        }
-        default:
-            spdlog::critical("Invalid seek mode {}", whence);
+    case std::ios::beg:
+        h->offset_ = offset;
+        return 0;
+    case std::ios::cur:
+    {
+        auto computedOffset = h->offset_ + offset;
+        if (computedOffset < 0) {
+            spdlog::critical("Invalid seek offset {}", computedOffset);
             return -1;
+        }
+        h->offset_ = computedOffset;
+        return 0;
+    }
+    case std::ios::end:
+    {
+        auto computedOffset = h->total_size_ + offset;
+        if (computedOffset < 0) {
+            spdlog::critical("Invalid seek offset {}", computedOffset);
+            return -1;
+        }
+        h->offset_ = computedOffset;
+        return 0;
+    }
+    default:
+        spdlog::critical("Invalid seek mode {}", whence);
+        return -1;
 
     }
 
 }
 
-const char *driver_getlasterror()
+const char* driver_getlasterror()
 {
     spdlog::debug("getlasterror");
 
     return NULL;
 }
 
-long long int driver_fread(void *ptr, size_t size, size_t count, void *stream)
+long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
 {
+    if (!stream)
+    {
+        spdlog::error("Error passing null stream pointer to fread");
+        return -1;
+    }
+    if (!ptr)
+    {
+        spdlog::error("Error passing null buffer pointer to fread");
+        return -1;
+    }
+
     spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
-    assert(stream != NULL);
-	MultiPartFile *h = (MultiPartFile *)stream;
+    MultiPartFile* h = reinterpret_cast<MultiPartFile*>(stream);
 
-    // TODO: handle multifile case
-    auto toRead = size * count;
-    spdlog::debug("offset = {} toRead = {}", h->offset, toRead);
+    //Refuse to read if offset > totalSize
+    const tOffset offset = h->offset_;
+    const tOffset total_size = h->total_size_;
+    if (offset > total_size)
+    {
+        return -1;
+    }
 
-    auto num_read = DownloadFileRangeToBuffer(h->bucketname, h->filename, (char*)ptr, toRead, h->offset,
-        h->offset + toRead);
+    tOffset to_read{ static_cast<tOffset>(size * count) };
 
-    if (num_read != -1)
-        h->offset += num_read;
-    return num_read;
+    if (offset + to_read > total_size)
+    {
+        to_read = total_size - offset;
+        spdlog::debug("offset {}, req len {} exceeds file size ({}) -> reducing len to {}",
+            offset, to_read, total_size, to_read);
+    }
+    else
+    {
+        spdlog::debug("offset = {} to_read = {}", offset, to_read);
+    }
+
+    // Start at first usable file chunk
+    // Advance through file chunks, advancing buffer pointer
+    // Until last requested byte was read
+    // Or error occured
+
+    tOffset bytes_read{ 0 };
+
+    // Lookup item containing initial bytes at requested offset
+    const auto& cumul_sizes = h->cumulativeSize_;
+    const tOffset common_header_length = h->commonHeaderLength_;
+    const std::string& bucket_name = h->bucketname_;
+    const auto& filenames = h->filenames_;
+    char* buffer_pos = reinterpret_cast<char*>(ptr);
+
+    auto greater_than_offset_it = std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
+    size_t idx = static_cast<size_t>(std::distance(cumul_sizes.begin(), greater_than_offset_it));
+
+    spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset, *greater_than_offset_it);
+
+
+    auto download_and_update = [&](tOffset read_start, tOffset read_end) -> tOffset {
+        tOffset range_bytes_read = DownloadFileRangeToBuffer(bucket_name, filenames[idx], buffer_pos,
+            static_cast<int64_t>(read_start), static_cast<int64_t>(read_end));
+
+        to_read -= range_bytes_read;
+        bytes_read += range_bytes_read;
+        buffer_pos += range_bytes_read;
+
+        return range_bytes_read;
+        };
+
+
+    //first file read
+
+    const tOffset file_start = (idx == 0) ? offset : offset - cumul_sizes[idx - 1] + common_header_length;
+    const tOffset read_end = std::min(file_start + to_read, file_start + cumul_sizes[idx] - offset);
+
+    if (download_and_update(file_start, read_end) == -1)
+    {
+        return -1;
+    }
+
+    while (to_read)
+    {
+        // read the missing bytes in the next files as necessary
+        idx++;
+        const tOffset start = common_header_length;
+        const tOffset end = std::min(start + to_read, start + cumul_sizes[idx] - cumul_sizes[idx - 1]);
+
+        if (download_and_update(start, end) == -1)
+        {
+            return -1;
+        }
+    }
+
+    h->offset_ += bytes_read;
+    return bytes_read;
+
+    //// TODO: handle multifile case
+    //auto toRead = size * count;
+    //spdlog::debug("offset = {} toRead = {}", h->offset, toRead);
+
+    //auto num_read = DownloadFileRangeToBuffer(h->bucketname, h->filename, (char*)ptr, toRead, h->offset,
+    //	h->offset + toRead);
+
+    //if (num_read != -1)
+    //	h->offset += num_read;
+    //return num_read;
 }
 
-long long int driver_fwrite(const void *ptr, size_t size, size_t count, void *stream)
+long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* stream)
 {
     spdlog::debug("fwrite {} {} {} {}", ptr, size, count, stream);
 
     assert(stream != NULL);
-	MultiPartFile *h = (MultiPartFile *)stream;
+    MultiPartFile* h = (MultiPartFile*)stream;
 
-    UploadBufferToGcs(h->bucketname, h->filename, (char*)ptr, size*count);
-    
+    UploadBufferToGcs(h->bucketname_, h->filename_, (char*)ptr, size * count);
+
     // TODO proper error handling...
-    return size*count;
+    return size * count;
 }
 
-int driver_fflush(void *)
+int driver_fflush(void* stream)
 {
     spdlog::debug("Flushing (does nothing...)");
     return 0;
 }
 
-int driver_remove(const char *filename)
+int driver_remove(const char* filename)
 {
     spdlog::debug("remove {}", filename);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
     std::string bucket_name, object_name;
     ParseGcsUri(filename, bucket_name, object_name);
     FallbackToDefaultBucket(bucket_name);
@@ -534,36 +718,36 @@ int driver_remove(const char *filename)
     return 1;
 }
 
-int driver_rmdir(const char *filename)
+int driver_rmdir(const char* filename)
 {
     spdlog::debug("rmdir {}", filename);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
     spdlog::debug("Remove dir (does nothing...)");
     return 1;
 }
 
-int driver_mkdir(const char *filename)
+int driver_mkdir(const char* filename)
 {
     spdlog::debug("mkdir {}", filename);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
     return 1;
 }
 
-long long int driver_diskFreeSpace(const char *filename)
+long long int driver_diskFreeSpace(const char* filename)
 {
     spdlog::debug("diskFreeSpace {}", filename);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
     return (long long int)5 * 1024 * 1024 * 1024 * 1024;
 }
 
-int driver_copyToLocal(const char *sSourceFilePathName, const char *sDestFilePathName)
+int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
 {
     spdlog::debug("copyToLocal {} {}", sSourceFilePathName, sDestFilePathName);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
 
     namespace gcs = google::cloud::storage;
     std::string bucket_name, object_name;
@@ -595,33 +779,34 @@ int driver_copyToLocal(const char *sSourceFilePathName, const char *sDestFilePat
         if (reader.bad()) {
             spdlog::error("Error during read: {} {}", (int)(reader.status().code()), reader.status().message());
             complete = true;
-        } 
+        }
         spdlog::debug("Read {}", reader.gcount());
 
         if (reader.gcount() > 0) {
             file_stream.write(buffer.data(), reader.gcount());
-        } else {
+        }
+        else {
             complete = true;
         }
 
     }
-    spdlog::debug("Close output"); 
+    spdlog::debug("Close output");
     file_stream.close();
 
     if (!reader.status().ok()) {
         std::cerr << "Error during download: " << reader.status() << "\n";
         return 0;
     }
-    spdlog::debug("Done copying"); 
+    spdlog::debug("Done copying");
 
     return 1;
 }
 
-int driver_copyFromLocal(const char *sSourceFilePathName, const char *sDestFilePathName)
+int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
 {
     spdlog::debug("copyFromLocal {} {}", sSourceFilePathName, sDestFilePathName);
 
-	assert(driver_isConnected());
+    assert(driver_isConnected());
 
     namespace gcs = google::cloud::storage;
     std::string bucket_name, object_name;
