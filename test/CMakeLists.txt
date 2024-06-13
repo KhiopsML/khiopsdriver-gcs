@@ -1,3 +1,5 @@
+enable_testing()
+
 add_executable(basic_test "")
 
 target_sources( basic_test
@@ -12,6 +14,9 @@ target_compile_options(basic_test
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 
-target_link_libraries(basic_test GTest::gtest khiopsdriver_file_gcs_test)
+find_package(GTest CONFIG REQUIRED)
 
+target_link_libraries(basic_test PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main khiopsdriver_file_gcs)
+
+include(GoogleTest)
 gtest_discover_tests(basic_test)
