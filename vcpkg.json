@@ -5,7 +5,8 @@
     "dependencies": [
         {"name": "fmt"},
         {"name": "google-cloud-cpp", "default-features": false, "features": ["storage"]},
-        {"name": "spdlog"}
+        {"name": "spdlog"},
+        {"name": "gtest"}
     ]
 }
 
