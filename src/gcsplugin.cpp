@@ -192,7 +192,7 @@ const char* driver_getScheme()
 
 int driver_isReadOnly()
 {
-    return 0;
+    return kFalse;
 }
 
 int driver_connect()

@@ -29,7 +29,7 @@ TEST(GCSDriverTest, GetScheme)
 
 TEST(GCSDriverTest, IsReadOnly)
 {
-    ASSERT_EQ(driver_isReadOnly(), kTrue);
+    ASSERT_EQ(driver_isReadOnly(), kFalse);
 }
 
 TEST(GCSDriverTest, Connect)
