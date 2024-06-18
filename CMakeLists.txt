@@ -17,6 +17,13 @@ project(khiops-gcs LANGUAGES CXX)
 include(GoogleTest)
 enable_testing()
 
+# Workaround for windows: https://github.com/actions/virtual-environments/issues/5900
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set_property(GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
+else()
+    set_property(GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
+endif()
+
 # Find dependencies
 find_package(fmt CONFIG REQUIRED)
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
