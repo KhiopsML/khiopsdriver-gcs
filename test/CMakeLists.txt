@@ -26,7 +26,9 @@ target_compile_options(basic_test
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 set_options(basic_test)
-
-target_link_libraries(basic_test PRIVATE gtest_main gmock_main khiopsdriver_file_gcs)
+target_include_directories(basic_test
+  PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
+         ${${PROJECT_NAME}_SOURCE_DIR}/src)
+target_link_libraries(basic_test PRIVATE gtest gtest_main gmock gmock_main khiopsdriver_file_gcs)
 
 gtest_discover_tests(basic_test)
