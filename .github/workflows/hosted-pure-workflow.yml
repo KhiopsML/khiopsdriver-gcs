@@ -16,9 +16,6 @@ on:
     branches: 
     - v11
     - main
-  workflow_dispatch:
-  schedule:
-  - cron: '0 1 * * *'
 
 jobs:
   job:
@@ -104,7 +101,7 @@ jobs:
       # store the built packages artifacts.
       - name: Restore from cache the dependencies and generate project files
         run: |
-          cmake --preset ninja-multi-vcpkg
+          cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Release
 
       # Build (Release configuration only) the whole project with Ninja (which is spawn by CMake).
       #
