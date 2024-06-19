@@ -128,5 +128,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
-          path: builds/ninja-multi-vcpkg/(bin|lib)/*.(dylib|so|dll)
-  
+          path: |
+            builds/ninja-multi-vcpkg/lib/*.dylib
+            builds/ninja-multi-vcpkg/lib/*.so
+            builds/ninja-multi-vcpkg/bin/*.dll
+          if-no-files-found: ignore
