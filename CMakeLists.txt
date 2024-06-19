@@ -17,13 +17,6 @@ project(khiops-gcs LANGUAGES CXX)
 include(GoogleTest)
 enable_testing()
 
-# Workaround for windows: https://github.com/actions/virtual-environments/issues/5900
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_property(GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
-else()
-    set_property(GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
-endif()
-
 # Find dependencies
 find_package(fmt CONFIG REQUIRED)
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
@@ -53,11 +46,5 @@ target_compile_options(khiopsdriver_file_gcs
 	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
-
-#add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
-#target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
-
-#add_executable(drivertest src/drivertest.cpp)
-#target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
 
 add_subdirectory(test)
