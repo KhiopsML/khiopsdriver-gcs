@@ -3,19 +3,19 @@ include(FetchContent)
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY "https://github.com/google/googletest.git"
-  GIT_TAG "v1.13.0")
+  GIT_TAG "v1.14.0")
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Workaround for windows: https://github.com/actions/virtual-environments/issues/5900
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set_property(TARGET gtest PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
-    set_property(TARGET gtest_main PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
-else()
-    set_property(TARGET gtest PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
-    set_property(TARGET gtest_main PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
-endif()
+#if(CMAKE_BUILD_TYPE STREQUAL "Release")
+#    set_property(TARGET gtest PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
+#    set_property(TARGET gtest_main PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
+#else()
+#    set_property(TARGET gtest PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
+#    set_property(TARGET gtest_main PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
+#endif()
   
 include(GoogleTest)
 
