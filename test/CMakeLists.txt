@@ -19,6 +19,6 @@ target_compile_options(basic_test
 target_include_directories(basic_test
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
-target_link_libraries(basic_test PRIVATE gtest gtest_main gmock gmock_main khiopsdriver_file_gcs)
+target_link_libraries(basic_test PRIVATE gtest khiopsdriver_file_gcs)
 
 gtest_discover_tests(basic_test)
