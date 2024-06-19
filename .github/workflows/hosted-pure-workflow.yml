@@ -128,8 +128,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
-          path: |
-            builds/ninja-multi-vcpkg/Release/*
-            lib/*
-          #path: builds/ninja-multi-vcpkg/Debug/*
+          path: builds/ninja-multi-vcpkg/lib/*
   
