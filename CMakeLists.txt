@@ -101,10 +101,10 @@ target_compile_options(khiopsdriver_file_gcs
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 
-add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
-target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
+#add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
+#target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
 
-add_executable(drivertest src/drivertest.cpp)
-target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
+#add_executable(drivertest src/drivertest.cpp)
+#target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
 
 add_subdirectory(test)
