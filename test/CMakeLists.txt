@@ -26,7 +26,12 @@ target_compile_options(plugin_test
 	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
-target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
+if(WIN32)
+    # do something
+  target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS} Shlwapi) # Link to dl
+else ()
+  target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
+endif (MSVC)
 
 gtest_discover_tests(basic_test)
 gtest_discover_tests(plugin_test)
