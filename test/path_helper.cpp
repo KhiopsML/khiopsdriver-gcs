@@ -30,7 +30,7 @@ namespace MyPaths {
 
 std::string getExecutablePath() {
    char rawPathName[MAX_PATH];
-   GetModuleFileNameA(NULL, rawPathName, MAX_PATH);
+   GetModuleFileName(NULL, rawPathName, MAX_PATH);
    return std::string(rawPathName);
 }
 
@@ -38,7 +38,7 @@ std::string getExecutableDir() {
     std::string executablePath = getExecutablePath();
     char* exePath = new char[executablePath.length()];
     strcpy(exePath, executablePath.c_str());
-    PathRemoveFileSpecA(exePath);
+    PathRemoveFileSpec(exePath);
     std::string directory = std::string(exePath);
     delete[] exePath;
     return directory;
@@ -46,7 +46,7 @@ std::string getExecutableDir() {
 
 std::string mergePaths(std::string pathA, std::string pathB) {
   char combined[MAX_PATH];
-  PathCombineA(combined, pathA.c_str(), pathB.c_str());
+  PathCombine(combined, pathA.c_str(), pathB.c_str());
   std::string mergedPath(combined);
   return mergedPath;
 }
