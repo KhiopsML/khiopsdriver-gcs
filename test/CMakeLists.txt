@@ -21,6 +21,8 @@ target_include_directories(basic_test
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
 target_link_libraries(basic_test PRIVATE gtest khiopsdriver_file_gcs)
 
+gtest_discover_tests(basic_test)
+
 add_executable(plugin_test plugin_test.cpp path_helper.cpp)
 target_compile_options(plugin_test
 	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
@@ -29,9 +31,13 @@ target_compile_options(plugin_test
 if(WIN32)
     # do something
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS} Shlwapi) # Link to dl
+  add_custom_command(
+    TARGET plugin_test POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:khiopsdriver_file_gcs> $<TARGET_FILE_DIR:plugin_test>
+    COMMAND_EXPAND_LISTS
+  )
 else ()
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
 endif (MSVC)
 
-gtest_discover_tests(basic_test)
 gtest_discover_tests(plugin_test)
