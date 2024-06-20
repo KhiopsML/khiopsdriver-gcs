@@ -21,4 +21,12 @@ target_include_directories(basic_test
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
 target_link_libraries(basic_test PRIVATE gtest khiopsdriver_file_gcs)
 
+add_executable(plugin_test plugin_test.cpp path_helper.cpp)
+target_compile_options(plugin_test
+	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
+	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
+)
+target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
+
 gtest_discover_tests(basic_test)
+gtest_discover_tests(plugin_test)
