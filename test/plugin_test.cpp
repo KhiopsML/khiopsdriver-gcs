@@ -20,11 +20,9 @@
 	#include <dlfcn.h>
 	#include <libgen.h>
 	#include <limits.h>
-	#include <dirent.h>
 #else
 	#include <windows.h>
 	#include "errhandlingapi.h"
-	#include "dirent.h"
 #endif
 
 #ifdef __is_unix__
@@ -79,27 +77,11 @@ void *init_plugin()
 	std::string lib_dir = MyPaths::mergePaths(MyPaths::dirname(bin_dir), std::string("lib"));
 	std::string lib_path = MyPaths::mergePaths(lib_dir, LIBRARY_NAME);
 #else
-	std::string lib_dir = bin_dir;
-	//std::string lib_path = MyPaths::mergePaths(bin_dir, LIBRARY_NAME);
 	std::string lib_path = LIBRARY_NAME;
 #endif
 
 	// DEBUG
-	printf("Lib dir = %s\n", lib_dir.c_str());
 	printf("Lib path = %s\n", lib_path.c_str());
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir (lib_dir.c_str())) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir (dir)) != NULL) {
-			printf ("%s\n", ent->d_name);
-		}
-		closedir (dir);
-	} else {
-		/* could not open directory */
-		perror ("");
-		return NULL;
-	}
 
 	// Try to load the shared library
 	library_handle = load_shared_library(lib_path.c_str());
@@ -110,10 +92,11 @@ void *init_plugin()
 		fprintf(stderr, "Error while loading library %s", LIBRARY_NAME);
 #ifdef __unix_or_mac__
 		fprintf(stderr, " (%s). ", dlerror());
+		fprintf(stderr, "Check LD_LIBRARY_PATH or set the library with its full path\n");
 #else
 		fwprintf(stderr, L" (0x%x). ", GetLastError());
+		fwprintf(stderr, "Check that the library is present in the same folder as the executable\n");
 #endif
-		fprintf(stderr, "Check LD_LIBRARY_PATH or set the library with its full path\n");
 		exit(EXIT_FAILURE);
 	}
 
