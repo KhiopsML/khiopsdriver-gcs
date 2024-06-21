@@ -32,7 +32,7 @@
 #elif defined(__is_mac__)
 #define LIBRARY_NAME "libkhiopsdriver_file_gcs.dylib"
 #else
-#define LIBRARY_NAME "libkhiopsdriver_file_gcs.dll"
+#define LIBRARY_NAME "khiopsdriver_file_gcs.dll"
 #endif
 
 /* API functions definition, that must be defined in the library */
