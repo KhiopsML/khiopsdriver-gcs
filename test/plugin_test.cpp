@@ -95,7 +95,7 @@ void *init_plugin()
 		fprintf(stderr, "Check LD_LIBRARY_PATH or set the library with its full path\n");
 #else
 		fwprintf(stderr, L" (0x%x). ", GetLastError());
-		fwprintf(stderr, "Check that the library is present in the same folder as the executable\n");
+		fprintf(stderr, "Check that the library is present in the same folder as the executable\n");
 #endif
 		exit(EXIT_FAILURE);
 	}
