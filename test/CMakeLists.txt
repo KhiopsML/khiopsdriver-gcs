@@ -29,7 +29,7 @@ target_compile_options(plugin_test
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 if(WIN32)
-    # do something
+  # custom build and test execution for Windows
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS} Shlwapi) # Link to dl
   add_custom_command(
     TARGET plugin_test POST_BUILD
@@ -40,4 +40,4 @@ else ()
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
 endif (MSVC)
 
-gtest_discover_tests(plugin_test)
+gtest_discover_tests(plugin_test DISCOVERY_MODE PRE_TEST)
