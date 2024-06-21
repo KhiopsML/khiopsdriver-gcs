@@ -56,9 +56,11 @@ std::string mergePaths(std::string pathA, std::string pathB) {
 #ifdef __linux__
 
 std::string getExecutablePath() {
-   char rawPathName[PATH_MAX];
-   realpath(PROC_SELF_EXE, rawPathName);
-   return  std::string(rawPathName);
+    char rawPathName[PATH_MAX];
+    if (realpath(PROC_SELF_EXE, rawPathName))
+        return std::string(rawPathName);
+
+    return NULL;
 }
 
 #endif
@@ -72,7 +74,7 @@ std::string getExecutablePath() {
     if(!_NSGetExecutablePath(rawPathName, &rawPathSize)) {
         realpath(rawPathName, realPathName);
     }
-    return  std::string(realPathName);
+    return std::string(realPathName);
 }
 #endif
 
