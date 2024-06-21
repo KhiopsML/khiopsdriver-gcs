@@ -80,7 +80,8 @@ void *init_plugin()
 	std::string lib_path = MyPaths::mergePaths(lib_dir, LIBRARY_NAME);
 #else
 	std::string lib_dir = bin_dir;
-	std::string lib_path = MyPaths::mergePaths(bin_dir, LIBRARY_NAME);
+	//std::string lib_path = MyPaths::mergePaths(bin_dir, LIBRARY_NAME);
+	std::string lib_path = LIBRARY_NAME;
 #endif
 
 	// DEBUG
