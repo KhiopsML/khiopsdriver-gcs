@@ -177,24 +177,27 @@ void *get_shared_library_function(void *library_handle, const char *function_nam
 
 TEST(GCSPluginTest, GetVersion)
 {
+	auto library_handle = init_plugin();
+
 	ASSERT_STREQ(ptr_driver_getVersion(), "0.1.0");
+
+	deinit_plugin(library_handle);
 }
 
 TEST(GCSPluginTest, GetScheme)
 {
-	ASSERT_STREQ(ptr_driver_getScheme(), "gs");
-}
+	auto library_handle = init_plugin();
 
+	ASSERT_STREQ(ptr_driver_getScheme(), "gs");
+
+	deinit_plugin(library_handle);
+}
 
 int main(int argc, char** argv)
 {
 	::testing::InitGoogleTest(&argc, argv);
 
-	auto library_handle = init_plugin();
-
 	auto result = RUN_ALL_TESTS();
-
-	deinit_plugin(library_handle);
 
 	return result;
 }
