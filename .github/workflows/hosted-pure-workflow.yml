@@ -112,6 +112,13 @@ jobs:
         run: |
           cmake --build --preset ninja-vcpkg-release
 
+
+      - uses: knicknic/os-specific-run@v1.0.3
+        with:
+          linux: ldd builds/ninja-multi-vcpkg/lib/libkhiopsdriver_file_gcs.so
+          windows: dumpbin /DEPENDENTS builds/ninja-multi-vcpkg/bin/libkhiopsdriver_file_gcs.dll
+
+
       # Retrieve google credentials through WIF
       # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
       - uses: google-github-actions/auth@v2
