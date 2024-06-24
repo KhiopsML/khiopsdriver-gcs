@@ -32,6 +32,10 @@
 *.app
 
 /vcpkg
+/vcpkg_installed
 /builds
 .DS_Store
 /build
+**/CMakeFiles
+**/Makefile
+*.cmake

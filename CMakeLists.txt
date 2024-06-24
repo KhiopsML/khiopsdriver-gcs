@@ -9,10 +9,13 @@ if(DEFINED ENV{VCPKG_DEFAULT_TRIPLET} AND NOT DEFINED VCPKG_TARGET_TRIPLET)
 endif()
 
 cmake_minimum_required(VERSION 3.20)
-# Enforce c++17 standard.
-set (CMAKE_CXX_STANDARD 17)
+# Enforce c++14 standard.
+set (CMAKE_CXX_STANDARD 14)
 
 project(khiops-gcs LANGUAGES CXX)
+
+include(GoogleTest)
+enable_testing()
 
 # Find dependencies
 find_package(fmt CONFIG REQUIRED)
@@ -23,13 +26,25 @@ find_package(spdlog CONFIG REQUIRED)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
-add_library(khiopsdriver_file_gcs MODULE src/gcsplugin.h src/gcsplugin.cpp)
+# Set the location of the built artifacts:
+#
+# - Shared and static library target directory: lib
+# - Executable target directory: bin
+# - We must use these weird generator expressions to avoid the Debug and Release directories in VS
+# - More info: https://stackoverflow.com/q/47175912
+#
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
+message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
+message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
+
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
+target_compile_options(khiopsdriver_file_gcs
+	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
+	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
+)
 
-add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
-target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt)
-
-add_executable(drivertest src/drivertest.cpp)
-target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
-
+add_subdirectory(test)

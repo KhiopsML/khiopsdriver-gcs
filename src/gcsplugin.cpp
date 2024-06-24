@@ -8,17 +8,28 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <google/cloud/rest_options.h>
 
-static const char* version = "0.1.0";
-static const char* driver_name = "GCS driver";
-static const char* driver_scheme = "gs";
+constexpr char* version = "0.1.0";
+constexpr char* driver_name = "GCS driver";
+constexpr char* driver_scheme = "gs";
+constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
-int bIsConnected = false;
-google::cloud::storage::Client client;
+bool bIsConnected = false;
+
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+gcs::Client client;
 // Global bucket name
-std::string globalBucketName = "";
+std::string globalBucketName;
 
-typedef long long int tOffset;
+using tOffset = long long;
+
+constexpr int kSuccess{ 0 };
+constexpr int kFailure{ 1 };
+
+constexpr int kFalse{ 0 };
+constexpr int kTrue{ 1 };
 
 struct MultiPartFile
 {
@@ -76,20 +87,23 @@ bool UploadBufferToGcs(const std::string& bucket_name,
     return true;
 }
 
-bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name) {
-    const std::string prefix = "gs://";
-    if (gcs_uri.compare(0, prefix.size(), prefix) != 0) {
+bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name)
+{
+    constexpr char* prefix{ "gs://" };
+    const size_t prefix_size{ std::strlen(prefix) };
+    //const size_t prefix_size{prefix.}
+    if (gcs_uri.compare(0, prefix_size, prefix) != 0) {
         spdlog::error("Invalid GCS URI: {}", gcs_uri);
         return false;
     }
 
-    std::size_t pos = gcs_uri.find('/', prefix.size());
+    const size_t pos = gcs_uri.find('/', prefix_size);
     if (pos == std::string::npos) {
         spdlog::error("Invalid GCS URI, missing object name: {}", gcs_uri);
         return false;
     }
 
-    bucket_name = gcs_uri.substr(prefix.size(), pos - prefix.size());
+    bucket_name = gcs_uri.substr(prefix_size, pos - prefix_size);
     object_name = gcs_uri.substr(pos + 1);
 
     return true;
@@ -105,11 +119,53 @@ void FallbackToDefaultBucket(std::string& bucket_name) {
     spdlog::critical("No bucket specified, and GCS_BUCKET_NAME is not set!");
 }
 
+void GetBucketAndObjectNames(const char *sFilePathName, std::string& bucket, std::string& object)
+{
+    ParseGcsUri(sFilePathName, bucket, object);
+    FallbackToDefaultBucket(bucket);
+}
+
+std::string ToLower(const std::string& str)
+{
+    std::string low{ str };
+    const size_t cnt = low.length();
+    for (size_t i = 0; i < cnt; i++)
+    {
+        low[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(low[i]))); // see https://en.cppreference.com/w/cpp/string/byte/tolower
+    }
+    return low;
+}
+
 std::string GetEnvironmentVariableOrDefault(const std::string& variable_name, 
                                             const std::string& default_value)
 {
-    const char* value = getenv(variable_name.c_str());
-    return value ? value : default_value;
+    char* value = getenv(variable_name.c_str());
+
+    if (value && std::strlen(value) > 0)
+    {
+        return value;
+    }
+
+    const std::string low_key = ToLower(variable_name);
+    if (low_key.find("token") || low_key.find("password") || low_key.find("key") || low_key.find("secret"))
+    {
+        spdlog::debug("No {} specified, using **REDACTED** as default.", variable_name);
+    }
+    else
+    {
+        spdlog::debug("No {} specified, using '{}' as default.", variable_name, default_value);
+    }
+
+    return default_value;
+}
+
+
+void HandleNoObjectError(const gc::Status &status)
+{
+    if (status.code() != google::cloud::StatusCode::kNotFound)
+    {
+        spdlog::error("Error checking object: {}", status.message());
+    }
 }
 
 // Implementation of driver functions
@@ -136,7 +192,7 @@ int driver_isReadOnly()
 
 int driver_connect()
 {
-    auto loglevel = GetEnvironmentVariableOrDefault("GCS_DRIVER_LOGLEVEL", "info");
+    const std::string loglevel = GetEnvironmentVariableOrDefault("GCS_DRIVER_LOGLEVEL", "info");
     if (loglevel == "debug")
         spdlog::set_level(spdlog::level::debug);
     else if (loglevel == "trace")
@@ -149,32 +205,45 @@ int driver_connect()
 	// Initialize variables from environment
     globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
 
-    namespace gcs = google::cloud::storage;
-    auto client_response = gcs::Client::CreateDefaultClient();
+    gc::Options options{};
 
-    if (!client_response) {
-        spdlog::error("Failed to create Storage Client: {}", (int)(client_response.status().code()), client_response.status().message());
-        return false;
+    // Add project ID if defined
+    std::string project = GetEnvironmentVariableOrDefault("CLOUD_ML_PROJECT_ID", "");
+    if (!project.empty())
+    {
+        options.set<gc::QuotaUserOption>(std::move(project));
     }
-    client = client_response.value();
+
+    std::string gcp_token_filename = GetEnvironmentVariableOrDefault("GCP_TOKEN", "");
+    //if (!gcp_token_filename.empty())
+    //{
+    //    // Initialize from token file
+    //    client = 
+    //}
+    //else
+    {
+        // Fallback to standard credentials discovery
+        client = gcs::Client{ std::move(options) };
+    }
+
     bIsConnected = true;
-	return true;
+	return kSuccess;
 }
 
 int driver_disconnect()
 {
-	int nRet = 0;
-	return nRet == 0;
+    bIsConnected = false;
+    return kSuccess;
 }
 
 int driver_isConnected()
 {
-	return bIsConnected;
+	return bIsConnected ? 1 : 0;
 }
 
 long long int driver_getSystemPreferredBufferSize()
 {
-	return 4 * 1024 * 1024; // 4 Mo
+	return preferred_buffer_size; // 4 Mo
 }
 
 int driver_exist(const char *filename)
@@ -196,27 +265,25 @@ int driver_fileExists(const char *sFilePathName)
 {
     spdlog::debug("fileExist {}", sFilePathName);
 
-    std::string bucket_name, object_name;
-    ParseGcsUri(sFilePathName, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);
+    std::string bucket_name;
+    std::string object_name;
+    GetBucketAndObjectNames(sFilePathName, bucket_name, object_name);
 
-    auto object_metadata = client.GetObjectMetadata(bucket_name, object_name);
-    if (object_metadata) {
-        spdlog::debug("file {} exists!", sFilePathName);
-        return true; // L'objet existe
-    } else if (object_metadata.status().code() == google::cloud::StatusCode::kNotFound) {
-        return false; // L'objet n'existe pas
-    } else {
-        spdlog::error("Error checking object: {}", object_metadata.status().message());
-        return false; // Une erreur s'est produite lors de la vérification
+    auto metadata = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
+    if (metadata.begin() == metadata.end())
+    {
+        spdlog::error("Error checking object");
+        return kFalse;
     }
+
+    spdlog::debug("file {} exists!", sFilePathName);
+    return kTrue; // L'objet existe
 }
 
 int driver_dirExists(const char *sFilePathName)
 {
     spdlog::debug("dirExist {}", sFilePathName);
-
-    return 1;
+    return kTrue;
 }
 
 long long int getFileSize(std::string bucket_name, std::string object_name) {

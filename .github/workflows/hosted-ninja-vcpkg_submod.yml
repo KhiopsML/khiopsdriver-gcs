@@ -20,9 +20,6 @@ on:
     branches: 
     - v11
     - main
-  workflow_dispatch:
-  schedule:
-  - cron: '0 1 * * *'
 
 jobs:
   job:
@@ -41,6 +38,9 @@ jobs:
             triplet: x64-osx
           - os: macos-14
             triplet: arm64-osx
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     env:
     #
     # [OPTIONAL] Define the vcpkg's triplet 
@@ -62,6 +62,13 @@ jobs:
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
+      # Retrieve google credentials through WIF - needed to run tests
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
+
       # Note: if the preset misses the "configuration", it is possible to explicitly select the
       # configuration with the additional `--config` flag, e.g.:
       #   buildPreset: 'ninja-vcpkg'
@@ -72,13 +79,18 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: 'ninja-multi-vcpkg'
+          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
           buildPreset: 'ninja-vcpkg-release'
           #buildPreset: 'ninja-vcpkg-debug'
           testPreset: 'test-release'
+          testPresetAdditionalArgs: "['--output-on-failure']"
 
       - name: Upload the packages as artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
-          path: builds/ninja-multi-vcpkg/Release/*
-          #path: builds/ninja-multi-vcpkg/Debug/*
+          path: |
+            builds/ninja-multi-vcpkg/lib/*.dylib
+            builds/ninja-multi-vcpkg/lib/*.so
+            builds/ninja-multi-vcpkg/bin/*.dll
+          if-no-files-found: ignore
