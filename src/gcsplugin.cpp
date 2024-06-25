@@ -128,7 +128,12 @@ void FallbackToDefaultBucket(std::string& bucket_name) {
 
 void GetBucketAndObjectNames(const char* sFilePathName, std::string& bucket, std::string& object)
 {
-    ParseGcsUri(sFilePathName, bucket, object);
+    if (!ParseGcsUri(sFilePathName, bucket, object))
+    {
+        bucket.clear();
+        object.clear();
+        return;
+    }
     FallbackToDefaultBucket(bucket);
 }
 
@@ -289,8 +294,14 @@ int driver_fileExists(const char* sFilePathName)
     std::string object_name;
     GetBucketAndObjectNames(sFilePathName, bucket_name, object_name);
 
-    auto metadata = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
-    if (metadata.begin() == metadata.end())
+    if (bucket_name.empty() || object_name.empty())
+    {
+        return kFalse;
+    }
+
+    auto status_or_metadata_list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
+    const auto first_item_it = status_or_metadata_list.begin();
+    if ((first_item_it == status_or_metadata_list.end()) || !(*first_item_it))
     {
         spdlog::error("Error checking object");
         return kFalse;
