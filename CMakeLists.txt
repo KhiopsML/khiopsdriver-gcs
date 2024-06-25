@@ -47,5 +47,4 @@ target_compile_options(khiopsdriver_file_gcs
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
 
-<<<<<<< HEAD
 add_subdirectory(test)

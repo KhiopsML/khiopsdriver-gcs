@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iterator>
 #include <google/cloud/rest_options.h>
+#include <memory>
 
 constexpr const char* version = "0.1.0";
 constexpr const char* driver_name = "GCS driver";
@@ -179,6 +180,11 @@ void HandleNoObjectError(const gc::Status& status)
 }
 
 // Implementation of driver functions
+void test_setClient(::google::cloud::storage::Client && mock_client)
+{
+    client = std::move(mock_client);
+    bIsConnected = kTrue;
+}
 
 const char* driver_getDriverName()
 {

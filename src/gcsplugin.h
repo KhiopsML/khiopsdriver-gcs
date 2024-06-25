@@ -2,6 +2,9 @@
 #include <sys/types.h>
 #include <cstdlib>
 
+#include <memory>
+#include "google/cloud/storage/client.h"
+
 #if defined(__unix__) || defined(__unix) || \
     (defined(__APPLE__) && defined(__MACH__))
 #define __unix_or_mac__
@@ -21,6 +24,8 @@
 extern "C"
 {
 #endif /* __cplusplus */
+
+    VISIBLE void test_setClient(::google::cloud::storage::Client && mock_client);
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Several functions defined below have the same semantic as those defined in the ANSI C API.
