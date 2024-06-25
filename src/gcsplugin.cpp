@@ -371,6 +371,10 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
     // multifile
     // check headers
     const std::string header = ReadHeader(bucket_name, object_metadata->name());
+    if (header.empty())
+    {
+        return -1;
+    }
     const long long header_size = static_cast<long long>(header.size());
     int header_to_subtract{ 0 };
     bool same_header{ true };
@@ -380,6 +384,10 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
         if (same_header)
         {
             const std::string curr_header = ReadHeader(bucket_name, (*list_it)->name());
+            if (curr_header.empty())
+            {
+                return -1;
+            }
             same_header = (header == curr_header);
             if (same_header)
             {
@@ -421,7 +429,7 @@ long long int driver_getFileSize(const char* filename)
 int AccumulateNamesAndSizes(MultiPartFile& h)
 {
     auto push_back_data = [](MultiPartFile& h, gcs::ListObjectsIterator& list_it) {
-        h.filenames_.push_back(std::move((*list_it)->name()));
+        h.filenames_.push_back((*list_it)->name());
         h.cumulativeSize_.push_back(static_cast<long long>((*list_it)->size()));
         };
 
