@@ -27,6 +27,8 @@ extern "C"
 
     VISIBLE void test_setClient(::google::cloud::storage::Client && mock_client);
 
+    VISIBLE void test_unsetClient();
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Several functions defined below have the same semantic as those defined in the ANSI C API.
 	// Obviously, driver_fopen corresponds to fopen in the C ANSI and so on for driver_fclose, driver_fread, driver_fread, driver_fwrite....
