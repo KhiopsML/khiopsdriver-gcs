@@ -80,20 +80,26 @@ constexpr std::array<const char*, 4> test_files = {
 
 class GCSDriverTestFixture : public ::testing::Test
 {
-public:
-    static void SetUpTestSuite()
+protected:
+    void SetUp() override
     {
         mock_client = std::make_shared<gcs::testing::MockClient>();
         auto client = gcs::testing::UndecoratedClientFromMock(mock_client);
         test_setClient(std::move(client));
     }
 
+    void TearDown() override
+    {
+        test_unsetClient();
+    }
+
+public:
     static void TearDownTestSuite()
     {
         ASSERT_EQ(driver_disconnect(), kSuccess);
     }
 
-    static std::shared_ptr<gcs::testing::MockClient> mock_client;
+    std::shared_ptr<gcs::testing::MockClient> mock_client;
 
     template<typename Func>
     void CheckInvalidURIs(Func f, int expect)
@@ -115,7 +121,6 @@ public:
     }
 };
 
-std::shared_ptr<gcs::testing::MockClient> GCSDriverTestFixture::mock_client = nullptr;
 
 gcs::ObjectMetadata MakeObjectMetadata(const std::string& bucket_name, const std::string& name, int64_t generation, uint64_t size)
 {

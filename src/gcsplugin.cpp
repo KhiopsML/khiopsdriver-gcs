@@ -186,6 +186,11 @@ void test_setClient(::google::cloud::storage::Client && mock_client)
     bIsConnected = kTrue;
 }
 
+void test_unsetClient()
+{
+    client = ::google::cloud::storage::Client{};
+}
+
 const char* driver_getDriverName()
 {
     return driver_name;
