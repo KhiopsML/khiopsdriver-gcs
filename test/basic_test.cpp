@@ -252,13 +252,13 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
 
     constexpr auto mock_content_1 = "mock_header\nmock_content_1";
     constexpr auto mock_content_2 = "mock_content_2";
-    constexpr size_t mock_header_size{ 11 }; // std::strlen("mock_header")
+    constexpr size_t mock_header_size{ 12 }; // std::strlen("mock_header\n")    includes end of line char
     constexpr size_t mock_content_1_size{ 26 }; //std::strlen(mock_content_1)
     constexpr size_t mock_content_2_size{ 14 }; //std::strlen(mock_content_2)
     constexpr size_t mock_content_total_size{ mock_content_1_size + mock_content_2_size };
 
-    std::size_t offset_1{ 0 };
-    std::size_t offset_2{ 0 };
+    size_t offset_1{ 0 };
+    size_t offset_2{ 0 };
 
 
     prepare_list_objects(MakeLOR("mock_bucket", { "mock_file_1", "mock_file_2" }, { mock_content_1_size, mock_content_2_size }));
