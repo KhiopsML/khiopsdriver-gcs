@@ -341,6 +341,10 @@ std::string ReadHeader(const std::string& bucket_name, const std::string& filena
     {
         return "";
     }
+    if (!stream.eof())
+    {
+        line.push_back('\n');
+    }
     return line;
 }
 
