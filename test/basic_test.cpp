@@ -97,6 +97,31 @@ constexpr std::array<const char*, 4> test_files = {
 };
 
 
+#define READ_MOCK_LAMBDA(read_sim) [&](gcs::internal::ReadObjectRangeRequest const& request) {                                                  \
+                                        EXPECT_EQ(request.bucket_name(), "mock_bucket") << request;                                             \
+                                        std::unique_ptr<gcs::testing::MockObjectReadSource> mock_source{new gcs::testing::MockObjectReadSource};\
+                                        ::testing::InSequence seq;                                                                              \
+                                        EXPECT_CALL(*mock_source, IsOpen()).WillRepeatedly(Return(true));                                       \
+                                        EXPECT_CALL(*mock_source, Read).WillOnce((read_sim));                                                   \
+                                        EXPECT_CALL(*mock_source, IsOpen()).WillRepeatedly(Return(false));                                      \
+                                                                                                                                                \
+                                        return gc::make_status_or<std::unique_ptr<gcs::internal::ObjectReadSource>>(std::move(mock_source));}   \
+
+
+#define READ_MOCK_LAMBDA_FAILURE [](gcs::internal::ReadObjectRangeRequest const& request) {                                                              \
+                                        EXPECT_EQ(request.bucket_name(), "mock_bucket") << request;                                                      \
+                                        std::unique_ptr<gcs::testing::MockObjectReadSource> mock_source{new gcs::testing::MockObjectReadSource};         \
+                                        ::testing::InSequence seq;                                                                                       \
+                                        EXPECT_CALL(*mock_source, IsOpen).WillRepeatedly(Return(true));                                                  \
+                                        EXPECT_CALL(*mock_source, Read)                                                                                  \
+                                            .WillOnce(Return(google::cloud::Status(google::cloud::StatusCode::kInvalidArgument, "Invalid Argument")));   \
+                                        EXPECT_CALL(*mock_source, IsOpen).WillRepeatedly(Return(false));                                                 \
+                                                                                                                                                         \
+                                        return google::cloud::make_status_or<std::unique_ptr<gcs::internal::ObjectReadSource>>(std::move(mock_source));} \
+
+
+
+
 class GCSDriverTestFixture : public ::testing::Test
 {
 protected:
@@ -120,8 +145,8 @@ public:
 
     std::shared_ptr<gcs::testing::MockClient> mock_client;
 
-    template<typename Func>
-    void CheckInvalidURIs(Func f, int expect)
+    template<typename Func, typename ReturnType>
+    void CheckInvalidURIs(Func f, ReturnType expect)
     {
         // null pointer
         ASSERT_EQ(f(nullptr), expect);
@@ -138,7 +163,117 @@ public:
         // valid URI, but only object name and assuming global bucket name is not set
         ASSERT_EQ(f("gs:///no_bucket"), expect);
     }
+
+    template<typename Func, typename Arg,  typename ReturnType>
+    void CheckInvalidURIs(Func f, Arg arg, ReturnType expect)
+    {
+        // null pointer
+        ASSERT_EQ(f(nullptr, arg), expect);
+
+        // name without "gs://" prefix
+        ASSERT_EQ(f("noprefix", arg), expect);
+
+        // name with correct prefix, but no clear bucket and object names
+        ASSERT_EQ(f("gs://not_valid", arg), expect);
+
+        // name with only bucket name
+        ASSERT_EQ(f("gs://only_bucket_name/", arg), expect);
+
+        // valid URI, but only object name and assuming global bucket name is not set
+        ASSERT_EQ(f("gs:///no_bucket", arg), expect);
+    }
+
+    void PrepareListObjects(LOReturnType result)
+    {
+        EXPECT_CALL(*mock_client, ListObjects).WillOnce(Return<LOReturnType>(std::move(result)));
+    }
+
+    struct MultiPartFile
+    {
+        std::string bucketname_;
+        std::string filename_;
+        long long offset_{ 0 };
+        // Added for multifile support
+        long long commonHeaderLength_{ 0 };
+        std::vector<std::string> filenames_;
+        std::vector<long long int> cumulativeSize_;
+        long long total_size_{ 0 };
+    };
+
+    struct ReadSimulatorParams
+    {
+        const char* content;
+        size_t content_size;
+        size_t* offset;
+    };
+
+
+    void* OpenReadOnly()
+    {
+        return driver_fopen("gs://mock_bucket/mock_file", 'r');
+    }
+
+
+    void OpenSuccess(const MultiPartFile& expected)
+    {
+        void* res = OpenReadOnly();
+        ASSERT_NE(res, nullptr);
+        MultiPartFile* res_cast{ reinterpret_cast<MultiPartFile*>(res) };
+        EXPECT_EQ(*res_cast, expected); //EXPECT instead of ASSERT, so res can be freed even in case of failure
+        ASSERT_EQ(driver_fclose(res), kSuccess);
+    }
+
+    
+    void OpenFailure()
+    {
+        void* res = OpenReadOnly();
+        EXPECT_EQ(res, nullptr);
+        ASSERT_EQ(driver_fclose(res), kFailure);
+    }
+
+
+    // simulate the answer to a reading request
+    gcs::internal::ReadSourceResult SimulateRead(void* buf, size_t n, ReadSimulatorParams& args)
+    {
+        size_t& offset = *args.offset;
+        const size_t l = std::min(n, args.content_size - offset);
+        std::memcpy(buf, args.content + offset, l);
+        offset += l;
+        return gcs::internal::ReadSourceResult{ l, gcs::internal::HttpResponse{200, {}, {}} };
+    }
+
+
+    // generate the read simulator lambda, parameterised by content, size and offset
+    std::function<gcs::internal::ReadSourceResult(void* buf, size_t n)> GenerateReadSimulator(ReadSimulatorParams& args)
+    {
+        return [&](void* buf, size_t n) { return SimulateRead(buf, n, args); };
+    }
+
+
+    void TestMultifileOpenSuccess(LOReturnType arg, ReadSimulatorParams& mock_file_1, ReadSimulatorParams& mock_file_2, const MultiPartFile& expected)
+    {
+        PrepareListObjects(std::move(arg));
+        EXPECT_CALL(*mock_client, ReadObject)
+            .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_1)))
+            .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_2)));
+        OpenSuccess(expected);
+
+        *mock_file_1.offset = 0;
+        *mock_file_2.offset = 0;
+    }
+    
 };
+
+bool operator==(const GCSDriverTestFixture::MultiPartFile& op1, const GCSDriverTestFixture::MultiPartFile& op2)
+{
+    return (op1.bucketname_ == op2.bucketname_
+        && op1.filename_ == op2.filename_
+        && op1.offset_ == op2.offset_
+        && op1.commonHeaderLength_ == op2.commonHeaderLength_
+        && op1.filenames_ == op2.filenames_
+        && op1.cumulativeSize_ == op2.cumulativeSize_
+        && op1.total_size_ == op2.total_size_);
+}
 
 
 gcs::ObjectMetadata MakeObjectMetadata(const std::string& bucket_name, const std::string& name, int64_t generation, uint64_t size)
@@ -186,29 +321,6 @@ TEST_F(GCSDriverTestFixture, DirExists)
     ASSERT_EQ(driver_dirExists(nullptr), kFalse);
     ASSERT_EQ(driver_dirExists("any_name"), kTrue);
 }
-
-#define READ_MOCK_LAMBDA(read_sim) [&](gcs::internal::ReadObjectRangeRequest const& request) {                                                  \
-                                        EXPECT_EQ(request.bucket_name(), "mock_bucket") << request;                                             \
-                                        std::unique_ptr<gcs::testing::MockObjectReadSource> mock_source{new gcs::testing::MockObjectReadSource};\
-                                        ::testing::InSequence seq;                                                                              \
-                                        EXPECT_CALL(*mock_source, IsOpen()).WillRepeatedly(Return(true));                                       \
-                                        EXPECT_CALL(*mock_source, Read).WillOnce((read_sim));                                                   \
-                                        EXPECT_CALL(*mock_source, IsOpen()).WillRepeatedly(Return(false));                                      \
-                                                                                                                                                \
-                                        return gc::make_status_or<std::unique_ptr<gcs::internal::ObjectReadSource>>(std::move(mock_source));}   \
-
-
-#define READ_MOCK_LAMBDA_FAILURE [](gcs::internal::ReadObjectRangeRequest const& request) {                                                              \
-                                        EXPECT_EQ(request.bucket_name(), "mock_bucket") << request;                                                      \
-                                        std::unique_ptr<gcs::testing::MockObjectReadSource> mock_source{new gcs::testing::MockObjectReadSource};         \
-                                        ::testing::InSequence seq;                                                                                       \
-                                        EXPECT_CALL(*mock_source, IsOpen).WillRepeatedly(Return(true));                                                  \
-                                        EXPECT_CALL(*mock_source, Read)                                                                                  \
-                                            .WillOnce(Return(google::cloud::Status(google::cloud::StatusCode::kInvalidArgument, "Invalid Argument")));   \
-                                        EXPECT_CALL(*mock_source, IsOpen).WillRepeatedly(Return(false));                                                 \
-                                                                                                                                                         \
-                                        return google::cloud::make_status_or<std::unique_ptr<gcs::internal::ObjectReadSource>>(std::move(mock_source));} \
-
 
 TEST_F(GCSDriverTestFixture, GetFileSize)
 {
@@ -312,18 +424,137 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
     ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), -1);
 }
 
-TEST_F(GCSDriverTestFixture, OpenReadModeAndClose)
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_InvalidURIs)
 {
-    for (const char* file : test_files)
-    {
-        void* stream = driver_fopen(file, 'r');
-        ASSERT_NE(stream, nullptr);
-        ASSERT_EQ(driver_fclose(stream), kSuccess);
-    }
+    CheckInvalidURIs(driver_fopen, 'r', nullptr);
+}
 
-    //fail on dir
-    ASSERT_EQ(driver_fopen(test_dir_name, 'r'), nullptr);
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess)
+{
+    MultiPartFile expected_struct{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file"},
+        {10},
+        10
+    };
 
-    //fail close on null ptr
-    ASSERT_EQ(driver_fclose(nullptr), kFailure);
+    PrepareListObjects(MakeLOR("mock_bucket", { "mock_file" }, { 10 }));
+    OpenSuccess(expected_struct);
+}
+
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileFailure)
+{
+    PrepareListObjects({});
+    OpenFailure();
+}
+
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess)
+{
+    constexpr const char* mock_file_0_content = "mock_header\ncontent";
+    constexpr size_t mock_file_0_size{ 19 };
+    constexpr size_t mock_header_size{ 12 };
+    size_t mock_file_0_offset{ 0 };
+    ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
+
+    constexpr const char* mock_file_1_content = "content";
+    constexpr size_t mock_file_1_size{ 7 };
+    size_t mock_file_1_offset{ 0 };
+    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
+
+    LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
+    
+    
+    constexpr size_t total_size{ mock_file_0_size + mock_file_1_size };
+
+    MultiPartFile expected_struct{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file_0", "mock_file_1"},
+        {mock_file_0_size, total_size},
+        total_size
+    };
+
+
+    TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1, expected_struct);
+}
+
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess)
+{
+    constexpr const char* mock_file_0_content = "mock_header\ncontent";
+    constexpr size_t mock_file_0_size{ 19 };
+    constexpr size_t mock_header_size{ 12 };
+    size_t mock_file_0_offset{ 0 };
+    ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
+
+    constexpr const char* mock_file_1_content = "mock_header\ncontent";
+    constexpr size_t mock_file_1_size{ 19 };
+    size_t mock_file_1_offset{ 0 };
+    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
+
+    LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
+    
+    
+    constexpr size_t total_size{ mock_file_0_size + mock_file_1_size - mock_header_size };
+
+    MultiPartFile expected_struct{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file_0", "mock_file_1"},
+        {mock_file_0_size, total_size},
+        total_size
+    };
+
+
+    TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1, expected_struct);
+}
+
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureOnFirstRead)
+{
+    constexpr const char* mock_file_0_content = "mock_header\ncontent";
+    constexpr size_t mock_file_0_size{ 19 };
+    constexpr size_t mock_header_size{ 12 };
+    size_t mock_file_0_offset{ 0 };
+    ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
+
+    constexpr const char* mock_file_1_content = "content";
+    constexpr size_t mock_file_1_size{ 7 };
+    size_t mock_file_1_offset{ 0 };
+    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
+
+    LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
+
+
+    PrepareListObjects(file0_file1_response);
+    EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA_FAILURE);
+    OpenFailure();
+}
+
+TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureOnSecondRead)
+{
+    constexpr const char* mock_file_0_content = "mock_header\ncontent";
+    constexpr size_t mock_file_0_size{ 19 };
+    constexpr size_t mock_header_size{ 12 };
+    size_t mock_file_0_offset{ 0 };
+    ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
+
+    constexpr const char* mock_file_1_content = "content";
+    constexpr size_t mock_file_1_size{ 7 };
+    size_t mock_file_1_offset{ 0 };
+    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
+
+    LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
+
+
+    PrepareListObjects(file0_file1_response);
+    EXPECT_CALL(*mock_client, ReadObject)
+        .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_0)))
+        .WillOnce(READ_MOCK_LAMBDA_FAILURE);
+    OpenFailure();
 }

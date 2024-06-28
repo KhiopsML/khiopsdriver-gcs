@@ -474,6 +474,10 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
     // multifile
     // check headers
     const std::string header = ReadHeader(bucket_name, h.filenames_[0]);
+    if (header.empty())
+    {
+        return kFailure;
+    }
     const long long header_size = static_cast<long long>(header.size());
     bool same_header{ true };
 
@@ -493,6 +497,10 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
         if (same_header)
         {
             const std::string curr_header = ReadHeader(bucket_name, *(h.filenames_.crbegin()));
+            if (curr_header.empty())
+            {
+                return kFailure;
+            }
             same_header = (header == curr_header);
             if (same_header)
             {
@@ -520,6 +528,12 @@ void* driver_fopen(const char* filename, char mode)
 
     auto h = new MultiPartFile;
     GetBucketAndObjectNames(filename, h->bucketname_, h->filename_);
+    if (h->bucketname_.empty() || h->filename_.empty())
+    {
+        spdlog::error("Error parsing URL.");
+        delete h;
+        return nullptr;
+    }
 
     switch (mode) {
     case 'r':
