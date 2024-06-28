@@ -498,16 +498,9 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess)
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureOnFirstRead)
 {
-    constexpr const char* mock_file_0_content = "mock_header\ncontent";
     constexpr size_t mock_file_0_size{ 19 };
-    constexpr size_t mock_header_size{ 12 };
-    size_t mock_file_0_offset{ 0 };
-    ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
 
-    constexpr const char* mock_file_1_content = "content";
     constexpr size_t mock_file_1_size{ 7 };
-    size_t mock_file_1_offset{ 0 };
-    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
 
     LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
 
@@ -525,10 +518,7 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureO
     size_t mock_file_0_offset{ 0 };
     ReadSimulatorParams mock_file_0{ mock_file_0_content, mock_file_0_size, &mock_file_0_offset };
 
-    constexpr const char* mock_file_1_content = "content";
     constexpr size_t mock_file_1_size{ 7 };
-    size_t mock_file_1_offset{ 0 };
-    ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
 
     LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
 
