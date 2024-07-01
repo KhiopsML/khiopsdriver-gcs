@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iterator>
 #include <google/cloud/rest_options.h>
+#include <limits>
 #include <memory>
 
 constexpr const char* version = "0.1.0";
@@ -180,7 +181,7 @@ void HandleNoObjectError(const gc::Status& status)
 }
 
 // Implementation of driver functions
-void test_setClient(::google::cloud::storage::Client && mock_client)
+void test_setClient(::google::cloud::storage::Client&& mock_client)
 {
     client = std::move(mock_client);
     bIsConnected = kTrue;
@@ -575,41 +576,62 @@ int driver_fclose(void* stream)
 
 int driver_fseek(void* stream, long long int offset, int whence)
 {
+    constexpr long long max_val = std::numeric_limits<long long>::max();
+
+    if (!stream)
+    {
+        return -1;
+    }
+
     spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
-    assert(stream != NULL);
-    MultiPartFile* h = (MultiPartFile*)stream;
+    MultiPartFile* h = reinterpret_cast<MultiPartFile*>(stream);
 
-    switch (whence) {
+    tOffset computed_offset{ 0 };
+
+    switch (whence)
+    {
     case std::ios::beg:
-        h->offset_ = offset;
-        return 0;
+        computed_offset = offset;
+        break;
     case std::ios::cur:
-    {
-        auto computedOffset = h->offset_ + offset;
-        if (computedOffset < 0) {
-            spdlog::critical("Invalid seek offset {}", computedOffset);
+        if (offset > max_val - h->offset_)
+        {
+            spdlog::critical("Signed overflow prevented");
             return -1;
         }
-        h->offset_ = computedOffset;
-        return 0;
-    }
+        computed_offset = h->offset_ + offset;
+        break;
     case std::ios::end:
-    {
-        auto computedOffset = h->total_size_ + offset;
-        if (computedOffset < 0) {
-            spdlog::critical("Invalid seek offset {}", computedOffset);
+        if (h->total_size_ > 0)
+        {
+            long long minus1 = h->total_size_ - 1;
+            if (offset > max_val - minus1)
+            {
+                spdlog::critical("Signed overflow prevented");
+                return -1;
+            }
+        }
+        if ((offset == std::numeric_limits<long long>::min()) && (h->total_size_ == 0))
+        {
+            spdlog::critical("Signed overflow prevented");
             return -1;
         }
-        h->offset_ = computedOffset;
-        return 0;
-    }
+
+        computed_offset = (h->total_size_ == 0) ? offset : h->total_size_ - 1 + offset;
+        break;
     default:
         spdlog::critical("Invalid seek mode {}", whence);
         return -1;
-
     }
 
+    if (computed_offset < 0)
+    {
+        spdlog::critical("Invalid seek offset {}", computed_offset);
+        return -1;
+    }
+    h->offset_ = computed_offset;
+    return 0;
 }
 
 const char* driver_getlasterror()
