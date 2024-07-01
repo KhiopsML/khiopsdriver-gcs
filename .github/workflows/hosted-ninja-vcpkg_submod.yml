@@ -75,7 +75,7 @@ jobs:
       #   buildPresetAdditionalArgs: "[`--config`, `Release`]"
       #   testPreset: 'ninja-vcpkg'
       #   testPresetAdditionalArgs: "[`--config`, `Release`]"
-      - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
+      - name: Build debug version and run sanitizer checks.
         if: matrix.os == 'ubuntu-latest'
         uses: lukka/run-cmake@v10
         with:

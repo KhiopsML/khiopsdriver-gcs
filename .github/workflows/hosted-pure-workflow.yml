@@ -101,13 +101,12 @@ jobs:
           service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
           workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
           
-      - name: Run sanitizer checks
+      - name: Build debug version and run sanitizer checks
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
-            cmake --build --preset ninja-vcpkg-debug
-            ctest --preset test-debug --output-on-failure
-          fi
+          cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
+          cmake --build --preset ninja-vcpkg-debug
+          ctest --preset test-debug --output-on-failure
       
       # Run CMake to generate Ninja project files, using the vcpkg's toolchain file to resolve and install
       # the dependencies as specified in vcpkg.json. Note that the vcpkg's toolchain is specified
