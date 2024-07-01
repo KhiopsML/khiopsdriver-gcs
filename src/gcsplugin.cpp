@@ -182,7 +182,6 @@ const char *driver_getVersion()
 
 const char *driver_getScheme()
 {
-    char* toto = (char*)malloc(10);
 	return driver_scheme;
 }
 
