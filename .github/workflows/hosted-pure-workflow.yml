@@ -94,12 +94,6 @@ jobs:
         with:
           toolset: 14.0
 
-      - name: Install libubsan if necessary
-        if: runner.os == 'Linux'
-        run: |
-            sudo apt-get update -y
-            sudo apt-get install -y libubsan1
-
       # Run CMake to generate Ninja project files, using the vcpkg's toolchain file to resolve and install
       # the dependencies as specified in vcpkg.json. Note that the vcpkg's toolchain is specified
       # in the CMakePresets.json file.
