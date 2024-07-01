@@ -41,8 +41,10 @@ message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
 add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
 
-add_compile_options(-fsanitize=undefined -fsanitize=address)
-add_link_options(-fsanitize=undefined -fsanitize=address)
+if(LINUX)
+	add_compile_options(-fsanitize=undefined -fsanitize=address)
+	add_link_options(-fsanitize=undefined -fsanitize=address)
+endif()
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
