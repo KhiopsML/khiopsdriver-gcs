@@ -4,6 +4,7 @@
 #include <array>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <memory>
 
@@ -164,7 +165,7 @@ public:
         ASSERT_EQ(f("gs:///no_bucket"), expect);
     }
 
-    template<typename Func, typename Arg,  typename ReturnType>
+    template<typename Func, typename Arg, typename ReturnType>
     void CheckInvalidURIs(Func f, Arg arg, ReturnType expect)
     {
         // null pointer
@@ -223,7 +224,7 @@ public:
         ASSERT_EQ(driver_fclose(res), kSuccess);
     }
 
-    
+
     void OpenFailure()
     {
         void* res = OpenReadOnly();
@@ -261,7 +262,7 @@ public:
         *mock_file_1.offset = 0;
         *mock_file_2.offset = 0;
     }
-    
+
 };
 
 bool operator==(const GCSDriverTestFixture::MultiPartFile& op1, const GCSDriverTestFixture::MultiPartFile& op2)
@@ -341,7 +342,7 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
     // single file
     constexpr uint64_t expected_size{ 10 };
     prepare_list_objects(MakeLOR("mock_bucket", { "mock_object" }, { expected_size }));
-    ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), expected_size);
+    ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), static_cast<long long>(expected_size));
 
 
     // tests for multifile cases
@@ -411,7 +412,7 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA_FAILURE);
     ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), -1);
-    
+
 
     //multi file, read failure on second file
 
@@ -465,8 +466,8 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess)
     ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
 
     LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
-    
-    
+
+
     constexpr size_t total_size{ mock_file_0_size + mock_file_1_size };
 
     MultiPartFile expected_struct{
@@ -475,8 +476,8 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess)
         0,
         0,
         {"mock_file_0", "mock_file_1"},
-        {mock_file_0_size, total_size},
-        total_size
+        {static_cast<long long>(mock_file_0_size), static_cast<long long>(total_size)},
+        static_cast<long long>(total_size)
     };
 
 
@@ -497,8 +498,8 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess)
     ReadSimulatorParams mock_file_1{ mock_file_1_content, mock_file_1_size, &mock_file_1_offset };
 
     LOReturnType file0_file1_response = MakeLOR("mock_bucket", { "mock_file_0", "mock_file_1" }, { mock_file_0_size, mock_file_1_size });
-    
-    
+
+
     constexpr size_t total_size{ mock_file_0_size + mock_file_1_size - mock_header_size };
 
     MultiPartFile expected_struct{
@@ -507,8 +508,8 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess)
         0,
         0,
         {"mock_file_0", "mock_file_1"},
-        {mock_file_0_size, total_size},
-        total_size
+        {static_cast<long long>(mock_file_0_size), static_cast<long long>(total_size)},
+        static_cast<long long>(total_size)
     };
 
 
@@ -547,4 +548,228 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureO
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_0)))
         .WillOnce(READ_MOCK_LAMBDA_FAILURE);
     OpenFailure();
+}
+
+TEST_F(GCSDriverTestFixture, Seek_BadArgs)
+{
+    constexpr int seek_failure{ -1 };
+
+    MultiPartFile one_file{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file"},
+        {0},
+        0
+    };
+
+    ASSERT_EQ(driver_fseek(nullptr, 0, std::ios::beg), seek_failure);
+    ASSERT_EQ(driver_fseek(&one_file, 0, -1), seek_failure);    // unrecognised whence
+}
+
+TEST_F(GCSDriverTestFixture, SeekFromStart)
+{
+    struct TestParams
+    {
+        long long offset;
+        int expected_result;
+    };
+
+    constexpr int seek_failure{ -1 };
+    constexpr int seek_success{ 0 };
+
+    auto test_func = [seek_failure](const std::vector<TestParams> vals, MultiPartFile& sample, long long sample_starting_offset) {
+        for (const auto& v : vals)
+        {
+            int res{ 0 };
+            ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::beg));
+            ASSERT_EQ(res, v.expected_result);
+            ASSERT_EQ(sample.offset_, v.expected_result == seek_failure ? sample_starting_offset : v.offset);
+            sample.offset_ = sample_starting_offset;
+        }
+        };
+
+
+    constexpr long long filesize{ 10 };
+    constexpr long long starting_offset{ 1 };
+
+    MultiPartFile one_file{
+        "mock_bucket",
+        "mock_file",
+        starting_offset,
+        0,
+        {"mock_file"},
+        {filesize},
+        filesize
+    };
+
+    std::vector<TestParams> test_values = {
+        TestParams{0, seek_success},
+        TestParams{5, seek_success},
+        TestParams{filesize - 1, seek_success},
+        TestParams{filesize, seek_success},
+        TestParams{filesize + 1, seek_success},
+        TestParams{-1, seek_failure},
+        TestParams{std::numeric_limits<long long>::min(), seek_failure},
+        TestParams{std::numeric_limits<long long>::max(), seek_success}
+    };
+
+    test_func(test_values, one_file, starting_offset);
+
+    //special case
+
+    // multifile
+    MultiPartFile multi_file{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file_0", "mock_file_1", "mock_file_3"},
+        {filesize, 2 * filesize, 3 * filesize},
+        3 * filesize
+    };
+
+    std::vector<TestParams> test_values_multifile = {
+        TestParams{0, seek_success},
+        TestParams{2 * filesize, seek_success},
+        TestParams{3 * filesize - 1, seek_success},
+        TestParams{3 * filesize, seek_success},
+        TestParams{3 * filesize + 1, seek_success},
+        TestParams{-1, seek_failure},
+        TestParams{std::numeric_limits<long long>::min(), seek_failure},
+        TestParams{std::numeric_limits<long long>::max(), seek_success}
+    };
+
+    test_func(test_values_multifile, multi_file, starting_offset);
+}
+
+TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset)
+{
+    struct TestParams
+    {
+        long long offset;
+        int expected_result;
+    };
+
+    constexpr int seek_failure{ -1 };
+    constexpr int seek_success{ 0 };
+
+    auto test_func = [seek_failure](const std::vector<TestParams> vals, MultiPartFile& sample, long long sample_starting_offset) {
+        for (const auto& v : vals)
+        {
+            int res{ 0 };
+            ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::cur));
+            ASSERT_EQ(res, v.expected_result);
+            ASSERT_EQ(sample.offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
+            sample.offset_ = sample_starting_offset;
+        }
+        };
+
+
+    constexpr long long filesize{ 10 };
+    constexpr long long starting_offset{ 5 };
+    constexpr long long gap_to_end{ filesize - starting_offset - 1 };
+
+    MultiPartFile one_file{
+        "mock_bucket",
+        "mock_file",
+        starting_offset,
+        0,
+        {"mock_file"},
+        {filesize},
+        filesize
+    };
+
+    std::vector<TestParams> test_values = {
+        TestParams{0, seek_success},
+        TestParams{-starting_offset , seek_success},
+        TestParams{-(starting_offset - 1), seek_success},
+        TestParams{gap_to_end - 1, seek_success},
+        TestParams{gap_to_end, seek_success},
+        TestParams{gap_to_end + 1, seek_success},
+        TestParams{-(starting_offset + 1), seek_failure},
+        TestParams{std::numeric_limits<long long>::min(), seek_failure},
+        TestParams{std::numeric_limits<long long>::max(), seek_failure}
+    };
+
+    test_func(test_values, one_file, starting_offset);
+
+    // special case: starting offset is 0
+    
+    MultiPartFile one_file_special_case{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file"},
+        {filesize},
+        filesize
+    };
+
+    std::vector<TestParams> special_test_values = { TestParams{std::numeric_limits<long long>::max(), seek_success} };
+    test_func(special_test_values, one_file_special_case, 0);
+}
+
+TEST_F(GCSDriverTestFixture, SeekFromEnd)
+{
+    struct TestParams
+    {
+        long long offset;
+        int expected_result;
+    };
+
+    constexpr int seek_failure{ -1 };
+    constexpr int seek_success{ 0 };
+
+    auto test_func = [seek_failure](const std::vector<TestParams> vals, MultiPartFile& sample, long long sample_starting_offset) {
+        for (const auto& v : vals)
+        {
+            int res{ 0 };
+            ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::end));
+            ASSERT_EQ(res, v.expected_result);
+            ASSERT_EQ(sample.offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
+            sample.offset_ = sample_starting_offset;
+        }
+        };
+
+
+    constexpr long long filesize{ 10 };
+    constexpr long long starting_offset{ filesize - 1 };
+
+    MultiPartFile one_file{
+        "mock_bucket",
+        "mock_file",
+        starting_offset,
+        0,
+        {"mock_file"},
+        {filesize},
+        filesize
+    };
+
+    std::vector<TestParams> test_values = {
+        TestParams{0, seek_success},
+        TestParams{-starting_offset , seek_success},
+        TestParams{1, seek_success},
+        TestParams{-(starting_offset + 1), seek_failure},
+        TestParams{std::numeric_limits<long long>::min(), seek_failure},
+        TestParams{std::numeric_limits<long long>::max(), seek_failure}
+    };
+
+    test_func(test_values, one_file, starting_offset);
+
+    // special case: file of size 0, offset 0
+
+    MultiPartFile one_file_special_case{
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        {"mock_file"},
+        {0},
+        0
+    };
+
+    std::vector<TestParams> special_test_values = { TestParams{std::numeric_limits<long long>::max(), seek_success} };
+    test_func(special_test_values, one_file_special_case, 0);
 }
