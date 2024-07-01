@@ -76,6 +76,7 @@ jobs:
       #   testPreset: 'ninja-vcpkg'
       #   testPresetAdditionalArgs: "[`--config`, `Release`]"
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
+        if: matrix.os == 'ubuntu-latest'
         uses: lukka/run-cmake@v10
         with:
           configurePreset: 'ninja-multi-vcpkg'
@@ -90,7 +91,6 @@ jobs:
           configurePreset: 'ninja-multi-vcpkg'
           configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
           buildPreset: 'ninja-vcpkg-release'
-          #buildPreset: 'ninja-vcpkg-debug'
           testPreset: 'test-release'
           testPresetAdditionalArgs: "['--output-on-failure']"
   
