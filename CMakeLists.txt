@@ -41,7 +41,8 @@ message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
 add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT(CMAKE_BUILD_TYPE STREQUAL "Release"))
+  message("Build system == Linux, build with sanitizer tools")
 	add_compile_options(-fsanitize=undefined -fsanitize=address)
 	add_link_options(-fsanitize=undefined -fsanitize=address)
 endif()

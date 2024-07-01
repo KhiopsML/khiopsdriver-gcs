@@ -82,7 +82,7 @@ jobs:
           configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
           buildPreset: 'ninja-vcpkg-release'
           #buildPreset: 'ninja-vcpkg-debug'
-          testPreset: 'test-release'
+          testPreset: 'test-debug'
           testPresetAdditionalArgs: "['--output-on-failure']"
 
       - name: Upload the packages as artifacts
