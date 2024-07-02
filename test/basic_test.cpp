@@ -55,6 +55,13 @@ TEST(GCSDriverTest, GetFileSize)
 	ASSERT_EQ(driver_disconnect(), kSuccess);
 }
 
+TEST(GCSDriverTest, GetMultipartFileSize)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-00000000000*.txt"), 5585568);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
 TEST(GCSDriverTest, GetSystemPreferredBufferSize)
 {
 	ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
