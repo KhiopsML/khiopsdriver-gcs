@@ -16,8 +16,8 @@ namespace gcs = gc::storage;
 using ::testing::Return;
 using LOReturnType = gc::StatusOr<gcs::internal::ListObjectsResponse>;
 
-constexpr int kSuccess{ 0 };
-constexpr int kFailure{ 1 };
+constexpr int kSuccess{ 1 };
+constexpr int kFailure{ 0 };
 
 constexpr int kFalse{ 0 };
 constexpr int kTrue{ 1 };
