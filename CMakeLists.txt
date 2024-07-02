@@ -55,3 +55,12 @@ target_compile_options(khiopsdriver_file_gcs
 )
 
 add_subdirectory(test)
+
+option(BUILD_TESTS "Build test programs" OFF)
+
+if(BUILD_TESTS)
+	add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
+	target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt ${CMAKE_DL_LIBS})
+	add_executable(drivertest src/drivertest.cpp)
+	target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
+endif(BUILD_TESTS)

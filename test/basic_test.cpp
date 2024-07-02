@@ -4,6 +4,8 @@
 
 #include "../src/gcsplugin.h"
 
+constexpr int kSuccess{ 1 };
+constexpr int kFailure{ 0 };
 
 TEST(GCSDriverTest, GetDriverName)
 {
@@ -31,26 +33,26 @@ TEST(GCSDriverTest, Connect)
 	ASSERT_FALSE(driver_isConnected());
 
 	//call connect and check connection
-	ASSERT_FALSE(driver_connect());
+	ASSERT_EQ(driver_connect(), kSuccess);
 	ASSERT_TRUE(driver_isConnected());
 
 	//call disconnect and check connection
-	ASSERT_FALSE(driver_disconnect());
+	ASSERT_EQ(driver_disconnect(), kSuccess);
 	ASSERT_FALSE(driver_isConnected());
 }
 
 TEST(GCSDriverTest, Disconnect)
 {
-	ASSERT_FALSE(driver_connect());
-	ASSERT_FALSE(driver_disconnect());
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
 	ASSERT_FALSE(driver_isConnected());
 }
 
 TEST(GCSDriverTest, GetFileSize)
 {
-	ASSERT_FALSE(driver_connect());
+	ASSERT_EQ(driver_connect(), kSuccess);
 	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), 5585568);
-	ASSERT_FALSE(driver_disconnect());
+	ASSERT_EQ(driver_disconnect(), kSuccess);
 }
 
 TEST(GCSDriverTest, GetSystemPreferredBufferSize)
