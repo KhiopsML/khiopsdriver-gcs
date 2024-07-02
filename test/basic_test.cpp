@@ -5,7 +5,6 @@
 #include "../src/gcsplugin.h"
 
 
-
 TEST(GCSDriverTest, GetDriverName)
 {
 	ASSERT_STREQ(driver_getDriverName(), "GCS driver");
@@ -54,17 +53,7 @@ TEST(GCSDriverTest, GetFileSize)
 	ASSERT_FALSE(driver_disconnect());
 }
 
-
-
-int main(int argc, char** argv)
+TEST(GCSDriverTest, GetSystemPreferredBufferSize)
 {
-	::testing::InitGoogleTest(&argc, argv);
-
-	//check that the arguments are effectively passed from ctest
-	for (int i = 0; i < argc; i++)
-	{
-		std::cout << argv[i] << '\n';
-	}
-
-	return RUN_ALL_TESTS();
+	ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }

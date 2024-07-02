@@ -10,6 +10,8 @@
 #include <iostream>
 #include <google/cloud/rest_options.h>
 
+#include <limits.h>
+
 char const *version = "0.1.0";
 char const *driver_name = "GCS driver";
 char const *driver_scheme = "gs";
@@ -177,11 +179,15 @@ const char *driver_getDriverName()
 
 const char *driver_getVersion()
 {
+    int i = 23;
+    i <<= 32;
 	return version;
 }
 
 const char *driver_getScheme()
 {
+
+    char * truc = (char*)malloc(10);
 	return driver_scheme;
 }
 
@@ -233,6 +239,9 @@ int driver_connect()
 int driver_disconnect()
 {
     bIsConnected = false;
+    int *ptr = NULL;
+    int toto = *ptr;
+    printf("Test value = %d\n", toto);
     return kSuccess;
 }
 
@@ -243,6 +252,10 @@ int driver_isConnected()
 
 long long int driver_getSystemPreferredBufferSize()
 {
+    long long toto = LONG_MIN;
+    printf("Value = %lld\n", toto);
+    long long titi = toto - 1;
+    printf("Value = %lld\n", titi);
 	return preferred_buffer_size; // 4 Mo
 }
 

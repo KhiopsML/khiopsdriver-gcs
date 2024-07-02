@@ -39,13 +39,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
-
 if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT(CMAKE_BUILD_TYPE STREQUAL "Release"))
-  message("Build system == Linux, build with sanitizer tools")
-	add_compile_options(-fsanitize=undefined -fsanitize=address)
-	add_link_options(-fsanitize=undefined -fsanitize=address)
+	message("Build system == Linux, build with sanitizer tools")
+	add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+	add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
 endif()
+
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
