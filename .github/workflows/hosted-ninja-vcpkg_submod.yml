@@ -75,16 +75,25 @@ jobs:
       #   buildPresetAdditionalArgs: "[`--config`, `Release`]"
       #   testPreset: 'ninja-vcpkg'
       #   testPresetAdditionalArgs: "[`--config`, `Release`]"
+      - name: Build debug version and run sanitizer checks.
+        if: matrix.os == 'ubuntu-latest'
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: 'ninja-multi-vcpkg'
+          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Debug']"
+          buildPreset: 'ninja-vcpkg-debug'
+          testPreset: 'test-debug'
+          testPresetAdditionalArgs: "['--output-on-failure']"
+
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10
         with:
           configurePreset: 'ninja-multi-vcpkg'
           configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
           buildPreset: 'ninja-vcpkg-release'
-          #buildPreset: 'ninja-vcpkg-debug'
           testPreset: 'test-release'
           testPresetAdditionalArgs: "['--output-on-failure']"
-
+  
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4
         with:

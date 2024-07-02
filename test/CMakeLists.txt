@@ -38,6 +38,6 @@ if(WIN32)
   )
 else ()
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
-endif (MSVC)
+endif ()
 
 gtest_discover_tests(plugin_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

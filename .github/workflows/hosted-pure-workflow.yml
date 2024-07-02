@@ -94,6 +94,20 @@ jobs:
         with:
           toolset: 14.0
 
+      # Retrieve google credentials through WIF
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
+          
+      - name: Build debug version and run sanitizer checks
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
+          cmake --build --preset ninja-vcpkg-debug
+          ctest --preset test-debug --output-on-failure
+      
       # Run CMake to generate Ninja project files, using the vcpkg's toolchain file to resolve and install
       # the dependencies as specified in vcpkg.json. Note that the vcpkg's toolchain is specified
       # in the CMakePresets.json file.
@@ -112,17 +126,11 @@ jobs:
         run: |
           cmake --build --preset ninja-vcpkg-release
 
-      # Retrieve google credentials through WIF
-      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
-      - uses: google-github-actions/auth@v2
-        with:
-          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
-          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
-
       # Test the whole project with CTest, again Release configuration only.
       - name: Test (Release configuration)
         run: |
           ctest --preset test-release --output-on-failure
+
 
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4

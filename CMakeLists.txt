@@ -39,7 +39,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
+if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT(CMAKE_BUILD_TYPE STREQUAL "Release"))
+	message("Build system == Linux, build with sanitizer tools")
+	add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+	add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+endif()
+
 add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
+
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 target_compile_options(khiopsdriver_file_gcs
@@ -48,3 +55,12 @@ target_compile_options(khiopsdriver_file_gcs
 )
 
 add_subdirectory(test)
+
+option(BUILD_TESTS "Build test programs" OFF)
+
+if(BUILD_TESTS)
+	add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
+	target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt ${CMAKE_DL_LIBS})
+	add_executable(drivertest src/drivertest.cpp)
+	target_link_libraries(drivertest ${CMAKE_DL_LIBS}) # Link to dl
+endif(BUILD_TESTS)
