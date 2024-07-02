@@ -196,3 +196,12 @@ TEST(GCSPluginTest, GetScheme)
 
 	deinit_plugin(library_handle);
 }
+
+int main(int argc, char** argv)
+{
+	::testing::InitGoogleTest(&argc, argv);
+
+	auto result = RUN_ALL_TESTS();
+
+	return result;
+}

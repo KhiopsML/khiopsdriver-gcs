@@ -57,3 +57,17 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize)
 {
 	ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }
+
+
+int main(int argc, char** argv)
+{
+	::testing::InitGoogleTest(&argc, argv);
+
+	//check that the arguments are effectively passed from ctest
+	for (int i = 0; i < argc; i++)
+	{
+		std::cout << argv[i] << '\n';
+	}
+
+	return RUN_ALL_TESTS();
+}

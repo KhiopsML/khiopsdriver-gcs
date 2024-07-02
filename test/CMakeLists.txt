@@ -19,7 +19,7 @@ target_compile_options(basic_test
 target_include_directories(basic_test
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
-target_link_libraries(basic_test PRIVATE gtest_main khiopsdriver_file_gcs)
+target_link_libraries(basic_test PRIVATE gtest khiopsdriver_file_gcs)
 
 gtest_discover_tests(basic_test)
 
@@ -37,7 +37,7 @@ if(WIN32)
     COMMAND_EXPAND_LISTS
   )
 else ()
-  target_link_libraries(plugin_test PRIVATE gtest_main ${CMAKE_DL_LIBS}) # Link to dl
+  target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
 endif ()
 
 gtest_discover_tests(plugin_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
