@@ -16,6 +16,12 @@ target_compile_options(basic_test
 	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
 	PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>
 )
+
+#MSVC requires /bigobj to build in debug config
+target_compile_options(basic_test
+    PRIVATE $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:MSVC>>:/bigobj>
+)
+
 target_include_directories(basic_test
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
