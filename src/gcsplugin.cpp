@@ -57,7 +57,8 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     char* buffer,
     //std::size_t buffer_length,
     std::int64_t start_range,
-    std::int64_t end_range) {
+    std::int64_t end_range)
+{
     namespace gcs = google::cloud::storage;
 
     auto reader = client.ReadObject(bucket_name, object_name, gcs::ReadRange(start_range, end_range));
@@ -656,20 +657,47 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
         return -1;
     }
 
+    if (0 == size)
+    {
+        spdlog::error("Error passing size of 0");
+        return -1;
+    }
+
     spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
     MultiPartFile* h = reinterpret_cast<MultiPartFile*>(stream);
-
-    //Refuse to read if offset > totalSize
     const tOffset offset = h->offset_;
-    const tOffset total_size = h->total_size_;
-    if (offset > total_size)
+
+    //fast exit for 0 read
+    if (0 == count)
     {
+        return 0;
+    }
+
+    // prevent overflow
+    constexpr size_t max_prod_usable{ static_cast<size_t>(std::numeric_limits<tOffset>::max()) };
+    if (max_prod_usable / size < count || max_prod_usable / count < size)
+    {
+        spdlog::critical("product size * count is too large, would overflow");
         return -1;
     }
 
     tOffset to_read{ static_cast<tOffset>(size * count) };
+    if (offset > std::numeric_limits<long long>::max() - to_read)
+    {
+        spdlog::critical("signed overflow prevented on reading attempt");
+        return -1;
+    }
+    // end of overflow prevention
 
+    // special case: if offset >= total_size, error if not 0 byte required. 0 byte required is already done above
+    const tOffset total_size = h->total_size_;
+    if (offset >= total_size)
+    {
+        return -1;
+    }
+
+    // normal cases
     if (offset + to_read > total_size)
     {
         to_read = total_size - offset;
@@ -738,17 +766,6 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
 
     h->offset_ += bytes_read;
     return bytes_read;
-
-    //// TODO: handle multifile case
-    //auto toRead = size * count;
-    //spdlog::debug("offset = {} toRead = {}", h->offset, toRead);
-
-    //auto num_read = DownloadFileRangeToBuffer(h->bucketname, h->filename, (char*)ptr, toRead, h->offset,
-    //	h->offset + toRead);
-
-    //if (num_read != -1)
-    //	h->offset += num_read;
-    //return num_read;
 }
 
 long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* stream)
