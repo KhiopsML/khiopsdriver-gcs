@@ -18,9 +18,9 @@
 
 #include <limits.h>
 
-char const *version = "0.1.0";
-char const *driver_name = "GCS driver";
-char const *driver_scheme = "gs";
+constexpr const char *version = "0.1.0";
+constexpr const char *driver_name = "GCS driver";
+constexpr const char *driver_scheme = "gs";
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
 bool bIsConnected = false;
