@@ -43,6 +43,11 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT(CMAKE_BUILD_TYPE STREQUAL "Relea
 	message("Build system == Linux, build with sanitizer tools")
 	add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
 	add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+	set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
+	include(CodeCoverage)
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
+	setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
+	setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage --gtest_output=xml:coverage.junit.xml)
 endif()
 
 add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
