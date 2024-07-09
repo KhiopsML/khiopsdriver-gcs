@@ -104,7 +104,7 @@ jobs:
       - name: Build debug version and run sanitizer checks
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt-get upadate
+          sudo apt-get update
           sudo apt-get install lcov gcovr
           cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
           cmake --build --preset ninja-vcpkg-debug
