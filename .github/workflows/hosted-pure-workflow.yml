@@ -107,6 +107,17 @@ jobs:
           cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
           cmake --build --preset ninja-vcpkg-debug
           ctest --preset test-debug --output-on-failure
+          cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage
+          cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_cobertura
+
+      - name: Upload coverage results
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          path: |
+            builds/ninja-multi-vcpkg/coverage/*
+            builds/ninja-multi-vcpkg/coverage.*
+          if-no-files-found: ignore
       
       # Run CMake to generate Ninja project files, using the vcpkg's toolchain file to resolve and install
       # the dependencies as specified in vcpkg.json. Note that the vcpkg's toolchain is specified
