@@ -69,6 +69,11 @@ jobs:
           service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
           workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
 
+      - name: Install coverage tols
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          apt-get install lcov gcovr
+  
       # Note: if the preset misses the "configuration", it is possible to explicitly select the
       # configuration with the additional `--config` flag, e.g.:
       #   buildPreset: 'ninja-vcpkg'
@@ -88,7 +93,6 @@ jobs:
       - name: Generate coverage report
         if: matrix.os == 'ubuntu-latest'
         run: |
-          apt-get install lcov gcovr
           cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       - name: Upload coverage results

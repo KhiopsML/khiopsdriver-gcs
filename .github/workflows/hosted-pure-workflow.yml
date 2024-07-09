@@ -104,10 +104,10 @@ jobs:
       - name: Build debug version and run sanitizer checks
         if: matrix.os == 'ubuntu-latest'
         run: |
+          apt-get install lcov gcovr
           cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
           cmake --build --preset ninja-vcpkg-debug
           ctest --preset test-debug --output-on-failure
-          apt-get install lcov gcovr
           cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       - name: Upload coverage results
