@@ -88,6 +88,7 @@ jobs:
       - name: Generate coverage report
         if: matrix.os == 'ubuntu-latest'
         run: |
+          apt-get install lcov gcovr
           cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       - name: Upload coverage results
