@@ -18,9 +18,9 @@
 
 #include <limits.h>
 
-constexpr const char *version = "0.1.0";
-constexpr const char *driver_name = "GCS driver";
-constexpr const char *driver_scheme = "gs";
+constexpr const char* version = "0.1.0";
+constexpr const char* driver_name = "GCS driver";
+constexpr const char* driver_scheme = "gs";
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
 bool bIsConnected = false;
@@ -50,6 +50,102 @@ struct MultiPartFile
     std::vector<long long int> cumulativeSize_;
     tOffset total_size_{ 0 };
 };
+
+enum class HandleType { kRead, kWrite, kAppend };
+
+using ReaderPtr = std::unique_ptr<MultiPartFile>;
+using WriterPtr = std::unique_ptr<gcs::ObjectWriteStream>;
+
+union ClientVariant
+{
+    ReaderPtr reader;
+    WriterPtr writer;
+
+    //  no default ctor is allowed since member have non trivial ctors
+    //  the chosen variant must be initialized by placement new
+    explicit ClientVariant(HandleType type)
+    {
+        switch (type)
+        {
+        case HandleType::kWrite:
+            new (&reader) ReaderPtr;
+            break;
+        case HandleType::kAppend:
+        case HandleType::kRead:
+        default:
+            new (&writer) WriterPtr;
+            break;
+        }
+    }
+
+    ~ClientVariant() {}
+};
+
+struct Handle
+{
+    HandleType type;
+    ClientVariant var;
+
+    Handle(HandleType p_type)
+        : type{ p_type }
+        , var(p_type)
+    {}
+
+    ~Handle()
+    {
+        switch (type)
+        {
+        case HandleType::kRead: var.reader.~ReaderPtr(); break;
+        case HandleType::kWrite: var.writer.~WriterPtr(); break;
+        case HandleType::kAppend:
+        default: break;
+        }
+    }
+
+    MultiPartFile& Reader() { return *(var.reader); }
+    gcs::ObjectWriteStream& Writer() { return *(var.writer); }
+};
+
+using HandlePtr = std::unique_ptr<Handle>;
+
+//TODO would be nice to have a generic version, but cannot find the way in C++11
+// 
+// 
+
+HandlePtr MakeHandlePtrFromReader(ReaderPtr&& reader_ptr)
+{
+    HandlePtr h{ new Handle(HandleType::kRead) };
+    h->var.reader = std::move(reader_ptr);
+    return h;
+}
+
+HandlePtr MakeHandlePtrFromWriter(WriterPtr&& writer_ptr)
+{
+    std::unique_ptr<Handle> h{ new Handle(HandleType::kWrite) };
+    h->var.writer = std::move(writer_ptr);
+    return h;
+}
+
+std::vector<HandlePtr> active_handles;
+
+std::vector<HandlePtr>::iterator FindHandle(void* handle)
+{
+    return std::find_if(active_handles.begin(), active_handles.end(), [handle](const std::unique_ptr<Handle>& act_h_ptr) {
+        return handle == static_cast<void*>(act_h_ptr.get());
+        });
+}
+
+int EraseRemove(void* handle)//std::vector<std::unique_ptr<Handle>>::iterator pos)
+{
+    auto to_erase = FindHandle(handle);
+    if (to_erase == active_handles.end())
+    {
+        return kFailure;
+    }
+    *to_erase = std::move(*active_handles.rbegin());
+    active_handles.pop_back();
+    return kSuccess;
+}
 
 // Definition of helper functions
 long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
@@ -99,7 +195,7 @@ bool UploadBufferToGcs(const std::string& bucket_name,
 
 bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name)
 {
-    char const *prefix = "gs://";
+    char const* prefix = "gs://";
     const size_t prefix_size{ std::strlen(prefix) };
     //const size_t prefix_size{prefix.}
     if (gcs_uri.compare(0, prefix_size, prefix) != 0) {
@@ -528,35 +624,44 @@ void* driver_fopen(const char* filename, char mode)
 
     spdlog::debug("fopen {} {}", filename, mode);
 
-    auto h = new MultiPartFile;
-    GetBucketAndObjectNames(filename, h->bucketname_, h->filename_);
-    if (h->bucketname_.empty() || h->filename_.empty())
+    std::string bucketname;
+    std::string objectname;
+
+    GetBucketAndObjectNames(filename, bucketname, objectname);
+
+    if (bucketname.empty() || objectname.empty())
     {
         spdlog::error("Error parsing URL.");
-        delete h;
         return nullptr;
     }
 
     switch (mode) {
     case 'r':
     {
-        if (kFailure == AccumulateNamesAndSizes(*h))
+        ReaderPtr reader_struct{ new MultiPartFile };
+        reader_struct->bucketname_ = std::move(bucketname);
+        reader_struct->filename_ = std::move(objectname);
+        if (kFailure == AccumulateNamesAndSizes(*reader_struct))
         {
-            //h is unusable
-            delete h;
+            //reader_struct is unusable
             return nullptr;
         }
-        return h;
+        active_handles.push_back(MakeHandlePtrFromReader(std::move(reader_struct)));
+        break;
     }
     case 'w':
-        return h;
-
+    {
+        active_handles.push_back(MakeHandlePtrFromWriter({}));
+        break;
+    }
     case 'a':
 
     default:
         spdlog::error("Invalid open mode {}", mode);
         return 0;
     }
+
+    return active_handles.rbegin()->get();
 }
 
 int driver_fclose(void* stream)
@@ -569,13 +674,10 @@ int driver_fclose(void* stream)
     }
 
     spdlog::debug("fclose {}", (void*)stream);
-    delete (reinterpret_cast<MultiPartFile*>(stream));
-    return kSuccess;
+
+    return EraseRemove(stream);
 }
 
-//long long int totalSize(MultiPartFile* h) {
-//	return h->cumulativeSize[h->cumulativeSize.size() - 1];
-//}
 
 int driver_fseek(void* stream, long long int offset, int whence)
 {
@@ -586,9 +688,16 @@ int driver_fseek(void* stream, long long int offset, int whence)
         return -1;
     }
 
+    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    if (HandleType::kRead != stream_h->type)
+    {
+        spdlog::error("Cannot seek on not reading stream");
+        return -1;
+    }
+
     spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
-    MultiPartFile* h = reinterpret_cast<MultiPartFile*>(stream);
+    MultiPartFile& h = stream_h->Reader();
 
     tOffset computed_offset{ 0 };
 
@@ -598,30 +707,30 @@ int driver_fseek(void* stream, long long int offset, int whence)
         computed_offset = offset;
         break;
     case std::ios::cur:
-        if (offset > max_val - h->offset_)
+        if (offset > max_val - h.offset_)
         {
             spdlog::critical("Signed overflow prevented");
             return -1;
         }
-        computed_offset = h->offset_ + offset;
+        computed_offset = h.offset_ + offset;
         break;
     case std::ios::end:
-        if (h->total_size_ > 0)
+        if (h.total_size_ > 0)
         {
-            long long minus1 = h->total_size_ - 1;
+            long long minus1 = h.total_size_ - 1;
             if (offset > max_val - minus1)
             {
                 spdlog::critical("Signed overflow prevented");
                 return -1;
             }
         }
-        if ((offset == std::numeric_limits<long long>::min()) && (h->total_size_ == 0))
+        if ((offset == std::numeric_limits<long long>::min()) && (h.total_size_ == 0))
         {
             spdlog::critical("Signed overflow prevented");
             return -1;
         }
 
-        computed_offset = (h->total_size_ == 0) ? offset : h->total_size_ - 1 + offset;
+        computed_offset = (h.total_size_ == 0) ? offset : h.total_size_ - 1 + offset;
         break;
     default:
         spdlog::critical("Invalid seek mode {}", whence);
@@ -633,7 +742,7 @@ int driver_fseek(void* stream, long long int offset, int whence)
         spdlog::critical("Invalid seek offset {}", computed_offset);
         return -1;
     }
-    h->offset_ = computed_offset;
+    h.offset_ = computed_offset;
     return 0;
 }
 
@@ -663,10 +772,18 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
         return -1;
     }
 
+    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    if (HandleType::kRead != stream_h->type)
+    {
+        spdlog::error("Cannot read on not reading stream");
+        return -1;
+    }
+
     spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
-    MultiPartFile* h = reinterpret_cast<MultiPartFile*>(stream);
-    const tOffset offset = h->offset_;
+    MultiPartFile& h = stream_h->Reader();
+
+    const tOffset offset = h.offset_;
 
     //fast exit for 0 read
     if (0 == count)
@@ -691,7 +808,7 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
     // end of overflow prevention
 
     // special case: if offset >= total_size, error if not 0 byte required. 0 byte required is already done above
-    const tOffset total_size = h->total_size_;
+    const tOffset total_size = h.total_size_;
     if (offset >= total_size)
     {
         return -1;
@@ -717,10 +834,10 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
     tOffset bytes_read{ 0 };
 
     // Lookup item containing initial bytes at requested offset
-    const auto& cumul_sizes = h->cumulativeSize_;
-    const tOffset common_header_length = h->commonHeaderLength_;
-    const std::string& bucket_name = h->bucketname_;
-    const auto& filenames = h->filenames_;
+    const auto& cumul_sizes = h.cumulativeSize_;
+    const tOffset common_header_length = h.commonHeaderLength_;
+    const std::string& bucket_name = h.bucketname_;
+    const auto& filenames = h.filenames_;
     char* buffer_pos = reinterpret_cast<char*>(ptr);
 
     auto greater_than_offset_it = std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
@@ -764,12 +881,18 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
         }
     }
 
-    h->offset_ += bytes_read;
+    h.offset_ += bytes_read;
     return bytes_read;
 }
 
 long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* stream)
 {
+    if (!stream)
+    {
+        spdlog::error("Error passing null stream pointer to fwrite");
+        return -1;
+    }
+
     spdlog::debug("fwrite {} {} {} {}", ptr, size, count, stream);
 
     assert(stream != NULL);
@@ -934,5 +1057,3 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
 
     return true;
 }
-
-
