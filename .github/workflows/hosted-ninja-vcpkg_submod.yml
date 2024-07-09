@@ -72,7 +72,8 @@ jobs:
       - name: Install coverage tols
         if: matrix.os == 'ubuntu-latest'
         run: |
-          apt-get install lcov gcovr
+          sudo apt-get update
+          sudo apt-get install lcov gcovr
   
       # Note: if the preset misses the "configuration", it is possible to explicitly select the
       # configuration with the additional `--config` flag, e.g.:
