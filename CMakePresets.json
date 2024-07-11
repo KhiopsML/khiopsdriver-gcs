@@ -15,40 +15,37 @@
             "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         },
         {
-            "name": "ninja-multi",
-            "displayName": "Ninja without vcpkg",
-            "description": "Configure Ninja project files for all configurations",
-            "binaryDir": "${sourceDir}/builds/${presetName}",
-            "generator": "Ninja Multi-Config"
+            "name": "ninja-multi-vcpkg-debug",
+            "displayName": "Ninja Multi-Config with vcpkg (Debug)",
+            "inherits": "ninja-multi-vcpkg",
+            "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "ninja-multi-vcpkg-release",
+            "displayName": "Ninja Multi-Config with vcpkg (Release)",
+            "inherits": "ninja-multi-vcpkg",
+            "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
         {
             "name": "ninja-vcpkg-debug",
-            "configurePreset": "ninja-multi-vcpkg",
+            "configurePreset": "ninja-multi-vcpkg-debug",
             "displayName": "Build (Debug)",
             "description": "Build with Ninja/vcpkg (Debug)",
             "configuration": "Debug"
         },
         {
             "name": "ninja-vcpkg-release",
-            "configurePreset": "ninja-multi-vcpkg",
+            "configurePreset": "ninja-multi-vcpkg-release",
             "displayName": "Build (Release)",
             "description": "Build with Ninja/vcpkg (Release)",
-            "configuration": "Release"
-        },
-        {
-            "name": "ninja-debug",
-            "configurePreset": "ninja-multi",
-            "displayName": "Build (Debug)",
-            "description": "Build with Ninja",
-            "configuration": "Debug"
-        },
-        {
-            "name": "ninja-release",
-            "configurePreset": "ninja-multi",
-            "displayName": "Build (release)",
-            "description": "Build with Ninja",
             "configuration": "Release"
         }
     ],

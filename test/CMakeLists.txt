@@ -10,7 +10,7 @@ FetchContent_MakeAvailable(googletest)
   
 include(GoogleTest)
 
-add_executable(basic_test basic_test.cpp)
+add_executable(basic_test basic_test.cpp drivertest.cpp)
 
 target_compile_options(basic_test
 	PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
