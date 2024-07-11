@@ -269,6 +269,18 @@ void HandleNoObjectError(const gc::Status& status)
     }
 }
 
+
+bool WillSizeCountProductOverflow(size_t size, size_t count)
+{
+    constexpr size_t max_prod_usable{ static_cast<size_t>(std::numeric_limits<tOffset>::max()) };
+    if (max_prod_usable / size < count || max_prod_usable / count < size)
+    {
+        spdlog::critical("product size * count is too large, would overflow");
+        return true;
+    }
+    return false;
+}
+
 // Implementation of driver functions
 void test_setClient(::google::cloud::storage::Client&& mock_client)
 {
@@ -807,10 +819,8 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
     }
 
     // prevent overflow
-    constexpr size_t max_prod_usable{ static_cast<size_t>(std::numeric_limits<tOffset>::max()) };
-    if (max_prod_usable / size < count || max_prod_usable / count < size)
+    if (WillSizeCountProductOverflow(size, count))
     {
-        spdlog::critical("product size * count is too large, would overflow");
         return -1;
     }
 
