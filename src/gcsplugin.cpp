@@ -293,6 +293,35 @@ void test_unsetClient()
     client = ::google::cloud::storage::Client{};
 }
 
+void* test_addReaderHandle(
+    const std::string& bucket,
+    const std::string& object,
+    long long offset,
+    long long commonHeaderLength,
+    const std::vector<std::string>& filenames,
+    const std::vector<long long int>& cumulativeSize,
+    long long total_size)
+{
+    ReaderPtr reader_ptr{ new MultiPartFile{
+        bucket,
+        object,
+        offset,
+        commonHeaderLength,
+        filenames,
+        cumulativeSize,
+        total_size
+    }};
+    active_handles.push_back(MakeHandlePtrFromReader(std::move(reader_ptr)));
+    return active_handles.rbegin()->get();
+}
+
+void* test_addWriterHandle()
+{
+    WriterPtr writer_ptr{ new gcs::ObjectWriteStream };
+    active_handles.push_back(MakeHandlePtrFromWriter(std::move(writer_ptr)));
+    return active_handles.rbegin()->get();
+}
+
 const char* driver_getDriverName()
 {
     return driver_name;
@@ -715,7 +744,16 @@ int driver_fseek(void* stream, long long int offset, int whence)
         return -1;
     }
 
-    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    // confirm stream's presence
+    auto to_stream = FindHandle(stream);
+    if (to_stream == active_handles.end())
+    {
+        spdlog::error("Cannot identify stream");
+        return -1;
+    }
+
+    auto& stream_h = *to_stream;
+
     if (HandleType::kRead != stream_h->type)
     {
         spdlog::error("Cannot seek on not reading stream");
@@ -799,7 +837,16 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
         return -1;
     }
 
-    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    // confirm stream's presence
+    auto to_stream = FindHandle(stream);
+    if (to_stream == active_handles.end())
+    {
+        spdlog::error("Cannot identify stream");
+        return -1;
+    }
+
+    auto& stream_h = *to_stream;
+
     if (HandleType::kRead != stream_h->type)
     {
         spdlog::error("Cannot read on not reading stream");
