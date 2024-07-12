@@ -3,6 +3,7 @@
     "version-string": "latest",
     "description": "Setting up C++ for Google Cloud with CMake and vcpkg",
     "dependencies": [
+        {"name": "boost-uuid"},
         {"name": "fmt"},
         {"name": "google-cloud-cpp", "default-features": false, "features": ["storage"]},
         {"name": "spdlog"}

@@ -2,9 +2,15 @@
 
 #include "../src/gcsplugin.h"
 
+#include <sstream>
+
+#include <boost/uuid/uuid.hpp>            // uuid class
+#include <boost/uuid/uuid_generators.hpp> // generators
+#include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
+
 /* functions prototype */
 int test(const char *file_name_input, const char *file_name_output, const char *file_name_local, int nBufferSize);
-int launch_test(const char *inputFilename, const char *outputFilename, const char *localOutput, int nBufferSize);
+int launch_test(const char *inputFilename, int nBufferSize);
 int copyFile(const char *file_name_input, const char *file_name_output, int nBufferSize);
 int copyFileWithFseek(const char *file_name_input, const char *file_name_output, int nBufferSize);
 int removeFile(const char *filename);
@@ -16,34 +22,35 @@ constexpr int kFailure{ 0 };
 TEST(GCSDriverTest, End2EndTest_SingleFile_512KB_OK)
 {
 	const char* inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-000000000001.txt";
-	const char* outputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/output/new_output.txt";
-	const char* localOutput = "/tmp/out1.txt";
 
 	/* default size of buffer passed to driver */
 	int nBufferSize = 512 * 1024;
 
 	/* error indicator in case of error */
-	int test_status = launch_test(inputFilename, outputFilename, localOutput, nBufferSize);
+	int test_status = launch_test(inputFilename, nBufferSize);
     ASSERT_EQ(test_status, kSuccess);
 }
 
 TEST(GCSDriverTest, End2EndTest_MultipartFile_512KB_OK)
 {
 	const char* inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-00000000000*.txt";
-	const char* outputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/output/new_output2.txt";
-	const char* localOutput = "/tmp/out2.txt";
 
 	/* default size of buffer passed to driver */
 	int nBufferSize = 512 * 1024;
 
 	/* error indicator in case of error */
-	int test_status = launch_test(inputFilename, outputFilename, localOutput, nBufferSize);
+	int test_status = launch_test(inputFilename, nBufferSize);
     ASSERT_EQ(test_status, kSuccess);
 }
 
-int launch_test(const char *inputFilename, const char *outputFilename, const char *localOutput, int nBufferSize)
+int launch_test(const char *inputFilename, int nBufferSize)
 {
 	int test_status = kSuccess;
+
+	std::stringstream outputFilename;
+	outputFilename << "gs://data-test-khiops-driver-gcs/khiops_data/output/" << boost::uuids::random_generator()() << "/output.txt";
+	std::stringstream localOutput;
+	localOutput << "/tmp/out-" << boost::uuids::random_generator()() << ".txt";
 
     // Connection to the file system
     bool bIsconnected = driver_connect();
@@ -62,7 +69,7 @@ int launch_test(const char *inputFilename, const char *outputFilename, const cha
         // The real test begins here
         if (test_status == kSuccess)
         {
-            test_status = test(inputFilename, outputFilename, localOutput, nBufferSize);
+            test_status = test(inputFilename, outputFilename.str().c_str(), localOutput.str().c_str(), nBufferSize);
         }
         driver_disconnect();
     }
