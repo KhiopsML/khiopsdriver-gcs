@@ -614,7 +614,7 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess)
         "mock_bucket",
         "mock_file",
         0,
-        0,
+        static_cast<long long>(mock_header_size),
         {"mock_file_0", "mock_file_1"},
         {static_cast<long long>(mock_file_0_size), static_cast<long long>(total_size)},
         static_cast<long long>(total_size)

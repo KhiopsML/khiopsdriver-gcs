@@ -601,8 +601,10 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
             }
         }
     }
-    h.commonHeaderLength_ = header_size;
-
+    if (same_header) {
+       h.commonHeaderLength_ = header_size;
+    }
+    
     h.total_size_ = *(h.cumulativeSize_.rbegin());
 
     return kSuccess;
@@ -1006,7 +1008,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
 
     int status = kSuccess;
 
-    for (uint i=0; i<reader_struct->filenames_.size() && status == kSuccess; i++) {
+    for (std::size_t i=0; i<reader_struct->filenames_.size() && status == kSuccess; i++) {
         spdlog::debug("copyToLocal processing file {} = {}", i, reader_struct->filenames_[i].c_str());
 
         // Create a ReadObject stream
