@@ -604,7 +604,7 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
     if (same_header) {
        h.commonHeaderLength_ = header_size;
     }
-    
+
     h.total_size_ = *(h.cumulativeSize_.rbegin());
 
     return kSuccess;
@@ -1035,16 +1035,16 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
             spdlog::debug("Read {}", reader.gcount());
 
             if (reader.gcount() > 0) {
-                char *buf_ptr = buffer.data();
+                int offset = 0;
                 std::streamsize num_bytes = reader.gcount();
                 if (i > 0 && !headerlineSkipped && reader_struct->commonHeaderLength_ > 0) {
                     // TODO: check bounds!
                     spdlog::debug("Skipping initial {} bytes", reader_struct->commonHeaderLength_);
-                    buf_ptr += reader_struct->commonHeaderLength_;
+                    offset = reader_struct->commonHeaderLength_;
                     num_bytes -= reader_struct->commonHeaderLength_;
                     headerlineSkipped = true;
                 }
-                file_stream.write(buf_ptr, num_bytes);
+                file_stream.write(buffer.data()+offset, num_bytes);
             }
             else {
                 complete = true;
