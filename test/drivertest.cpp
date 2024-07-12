@@ -31,6 +31,31 @@ TEST(GCSDriverTest, End2EndTest_SingleFile_512KB_OK)
     ASSERT_EQ(test_status, kSuccess);
 }
 
+TEST(GCSDriverTest, End2EndTest_SingleFile_2MB_OK)
+{
+	const char* inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-000000000001.txt";
+
+	/* default size of buffer passed to driver */
+	int nBufferSize = 2 * 1024 * 1024;
+
+	/* error indicator in case of error */
+	int test_status = launch_test(inputFilename, nBufferSize);
+    ASSERT_EQ(test_status, kSuccess);
+}
+
+TEST(GCSDriverTest, End2EndTest_SingleFile_512B_OK)
+{
+	/* use this particular file because it is short and buffer size triggers lots of read operations */
+	const char* inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-000000000002.txt";
+
+	/* default size of buffer passed to driver */
+	int nBufferSize = 512;
+
+	/* error indicator in case of error */
+	int test_status = launch_test(inputFilename, nBufferSize);
+    ASSERT_EQ(test_status, kSuccess);
+}
+
 TEST(GCSDriverTest, End2EndTest_MultipartFile_512KB_OK)
 {
 	const char* inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-00000000000*.txt";
