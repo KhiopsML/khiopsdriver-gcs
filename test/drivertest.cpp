@@ -50,7 +50,11 @@ int launch_test(const char *inputFilename, int nBufferSize)
 	std::stringstream outputFilename;
 	outputFilename << "gs://data-test-khiops-driver-gcs/khiops_data/output/" << boost::uuids::random_generator()() << "/output.txt";
 	std::stringstream localOutput;
-	localOutput << "/tmp/out-" << boost::uuids::random_generator()() << ".txt";
+#ifdef _WIN32
+	localOutput << std::getenv("TEMP") << "\\out-" << boost::uuids::random_generator()() << ".txt";
+#else
+	localOutput << std::getenv("TEMP") << "/out-" << boost::uuids::random_generator()() << ".txt";
+#endif
 
     // Connection to the file system
     bool bIsconnected = driver_connect();
