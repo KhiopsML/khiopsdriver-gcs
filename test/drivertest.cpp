@@ -53,7 +53,7 @@ int launch_test(const char *inputFilename, int nBufferSize)
 #ifdef _WIN32
 	localOutput << std::getenv("TEMP") << "\\out-" << boost::uuids::random_generator()() << ".txt";
 #else
-	localOutput << std::getenv("TEMP") << "/out-" << boost::uuids::random_generator()() << ".txt";
+	localOutput << "/tmp/out-" << boost::uuids::random_generator()() << ".txt";
 #endif
 
     // Connection to the file system
