@@ -17,6 +17,7 @@
 #include <memory>
 
 #include <limits.h>
+#include <google/cloud/storage/object_write_stream.h>
 
 constexpr const char* version = "0.1.0";
 constexpr const char* driver_name = "GCS driver";
@@ -51,10 +52,17 @@ struct MultiPartFile
     tOffset total_size_{ 0 };
 };
 
+struct WriteFile
+{
+    std::string bucketname_;
+    std::string filename_;
+    google::cloud::storage::ObjectWriteStream writer_;
+};
+
 enum class HandleType { kRead, kWrite, kAppend };
 
 using ReaderPtr = std::unique_ptr<MultiPartFile>;
-using WriterPtr = std::unique_ptr<gcs::ObjectWriteStream>;
+using WriterPtr = std::unique_ptr<WriteFile>;
 
 union ClientVariant
 {
@@ -103,7 +111,7 @@ struct Handle
     }
 
     MultiPartFile& Reader() { return *(var.reader); }
-    gcs::ObjectWriteStream& Writer() { return *(var.writer); }
+    WriteFile& Writer() { return *(var.writer); }
 };
 
 using HandlePtr = std::unique_ptr<Handle>;
@@ -173,24 +181,6 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     spdlog::debug("read = {}", num_read);
 
     return num_read;
-}
-
-bool UploadBufferToGcs(const std::string& bucket_name,
-    const std::string& object_name,
-    const char* buffer,
-    std::size_t buffer_size) {
-
-    auto writer = client.WriteObject(bucket_name, object_name);
-    writer.write(buffer, buffer_size);
-    writer.Close();
-
-    auto status = writer.metadata();
-    if (!status) {
-        spdlog::error("Error during upload: {} {}", (int)(status.status().code()), status.status().message());
-        return false;
-    }
-
-    return true;
 }
 
 bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name)
@@ -410,7 +400,12 @@ int driver_fileExists(const char* sFilePathName)
 
     auto status_or_metadata_list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
     const auto first_item_it = status_or_metadata_list.begin();
-    if ((first_item_it == status_or_metadata_list.end()) || !(*first_item_it))
+    if (first_item_it == status_or_metadata_list.end())
+    {
+        spdlog::debug("Object does not exist");
+        return kFalse;
+    }
+    if (!(*first_item_it))
     {
         spdlog::error("Error checking object");
         return kFalse;
@@ -606,6 +601,9 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
             }
         }
     }
+    if (same_header) {
+       h.commonHeaderLength_ = header_size;
+    }
 
     h.total_size_ = *(h.cumulativeSize_.rbegin());
 
@@ -651,7 +649,14 @@ void* driver_fopen(const char* filename, char mode)
     }
     case 'w':
     {
-        active_handles.push_back(MakeHandlePtrFromWriter({}));
+        auto writer = client.WriteObject(bucketname, objectname);
+        if (!writer) {
+            spdlog::error("Error initializing write stream: {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
+            return 0;
+        }
+        WriterPtr writer_struct{ new WriteFile };
+        writer_struct->writer_ = std::move(writer);
+        active_handles.push_back(MakeHandlePtrFromWriter(std::move(writer_struct)));
         break;
     }
     case 'a':
@@ -674,6 +679,16 @@ int driver_fclose(void* stream)
     }
 
     spdlog::debug("fclose {}", (void*)stream);
+
+    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    if (HandleType::kWrite == stream_h->type)
+    {
+        stream_h->var.writer->writer_.Close();
+        auto status = stream_h->var.writer->writer_.metadata();
+        if (!status) {
+            spdlog::error("Error during upload: {} {}", (int)(status.status().code()), status.status().message());
+        }
+    }
 
     return EraseRemove(stream);
 }
@@ -896,9 +911,20 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
     spdlog::debug("fwrite {} {} {} {}", ptr, size, count, stream);
 
     assert(stream != NULL);
-    MultiPartFile* h = (MultiPartFile*)stream;
+    Handle* stream_h = reinterpret_cast<Handle*>(stream);
+    if (HandleType::kWrite != stream_h->type)
+    {
+        spdlog::error("Cannot write on not writing stream");
+        return -1;
+    }
 
-    UploadBufferToGcs(h->bucketname_, h->filename_, (char*)ptr, size * count);
+    stream_h->var.writer->writer_.write((const char*)ptr, size * count);
+    if (stream_h->var.writer->writer_.bad()) {
+        auto status = stream_h->var.writer->writer_.last_status();
+        spdlog::error("Error during upload: {} {}", (int)(status.code()), status.message());
+        return -1;
+    }
+    spdlog::debug("Write status after write: good {}, bad {}, fail {}, goodbit {}", stream_h->var.writer->writer_.good(), stream_h->var.writer->writer_.bad(), stream_h->var.writer->writer_.fail(), (int)(stream_h->var.writer->writer_.goodbit));
 
     // TODO proper error handling...
     return size * count;
@@ -922,10 +948,10 @@ int driver_remove(const char* filename)
     auto status = client.DeleteObject(bucket_name, object_name);
     if (!status.ok()) {
         spdlog::error("Error deleting object: {} {}", (int)(status.code()), status.message());
-        return 0;
+        return kFailure;
     }
 
-    return 1;
+    return kSuccess;
 }
 
 int driver_rmdir(const char* filename)
@@ -964,10 +990,12 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
     ParseGcsUri(sSourceFilePathName, bucket_name, object_name);
     FallbackToDefaultBucket(bucket_name);
 
-    // Create a ReadObject stream
-    auto reader = client.ReadObject(bucket_name, object_name);
-    if (!reader) {
-        spdlog::error("Error initializing download stream: {} {}", (int)(reader.status().code()), reader.status().message());
+    ReaderPtr reader_struct{ new MultiPartFile };
+    reader_struct->bucketname_ = bucket_name;
+    reader_struct->filename_ = object_name;
+    if (kFailure == AccumulateNamesAndSizes(*reader_struct))
+    {
+        //reader_struct is unusable
         return false;
     }
 
@@ -978,38 +1006,59 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         return false;
     }
 
-    // Read from the GCS object and write to the local file
-    std::string buffer(1024, '\0');
-    spdlog::debug("Start reading {}", buffer);
+    int status = kSuccess;
 
-    bool complete = false;
-    while (!complete) {
-        reader.read(&buffer[0], buffer.size());
+    for (std::size_t i=0; i<reader_struct->filenames_.size() && status == kSuccess; i++) {
+        spdlog::debug("copyToLocal processing file {} = {}", i, reader_struct->filenames_[i].c_str());
 
-        if (reader.bad()) {
-            spdlog::error("Error during read: {} {}", (int)(reader.status().code()), reader.status().message());
-            complete = true;
+        // Create a ReadObject stream
+        auto reader = client.ReadObject(bucket_name, reader_struct->filenames_[i].c_str());
+        if (!reader) {
+            spdlog::error("Error initializing download stream: {} {}", (int)(reader.status().code()), reader.status().message());
+            status = kFailure;
+            break;
         }
-        spdlog::debug("Read {}", reader.gcount());
 
-        if (reader.gcount() > 0) {
-            file_stream.write(buffer.data(), reader.gcount());
-        }
-        else {
-            complete = true;
+        // Read from the GCS object and write to the local file
+        std::string buffer(1024, '\0');
+        spdlog::debug("Start reading {}", buffer);
+
+        bool complete = false;
+        bool headerlineSkipped = false;
+        while (!complete) {
+            reader.read(&buffer[0], buffer.size());
+
+            if (reader.bad()) {
+                spdlog::error("Error during read: {} {}", (int)(reader.status().code()), reader.status().message());
+                complete = true;
+            }
+            spdlog::debug("Read {}", reader.gcount());
+
+            if (reader.gcount() > 0) {
+                int offset = 0;
+                std::streamsize num_bytes = reader.gcount();
+                if (i > 0 && !headerlineSkipped && reader_struct->commonHeaderLength_ > 0) {
+                    // TODO: check bounds!
+                    spdlog::debug("Skipping initial {} bytes", reader_struct->commonHeaderLength_);
+                    offset = reader_struct->commonHeaderLength_;
+                    num_bytes -= reader_struct->commonHeaderLength_;
+                    headerlineSkipped = true;
+                }
+                file_stream.write(buffer.data()+offset, num_bytes);
+            }
+            else {
+                complete = true;
+            }
+
         }
 
     }
     spdlog::debug("Close output");
     file_stream.close();
 
-    if (!reader.status().ok()) {
-        std::cerr << "Error during download: " << reader.status() << "\n";
-        return 0;
-    }
     spdlog::debug("Done copying");
 
-    return 1;
+    return status;
 }
 
 int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
@@ -1027,14 +1076,14 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
     std::ifstream file_stream(sSourceFilePathName, std::ios::binary);
     if (!file_stream.is_open()) {
         spdlog::error("Failed to open local file: {}", sSourceFilePathName);
-        return false;
+        return kFailure;
     }
 
     // Create a WriteObject stream
-    auto writer = client.WriteObject(bucket_name, object_name, gcs::IfGenerationMatch(0));
+    auto writer = client.WriteObject(bucket_name, object_name);
     if (!writer) {
         spdlog::error("Error initializing upload stream: {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
-        return false;
+        return kFailure;
     }
 
     // Read from the local file and write to the GCS object
@@ -1052,8 +1101,8 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
     if (!status) {
         spdlog::error("Error during file upload: {} {}", (int)(status.status().code()), status.status().message());
 
-        return false;
+        return kFailure;
     }
 
-    return true;
+    return kSuccess;
 }
