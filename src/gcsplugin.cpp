@@ -1191,7 +1191,29 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
 
 int driver_fflush(void* stream)
 {
-    spdlog::debug("Flushing (does nothing...)");
+    if (!stream)
+    {
+        spdlog::error("Error passing null stream pointer to fflush");
+        return -1;
+    }
+
+    auto stream_it = FindHandle(stream);
+    ERROR_NO_STREAM(stream_it, -1);
+    Handle& stream_h = **stream_it;
+
+    if (HandleType::kWrite != stream_h.type)
+    {
+        spdlog::error("Cannot flush on not writing stream");
+        return -1;
+    }
+
+    auto& out_stream = stream_h.Writer().writer_;
+    if (out_stream.flush().bad())
+    {
+        spdlog::error("Error during upload");
+        return -1;
+    }
+
     return 0;
 }
 
