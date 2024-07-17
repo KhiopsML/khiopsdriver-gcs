@@ -889,17 +889,25 @@ int driver_fclose(void* stream)
 
     spdlog::debug("fclose {}", (void*)stream);
 
-    Handle* stream_h = reinterpret_cast<Handle*>(stream);
-    if (HandleType::kWrite == stream_h->type)
+    auto stream_it = FindHandle(stream);
+    ERROR_NO_STREAM(stream_it, kFailure);
+    auto& h_ptr = *stream_it;
+
+    if (HandleType::kWrite == h_ptr->type)
     {
-        stream_h->var.writer->writer_.Close();
-        auto status = stream_h->var.writer->writer_.metadata();
-        if (!status) {
-            spdlog::error("Error during upload: {} {}", (int)(status.status().code()), status.status().message());
+        //close the stream to flush all remaining bytes in the put area
+        auto& writer = h_ptr->Writer().writer_;
+        writer.Close();
+        auto& status = writer.metadata();
+        if (!status)
+        {
+            spdlog::error("Error during upload: {} {}", static_cast<int>(status.status().code()), status.status().message());
         }
     }
 
-    return EraseRemove(stream);
+    EraseRemove(stream_it);
+
+    return kSuccess;
 }
 
 
