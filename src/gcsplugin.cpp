@@ -56,13 +56,15 @@ struct WriteFile
 {
     std::string bucketname_;
     std::string filename_;
-    google::cloud::storage::ObjectWriteStream writer_;
+    gcs::ObjectWriteStream writer_;
 };
 
 enum class HandleType { kRead, kWrite, kAppend };
 
-using ReaderPtr = std::unique_ptr<MultiPartFile>;
-using WriterPtr = std::unique_ptr<WriteFile>;
+using Reader = MultiPartFile;
+using Writer = WriteFile;
+using ReaderPtr = std::unique_ptr<Reader>;
+using WriterPtr = std::unique_ptr<Writer>;
 
 union ClientVariant
 {
@@ -110,8 +112,8 @@ struct Handle
         }
     }
 
-    MultiPartFile& Reader() { return *(var.reader); }
-    WriteFile& Writer() { return *(var.writer); }
+    Reader& Reader() { return *(var.reader); }
+    Writer& Writer() { return *(var.writer); }
 };
 
 using HandlePtr = std::unique_ptr<Handle>;
@@ -120,39 +122,69 @@ using HandlePtr = std::unique_ptr<Handle>;
 // 
 // 
 
-HandlePtr MakeHandlePtrFromReader(ReaderPtr&& reader_ptr)
+//HandlePtr MakeHandlePtrFromReader(ReaderPtr&& reader_ptr)
+//{
+//    HandlePtr h{ new Handle(HandleType::kRead) };
+//    h->var.reader = std::move(reader_ptr);
+//    return h;
+//}
+//
+//HandlePtr MakeHandlePtrFromWriter(WriterPtr&& writer_ptr)
+//{
+//    std::unique_ptr<Handle> h{ new Handle(HandleType::kWrite) };
+//    h->var.writer = std::move(writer_ptr);
+//    return h;
+//}
+
+
+void InitHandle(Handle& h, ReaderPtr&& r_ptr)
 {
-    HandlePtr h{ new Handle(HandleType::kRead) };
-    h->var.reader = std::move(reader_ptr);
+    h.var.reader = std::move(r_ptr);
+}
+
+void InitHandle(Handle& h, WriterPtr&& w_ptr)
+{
+    h.var.writer = std::move(w_ptr);
+}
+
+template<typename VariantPtr, HandleType Type>
+HandlePtr MakeHandleFromVariant(VariantPtr&& var_ptr)
+{
+    HandlePtr h{ new Handle(Type) };
+    InitHandle(*h, std::move(var_ptr));
     return h;
 }
 
-HandlePtr MakeHandlePtrFromWriter(WriterPtr&& writer_ptr)
+
+using HandleContainer = std::vector<HandlePtr>;
+using HandleIt = HandleContainer::iterator;
+
+HandleContainer active_handles;
+
+
+template<typename VariantPtr, HandleType Type>
+Handle* InsertHandle(VariantPtr&& var_ptr)
 {
-    std::unique_ptr<Handle> h{ new Handle(HandleType::kWrite) };
-    h->var.writer = std::move(writer_ptr);
-    return h;
+    return active_handles.insert(active_handles.end(),
+        MakeHandleFromVariant<VariantPtr, Type>(std::move(var_ptr)))->get();
 }
 
-std::vector<HandlePtr> active_handles;
-
-std::vector<HandlePtr>::iterator FindHandle(void* handle)
+HandleIt FindHandle(void* handle)
 {
-    return std::find_if(active_handles.begin(), active_handles.end(), [handle](const std::unique_ptr<Handle>& act_h_ptr) {
+    return std::find_if(active_handles.begin(), active_handles.end(), [handle](const HandlePtr& act_h_ptr) {
         return handle == static_cast<void*>(act_h_ptr.get());
         });
 }
 
-int EraseRemove(void* handle)//std::vector<std::unique_ptr<Handle>>::iterator pos)
+void EraseRemove(HandleIt pos)// void* handle)//std::vector<std::unique_ptr<Handle>>::iterator pos)
 {
-    auto to_erase = FindHandle(handle);
+    /*auto to_erase = FindHandle(handle);
     if (to_erase == active_handles.end())
     {
         return kFailure;
-    }
-    *to_erase = std::move(*active_handles.rbegin());
+    }*/
+    *pos = std::move(active_handles.back());
     active_handles.pop_back();
-    return kSuccess;
 }
 
 // Definition of helper functions
@@ -311,15 +343,13 @@ void* test_addReaderHandle(
         cumulativeSize,
         total_size
     }};
-    active_handles.push_back(MakeHandlePtrFromReader(std::move(reader_ptr)));
-    return active_handles.rbegin()->get();
+    return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_ptr));
 }
 
 void* test_addWriterHandle()
 {
-    WriterPtr writer_ptr{ new gcs::ObjectWriteStream };
-    active_handles.push_back(MakeHandlePtrFromWriter(std::move(writer_ptr)));
-    return active_handles.rbegin()->get();
+    WriterPtr writer_ptr{ new WriteFile };
+    return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_ptr));
 }
 
 const char* driver_getDriverName()
@@ -420,6 +450,18 @@ int driver_exist(const char* filename)
     }
 }
 
+
+#define INIT_NAMES_OR_ERROR(pathname, bucketname, objectname, errval)   \
+{                                                                       \
+    GetBucketAndObjectNames((pathname), (bucketname), (objectname));    \
+    if ((bucketname).empty() || (objectname).empty())                   \
+    {                                                                   \
+        spdlog::error("Error parsing URL.");                            \
+        return (errval);                                                \
+    }                                                                   \
+}                                                                       \
+
+
 int driver_fileExists(const char* sFilePathName)
 {
     if (!sFilePathName)
@@ -432,12 +474,14 @@ int driver_fileExists(const char* sFilePathName)
 
     std::string bucket_name;
     std::string object_name;
-    GetBucketAndObjectNames(sFilePathName, bucket_name, object_name);
+
+    INIT_NAMES_OR_ERROR(sFilePathName, bucket_name, object_name, kFalse);
+    /*GetBucketAndObjectNames(sFilePathName, bucket_name, object_name);
 
     if (bucket_name.empty() || object_name.empty())
     {
         return kFalse;
-    }
+    }*/
 
     auto status_or_metadata_list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
     const auto first_item_it = status_or_metadata_list.begin();
@@ -561,56 +605,73 @@ long long int driver_getFileSize(const char* filename)
 
     std::string bucket_name;
     std::string object_name;
-    GetBucketAndObjectNames(filename, bucket_name, object_name);
 
-    if (bucket_name.empty() || object_name.empty())
-    {
-        return -1;
-    }
+    INIT_NAMES_OR_ERROR(filename, bucket_name, object_name, -1);
+
+    /*GetBucketAndObjectNames(filename, bucket_name, object_name);
+    ERROR_NO_NAME(bucket_name, objectn_name, -1);*/
 
     return GetFileSize(bucket_name, object_name);
 }
 
-int AccumulateNamesAndSizes(MultiPartFile& h)
+gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::string& objectname)
 {
-    auto push_back_data = [](MultiPartFile& h, gcs::ListObjectsIterator& list_it) {
-        h.filenames_.push_back((*list_it)->name());
-        h.cumulativeSize_.push_back(static_cast<long long>((*list_it)->size()));
+    std::vector<std::string> filenames;
+    std::vector<long long> cumulativeSize;
+
+    auto push_back_data = [&](gcs::ListObjectsIterator& list_it) {
+        filenames.push_back((*list_it)->name());
+        long long size = static_cast<long long>((*list_it)->size());
+        if (!cumulativeSize.empty())
+        {
+            size += cumulativeSize.back();
+        }
+        cumulativeSize.push_back(size);
         };
 
-    const std::string& bucket_name{ h.bucketname_ };
-    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ h.filename_ });
+    auto list = client.ListObjects(bucketname, gcs::MatchGlob{ objectname });
     auto list_it = list.begin();
     const auto list_end = list.end();
 
     if (list_end == list_it)
     {
         //no file, or not a file
-        return kFailure;
+        return gc::Status(gc::StatusCode::kNotFound, "no file found");
     }
 
     if (!(*list_it))
     {
+        auto& status = (*list_it).status();
         //unusable data
-        return kFailure;
+        return gc::Status(status.code(), status.message());
     }
 
-    push_back_data(h, list_it);
+    push_back_data(list_it);
 
     list_it++;
     if (list_end == list_it)
     {
         //unique file
-        h.total_size_ = h.cumulativeSize_[0];
-        return kSuccess;
+        const tOffset total_size = cumulativeSize.back();
+        return ReaderPtr(new MultiPartFile{
+            bucketname,
+            objectname,
+            0,
+            0,
+            std::move(filenames),
+            std::move(cumulativeSize),
+            total_size
+        });
+        /*h.total_size_ = h.cumulativeSize_[0];
+        return kSuccess;*/
     }
 
     // multifile
     // check headers
-    const std::string header = ReadHeader(bucket_name, h.filenames_[0]);
+    const std::string header = ReadHeader(bucketname, filenames.front());
     if (header.empty())
     {
-        return kFailure;
+        return gc::Status(gc::StatusCode::kUnknown, "empty header encountered");
     }
     const long long header_size = static_cast<long long>(header.size());
     bool same_header{ true };
@@ -619,37 +680,124 @@ int AccumulateNamesAndSizes(MultiPartFile& h)
     {
         if (!(*list_it))
         {
+            auto& status = (*list_it).status();
             //unusable data
-            return kFailure;
+            return gc::Status(status.code(), status.message());
         }
 
-        push_back_data(h, list_it);
-        auto last_size_it = h.cumulativeSize_.rbegin();
-        const auto size_before_last_it = last_size_it + 1;
-        *last_size_it += *size_before_last_it;
+        push_back_data(list_it);
+        //auto last_size_it = h.cumulativeSize_.rbegin();
+        //const auto size_before_last_it = last_size_it + 1;
+        //*last_size_it += *size_before_last_it;
 
         if (same_header)
         {
-            const std::string curr_header = ReadHeader(bucket_name, *(h.filenames_.crbegin()));
+            const std::string curr_header = ReadHeader(bucketname, filenames.back());
             if (curr_header.empty())
             {
-                return kFailure;
+                return gc::Status(gc::StatusCode::kUnknown, "empty header encountered");
             }
             same_header = (header == curr_header);
             if (same_header)
             {
-                *last_size_it -= header_size;
+                cumulativeSize.back() -= header_size;
+                //*last_size_it -= header_size;
             }
         }
     }
-    if (same_header) {
-       h.commonHeaderLength_ = header_size;
-    }
+    
+    tOffset total_size = cumulativeSize.back();
 
-    h.total_size_ = *(h.cumulativeSize_.rbegin());
-
-    return kSuccess;
+    return ReaderPtr(new MultiPartFile{
+        bucketname,
+        objectname,
+        0,
+        same_header ? header_size : 0,
+        std::move(filenames),
+        std::move(cumulativeSize),
+        total_size
+    });
 }
+
+//int AccumulateNamesAndSizes(MultiPartFile& h)
+//{
+//    auto push_back_data = [](MultiPartFile& h, gcs::ListObjectsIterator& list_it) {
+//        h.filenames_.push_back((*list_it)->name());
+//        h.cumulativeSize_.push_back(static_cast<long long>((*list_it)->size()));
+//        };
+//
+//    const std::string& bucket_name{ h.bucketname_ };
+//    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ h.filename_ });
+//    auto list_it = list.begin();
+//    const auto list_end = list.end();
+//
+//    if (list_end == list_it)
+//    {
+//        //no file, or not a file
+//        return kFailure;
+//    }
+//
+//    if (!(*list_it))
+//    {
+//        //unusable data
+//        return kFailure;
+//    }
+//
+//    push_back_data(h, list_it);
+//
+//    list_it++;
+//    if (list_end == list_it)
+//    {
+//        //unique file
+//        h.total_size_ = h.cumulativeSize_[0];
+//        return kSuccess;
+//    }
+//
+//    // multifile
+//    // check headers
+//    const std::string header = ReadHeader(bucket_name, h.filenames_[0]);
+//    if (header.empty())
+//    {
+//        return kFailure;
+//    }
+//    const long long header_size = static_cast<long long>(header.size());
+//    bool same_header{ true };
+//
+//    for (; list_it != list.end(); list_it++)
+//    {
+//        if (!(*list_it))
+//        {
+//            //unusable data
+//            return kFailure;
+//        }
+//
+//        push_back_data(h, list_it);
+//        auto last_size_it = h.cumulativeSize_.rbegin();
+//        const auto size_before_last_it = last_size_it + 1;
+//        *last_size_it += *size_before_last_it;
+//
+//        if (same_header)
+//        {
+//            const std::string curr_header = ReadHeader(bucket_name, *(h.filenames_.crbegin()));
+//            if (curr_header.empty())
+//            {
+//                return kFailure;
+//            }
+//            same_header = (header == curr_header);
+//            if (same_header)
+//            {
+//                *last_size_it -= header_size;
+//            }
+//        }
+//    }
+//    if (same_header) {
+//       h.commonHeaderLength_ = header_size;
+//    }
+//
+//    h.total_size_ = *(h.cumulativeSize_.rbegin());
+//
+//    return kSuccess;
+//}
 
 void* driver_fopen(const char* filename, char mode)
 {
@@ -666,49 +814,69 @@ void* driver_fopen(const char* filename, char mode)
     std::string bucketname;
     std::string objectname;
 
-    GetBucketAndObjectNames(filename, bucketname, objectname);
+    INIT_NAMES_OR_ERROR(filename, bucketname, objectname, nullptr);
+
+    /*GetBucketAndObjectNames(filename, bucketname, objectname);
 
     if (bucketname.empty() || objectname.empty())
     {
         spdlog::error("Error parsing URL.");
         return nullptr;
-    }
+    }*/
 
     switch (mode) {
     case 'r':
     {
-        ReaderPtr reader_struct{ new MultiPartFile };
+        auto reader_struct = MakeReaderPtr(bucketname, objectname);
+        if (!reader_struct)
+        {
+            //reader_struct is unusable
+            spdlog::error(reader_struct.status().message());
+            return nullptr;
+        }
+
+        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_struct).value());
+
+        /*ReaderPtr reader_struct{ new MultiPartFile };
         reader_struct->bucketname_ = std::move(bucketname);
         reader_struct->filename_ = std::move(objectname);
         if (kFailure == AccumulateNamesAndSizes(*reader_struct))
         {
-            //reader_struct is unusable
             return nullptr;
         }
-        active_handles.push_back(MakeHandlePtrFromReader(std::move(reader_struct)));
-        break;
+
+        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_struct));*/
     }
     case 'w':
     {
         auto writer = client.WriteObject(bucketname, objectname);
         if (!writer) {
-            spdlog::error("Error initializing write stream: {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
-            return 0;
+            spdlog::error("Error initializing write stream");// : {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
+            return nullptr;
         }
         WriterPtr writer_struct{ new WriteFile };
+        writer_struct->bucketname_ = std::move(bucketname);
+        writer_struct->filename_ = std::move(objectname);
         writer_struct->writer_ = std::move(writer);
-        active_handles.push_back(MakeHandlePtrFromWriter(std::move(writer_struct)));
-        break;
+        return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
     }
     case 'a':
 
     default:
         spdlog::error("Invalid open mode {}", mode);
-        return 0;
+        return nullptr;
     }
 
-    return active_handles.rbegin()->get();
 }
+
+
+#define ERROR_NO_STREAM(handle_it, errval)      \
+if ((handle_it) == active_handles.end())        \
+{                                               \
+    spdlog::error("Cannot identify stream");    \
+    return (errval);                            \
+}                                               \
+
 
 int driver_fclose(void* stream)
 {
@@ -746,11 +914,7 @@ int driver_fseek(void* stream, long long int offset, int whence)
 
     // confirm stream's presence
     auto to_stream = FindHandle(stream);
-    if (to_stream == active_handles.end())
-    {
-        spdlog::error("Cannot identify stream");
-        return -1;
-    }
+    ERROR_NO_STREAM(to_stream, -1);
 
     auto& stream_h = *to_stream;
 
