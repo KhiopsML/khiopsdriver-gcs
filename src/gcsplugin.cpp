@@ -1315,17 +1315,17 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
     // memory allocation will occur later, before actual use
     std::vector<char> waste;
 
-    auto write_to_file = [&](std::streamsize count) {
-        if (!file_stream.write(buf_data, count))
-        {
-            // something went wrong, abort
-            spdlog::error("Error while writing data to local file");
-            return false;
-        }
-        // reset buffer for further use
-        buffer.fill('\0');
-        return true;
-        };
+    //auto write_to_file = [&](std::streamsize count) {
+    //    if (!file_stream.write(buf_data, count))
+    //    {
+    //        // something went wrong, abort
+    //        spdlog::error("Error while writing data to local file");
+    //        return false;
+    //    }
+    //    // reset buffer for further use
+    //    buffer.fill('\0');
+    //    return true;
+    //    };
 
     auto read_and_write = [&](gcs::ObjectReadStream& from, bool skip_header = false, std::streamsize header_size = 0) {
         
@@ -1355,27 +1355,29 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         }
 
         const std::streamsize buf_size_cast = static_cast<std::streamsize>(buf_size);
-        while (from.read(buf_data, buf_size_cast))
+        while (from.read(buf_data, buf_size_cast) && file_stream.write(buf_data, buf_size_cast)) {}
+        // what made the process stop?
+        if (!file_stream)
         {
-            // buf_size bytes were read
-            if (!write_to_file(buf_size_cast))
-            {
-                return false;
-            }
+            // something went wrong on write side, abort
+            spdlog::error("Error while writing data to local file");
+            return false;
         }
-        // what made read stop?
-        if (from.eof())
+        else if (from.eof())
         {
             // short read, copy what remains, if any
             const std::streamsize rem = from.gcount();
-            if (rem > 0 && !write_to_file(rem))
+            if (rem > 0 && !file_stream.write(buf_data, rem))// !write_to_file(rem))
             {
+                // something went wrong on write side, abort
+                spdlog::error("Error while writing data to local file");
                 return false;
             }
         }
         else if (from.bad())
         {
-            // abort
+            // something went wrong on read side
+            spdlog::error("Error while reading from cloud storage");
             return false;
         }
 
@@ -1503,14 +1505,19 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
 
 int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
 {
+    if (!sSourceFilePathName || !sDestFilePathName)
+    {
+        spdlog::error("Error passing null pointers as arguments to copyFromLocal");
+        return kFailure;
+    }
+
     spdlog::debug("copyFromLocal {} {}", sSourceFilePathName, sDestFilePathName);
 
     assert(driver_isConnected());
 
-    namespace gcs = google::cloud::storage;
-    std::string bucket_name, object_name;
-    ParseGcsUri(sDestFilePathName, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);
+    std::string bucket_name;
+    std::string object_name;
+    INIT_NAMES_OR_ERROR(sDestFilePathName, bucket_name, object_name, kFailure);
 
     // Open the local file
     std::ifstream file_stream(sSourceFilePathName, std::ios::binary);
@@ -1521,23 +1528,44 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
 
     // Create a WriteObject stream
     auto writer = client.WriteObject(bucket_name, object_name);
-    if (!writer) {
+    if (!writer || !writer.IsOpen()) {
         spdlog::error("Error initializing upload stream: {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
         return kFailure;
     }
 
     // Read from the local file and write to the GCS object
-    std::string buffer(1024, '\0');
-    while (!file_stream.eof()) {
-        file_stream.read(&buffer[0], buffer.size());
-        writer.write(buffer.data(), file_stream.gcount());
+    constexpr size_t buf_size{ 1024 };
+    std::array<char, buf_size> buffer{};
+    char* buf_data = buffer.data();
+
+    while (file_stream.read(buf_data, buf_size) && writer.write(buf_data, buf_size)) {}
+    // what made the process stop?
+    if (!writer)
+    {
+        spdlog::error("Error while copying to remote storage");
+        return kFailure;
+
     }
-    file_stream.close();
+    else if (file_stream.eof())
+    {
+        // copy what remains in the buffer
+        const auto rem = file_stream.gcount();
+        if (rem > 0 && !writer.write(buf_data, rem))
+        {
+            spdlog::error("Error while copying to remote storage");
+            return kFailure;
+        }
+    }
+    else if (file_stream.bad())
+    {
+        spdlog::error("Error while reading on local storage");
+        return kFailure;
+    }
 
     // Close the GCS WriteObject stream to complete the upload
     writer.Close();
 
-    auto status = writer.metadata();
+    auto& status = writer.metadata();
     if (!status) {
         spdlog::error("Error during file upload: {} {}", (int)(status.status().code()), status.status().message());
 
