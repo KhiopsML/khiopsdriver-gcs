@@ -1137,26 +1137,56 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
         return -1;
     }
 
+    if (!ptr)
+    {
+        spdlog::error("Error passing null buffer pointer to fwrite");
+        return -1;
+    }
+
+    if (0 == size)
+    {
+        spdlog::error("Error passing size 0 to fwrite");
+        return -1;
+    }
+
     spdlog::debug("fwrite {} {} {} {}", ptr, size, count, stream);
 
-    assert(stream != NULL);
-    Handle* stream_h = reinterpret_cast<Handle*>(stream);
-    if (HandleType::kWrite != stream_h->type)
+    auto stream_it = FindHandle(stream);
+    ERROR_NO_STREAM(stream_it, -1);
+    Handle& stream_h = **stream_it;
+
+    if (HandleType::kWrite != stream_h.type)
     {
         spdlog::error("Cannot write on not writing stream");
         return -1;
     }
+    
+    // fast exit for 0
+    if (0 == count)
+    {
+        return 0;
+    }
 
-    stream_h->var.writer->writer_.write((const char*)ptr, size * count);
-    if (stream_h->var.writer->writer_.bad()) {
-        auto status = stream_h->var.writer->writer_.last_status();
-        spdlog::error("Error during upload: {} {}", (int)(status.code()), status.message());
+    // prevent integer overflow
+    if (WillSizeCountProductOverflow(size, count))
+    {
         return -1;
     }
-    spdlog::debug("Write status after write: good {}, bad {}, fail {}, goodbit {}", stream_h->var.writer->writer_.good(), stream_h->var.writer->writer_.bad(), stream_h->var.writer->writer_.fail(), (int)(stream_h->var.writer->writer_.goodbit));
 
-    // TODO proper error handling...
-    return size * count;
+    const long long to_write = static_cast<long long>(size * count);
+
+    gcs::ObjectWriteStream& writer = stream_h.Writer().writer_;
+    writer.write(static_cast<const char*>(ptr), to_write);
+    if (writer.bad())
+    {
+        auto last_status = writer.last_status();
+        spdlog::error("Error during upload: {} {}", (int)(last_status.code()), last_status.message());
+        return -1;
+    }
+    spdlog::debug("Write status after write: good {}, bad {}, fail {}, goodbit {}",
+        writer.good(), writer.bad(), writer.fail(), writer.goodbit);
+
+    return to_write;
 }
 
 int driver_fflush(void* stream)
