@@ -1198,14 +1198,21 @@ int driver_fflush(void* stream)
 
 int driver_remove(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to remove");
+        return kFailure;
+    }
+
     spdlog::debug("remove {}", filename);
 
     assert(driver_isConnected());
-    std::string bucket_name, object_name;
-    ParseGcsUri(filename, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);
 
-    auto status = client.DeleteObject(bucket_name, object_name);
+    std::string bucket_name;
+    std::string object_name;
+    INIT_NAMES_OR_ERROR(filename, bucket_name, object_name, kFailure);
+
+    const auto status = client.DeleteObject(bucket_name, object_name);
     if (!status.ok()) {
         spdlog::error("Error deleting object: {} {}", (int)(status.code()), status.message());
         return kFailure;
@@ -1216,6 +1223,12 @@ int driver_remove(const char* filename)
 
 int driver_rmdir(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to rmdir");
+        return kFailure;
+    }
+
     spdlog::debug("rmdir {}", filename);
 
     assert(driver_isConnected());
@@ -1225,6 +1238,12 @@ int driver_rmdir(const char* filename)
 
 int driver_mkdir(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to mkdir");
+        return kFailure;
+    }
+
     spdlog::debug("mkdir {}", filename);
 
     assert(driver_isConnected());
@@ -1233,10 +1252,17 @@ int driver_mkdir(const char* filename)
 
 long long int driver_diskFreeSpace(const char* filename)
 {
+    if (!filename)
+    {
+        spdlog::error("Error passing null pointer to diskFreeSpace");
+        return -1;
+    }
+
     spdlog::debug("diskFreeSpace {}", filename);
 
     assert(driver_isConnected());
-    return (long long int)5 * 1024 * 1024 * 1024 * 1024;
+    constexpr long long free_space{ 5LL * 1024LL * 1024LL * 1024LL * 1024LL };
+    return free_space;
 }
 
 int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
