@@ -845,7 +845,58 @@ void* driver_fopen(const char* filename, char mode)
         return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
     }
     case 'a':
+    {
+        // GCS does not as yet provide a way to add data to existing files.
+        // This will be the process to emulate an append:
+        // - create a multifile struct with the metadata required for a read
+        // - gather all the content
+        // - close the reading stream
+        // - open a writing stream with the same name
+        // - rewrite the existing content
+        // - return a handle to the open writing streamhere will temporarily open the existing file, gather
+        
+        auto maybe_reader = MakeReaderPtr(bucketname, objectname);
+        if (!maybe_reader)
+        {
+            // the data is unusable
+            spdlog::error("Error while opening file: {}", maybe_reader.status().message());
+            return nullptr;
+        }
 
+        auto& reader_ptr = maybe_reader.value();
+        const long long content_size = reader_ptr->total_size_;
+        std::vector<char> content(static_cast<size_t>(content_size));
+
+        const long long bytes_read = ReadBytesInFile(*reader_ptr, content.data(), content_size);
+        if (bytes_read == -1)
+        {
+            spdlog::error("Error while reading file");
+            return nullptr;
+        }
+        else if (bytes_read < content_size)
+        {
+            spdlog::error("Error while reading file: end of file encountered prematurely");
+            return nullptr;
+        }
+
+        // content is available for copy, if the file can be opened to write in it
+        auto out_stream = MakeWriterPtr(bucketname, objectname);
+        if (!out_stream)
+        {
+            return nullptr;
+        }
+
+        auto& writer = out_stream->writer_;
+        if (!writer.write(content.data(), content_size))
+        {
+            auto last_status = writer.last_status();
+            spdlog::error("Error while rewriting previous file content: {} {}", (int)(last_status.code()), last_status.message());
+            return nullptr;
+        }
+
+        // content successfully rewritten, return the handle to the writer
+        return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(out_stream));
+    }
     default:
         spdlog::error("Invalid open mode {}", mode);
         return nullptr;
