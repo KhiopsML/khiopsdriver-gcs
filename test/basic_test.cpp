@@ -1314,7 +1314,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
 
     //fail at subsequent read
     const std::vector<long long> fail_other_read_test_values = { 0, cast_mock_size_0 - 1 };
-    for (long long i : fail_first_read_test_values)
+    for (long long i : fail_other_read_test_values)
     {
         test_func(i, static_cast<size_t>(filesize), [&]() {
             EXPECT_CALL(*mock_client, ReadObject)
