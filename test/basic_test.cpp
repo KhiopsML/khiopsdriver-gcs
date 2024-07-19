@@ -259,6 +259,8 @@ public:
 
     using HandlePtr = std::unique_ptr<Handle>;
 
+    using HandleContainer = std::vector<HandlePtr>;
+
     //TODO would be nice to have a generic version, but cannot find the way in C++11
     // 
     // 
@@ -535,6 +537,70 @@ TEST_F(GCSDriverTestFixture, Open_InvalidURIs_AllModes)
     }
 }
 
+TEST_F(GCSDriverTestFixture, Close)
+{
+    HandleContainer* active_handles = reinterpret_cast<HandleContainer*>(test_getActiveHandles());
+
+    void* read_h = test_addReaderHandle(
+        "mock_bucket",
+        "mock_object",
+        0,
+        0,
+        { "mock_name" },
+        { 1 },
+        1
+    );
+
+    void* another_read_h = test_addReaderHandle(
+        "mock_bucket",
+        "mock_object",
+        0,
+        0,
+        { "mock_name" },
+        { 1 },
+        1
+    );
+
+    void* write_h = test_addWriterHandle();
+
+    Handle unknown(HandleType::kRead);
+
+    // null pointer
+    ASSERT_EQ(active_handles->size(), 3);
+    ASSERT_EQ(driver_fclose(nullptr), kFailure);
+    ASSERT_EQ(active_handles->size(), 3);
+    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), read_h);
+
+    // address unknown
+    ASSERT_EQ(driver_fclose(&unknown), kFailure);
+    ASSERT_EQ(active_handles->size(), 3);
+    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), read_h);
+
+    // close read_h
+    // additional post-condition: write_h, that was the last handle, must have been swapped to the front
+    ASSERT_EQ(driver_fclose(read_h), kSuccess);
+    ASSERT_EQ(active_handles->size(), 2);
+    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), write_h);
+
+    // try to close read_h handle again
+    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_EQ(active_handles->size(), 2);
+    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), write_h);
+
+    // close write_h
+    ASSERT_EQ(driver_fclose(write_h), kSuccess);
+    ASSERT_EQ(active_handles->size(), 1);
+    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), another_read_h);
+
+    // close last handle
+    ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
+    ASSERT_TRUE(active_handles->empty());
+
+    // try closing a handle again while container is empty
+    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_TRUE(active_handles->empty());
+}
+
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess)
 {
     MultiPartFile expected_struct{
@@ -555,13 +621,6 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileFailure)
 {
     PrepareListObjects({});
     OpenFailure();
-}
-
-TEST_F(GCSDriverTestFixture, CloseFileFailure)
-{
-    // try closing a handle not present
-    Handle dummy_handle(HandleType::kRead);
-    ASSERT_EQ(driver_fclose(&dummy_handle), kFailure);
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess)

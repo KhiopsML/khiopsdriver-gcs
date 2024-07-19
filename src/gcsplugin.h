@@ -29,6 +29,8 @@ extern "C"
 
     VISIBLE void test_unsetClient();
 
+    VISIBLE void* test_getActiveHandles();
+
     VISIBLE void* test_addReaderHandle(
         const std::string& bucket,
         const std::string& object,

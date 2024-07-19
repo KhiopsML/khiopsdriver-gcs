@@ -407,6 +407,11 @@ void test_unsetClient()
     client = ::google::cloud::storage::Client{};
 }
 
+void* test_getActiveHandles()
+{
+    return &active_handles;
+}
+
 void* test_addReaderHandle(
     const std::string& bucket,
     const std::string& object,
