@@ -1293,14 +1293,6 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         return kFailure;
     }
 
-    /*ReaderPtr reader_struct{ new MultiPartFile };
-    reader_struct->bucketname_ = bucket_name;
-    reader_struct->filename_ = object_name;
-    if (kFailure == AccumulateNamesAndSizes(*reader_struct))
-    {
-        return kFailure;
-    }*/
-
     ReaderPtr reader = std::move(maybe_reader).value();
     const size_t nb_files = reader->filenames_.size();
 
@@ -1319,18 +1311,6 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
     // create a waste buffer now, so the lambdas can reference it
     // memory allocation will occur later, before actual use
     std::vector<char> waste;
-
-    //auto write_to_file = [&](std::streamsize count) {
-    //    if (!file_stream.write(buf_data, count))
-    //    {
-    //        // something went wrong, abort
-    //        spdlog::error("Error while writing data to local file");
-    //        return false;
-    //    }
-    //    // reset buffer for further use
-    //    buffer.fill('\0');
-    //    return true;
-    //    };
 
     auto read_and_write = [&](gcs::ObjectReadStream& from, bool skip_header = false, std::streamsize header_size = 0) {
         
@@ -1428,84 +1408,6 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
     spdlog::debug("Done copying");
 
     return kSuccess;
-
-    //    // Open the read stream
-    //    reader_stream = client.ReadObject(bucket_name, filename);
-    //    if (!reader_stream.IsOpen() || !reader_stream)
-    //    {
-    //        spdlog::error("Error initializing download stream: {} {}", (int)(reader_stream.status().code()), reader_stream.status().message());
-    //        return kFailure;
-    //    }
-
-    //    // read while taking offset of common header into account
-    //}
-
-    //int status = kSuccess;
-
-
-    //for (size_t i = 0; i < nb_files; i++) {
-    //    const char* filename = reader->filenames_[i].data();
-    //    spdlog::debug("copyToLocal processing file {} = {}", i, filename);
-
-    //    // Create a ReadObject stream
-    //    auto reader_stream = client.ReadObject(bucket_name, filename);
-    //    if (!reader_stream) {
-    //        spdlog::error("Error initializing download stream: {} {}", (int)(reader_stream.status().code()), reader_stream.status().message());
-    //        status = kFailure;
-    //        break;
-    //    }
-
-    //    // Read from the GCS object and write to the local file
-    //    //constexpr size_t buf_size{ 1024 };
-    //    //std::vector<char> buffer(buf_size, '\0');
-    //    //char* buf_data = buffer.data();     // size is fixed, the vector won't be reallocated
-    //    //std::string buffer(1024, '\0');
-    //    spdlog::debug("Start reading {}", buffer);
-
-    //    // Read the full first file
-    //    while (reader_stream.read(buf_data, buf_size)) {}
-
-    //    if (reader_stream.bad())
-
-    //    bool complete = false;
-    //    bool headerlineSkipped = false;
-    //    const tOffset header_length{ reader->commonHeaderLength_ };
-
-    //    for(;;) {
-    //        reader_stream.read(buffer.data(), buffer.size());
-
-    //        if (reader_stream.bad()) {
-    //            spdlog::error("Error during read: {} {}", (int)(reader_stream.status().code()), reader_stream.status().message());
-    //            break;
-    //        }
-
-    //        const auto extract = reader_stream.gcount();
-    //        spdlog::debug("Read {}", extract);
-
-    //        if (extract == 0)
-    //        {
-    //            break;
-    //        }
-
-    //        int offset = 0;
-    //        std::streamsize num_bytes = extract;
-    //        if (i > 0 && !headerlineSkipped && header_length > 0) {
-    //            // TODO: check bounds!
-    //            spdlog::debug("Skipping initial {} bytes", header_length);
-    //            offset = header_length;
-    //            num_bytes -= header_length;
-    //            headerlineSkipped = true;
-    //        }
-    //        file_stream.write(buffer.data()+offset, num_bytes);
-    //    }
-
-    //}
-    //spdlog::debug("Close output");
-    //file_stream.close();
-
-    //spdlog::debug("Done copying");
-
-    //return status;
 }
 
 int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFilePathName)
