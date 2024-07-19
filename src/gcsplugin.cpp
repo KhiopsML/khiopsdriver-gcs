@@ -1183,8 +1183,8 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
         spdlog::error("Error during upload: {} {}", (int)(last_status.code()), last_status.message());
         return -1;
     }
-    spdlog::debug("Write status after write: good {}, bad {}, fail {}, goodbit {}",
-        writer.good(), writer.bad(), writer.fail(), writer.goodbit);
+    spdlog::debug("Write status after write: good {}, bad {}, fail {}",
+        writer.good(), writer.bad(), writer.fail());
 
     return to_write;
 }
