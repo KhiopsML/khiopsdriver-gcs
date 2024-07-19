@@ -526,9 +526,13 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
     ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), -1);
 }
 
-TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_InvalidURIs)
+TEST_F(GCSDriverTestFixture, Open_InvalidURIs_AllModes)
 {
-    CheckInvalidURIs(driver_fopen, 'r', nullptr);
+    constexpr char modes[3] = { 'r', 'w', 'a' };
+    for (char m : modes)
+    {
+        CheckInvalidURIs(driver_fopen, m, nullptr);
+    }
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess)
