@@ -112,8 +112,8 @@ struct Handle
         }
     }
 
-    Reader& Reader() { return *(var.reader); }
-    Writer& Writer() { return *(var.writer); }
+    Reader& GetReader() { return *(var.reader); }
+    Writer& GetWriter() { return *(var.writer); }
 };
 
 using HandlePtr = std::unique_ptr<Handle>;
@@ -896,7 +896,7 @@ int driver_fclose(void* stream)
     if (HandleType::kWrite == h_ptr->type)
     {
         //close the stream to flush all remaining bytes in the put area
-        auto& writer = h_ptr->Writer().writer_;
+        auto& writer = h_ptr->GetWriter().writer_;
         writer.Close();
         auto& status = writer.metadata();
         if (!status)
@@ -934,7 +934,7 @@ int driver_fseek(void* stream, long long int offset, int whence)
 
     spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
-    MultiPartFile& h = stream_h->Reader();
+    MultiPartFile& h = stream_h->GetReader();
 
     tOffset computed_offset{ 0 };
 
@@ -1027,7 +1027,7 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
 
     spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
-    MultiPartFile& h = stream_h->Reader();
+    MultiPartFile& h = stream_h->GetReader();
 
     const tOffset offset = h.offset_;
 
@@ -1175,7 +1175,7 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
 
     const long long to_write = static_cast<long long>(size * count);
 
-    gcs::ObjectWriteStream& writer = stream_h.Writer().writer_;
+    gcs::ObjectWriteStream& writer = stream_h.GetWriter().writer_;
     writer.write(static_cast<const char*>(ptr), to_write);
     if (writer.bad())
     {
@@ -1207,8 +1207,8 @@ int driver_fflush(void* stream)
         return -1;
     }
 
-    auto& out_stream = stream_h.Writer().writer_;
-    if (out_stream.flush().bad())
+    auto& out_stream = stream_h.GetWriter().writer_;
+    if (!out_stream.flush())
     {
         spdlog::error("Error during upload");
         return -1;
