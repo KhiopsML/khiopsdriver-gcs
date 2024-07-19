@@ -195,8 +195,6 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     std::int64_t start_range,
     std::int64_t end_range)
 {
-    namespace gcs = google::cloud::storage;
-
     auto reader = client.ReadObject(bucket_name, object_name, gcs::ReadRange(start_range, end_range));
     if (!reader) {
         spdlog::error("Error reading object: {}", reader.status().message());
@@ -213,6 +211,90 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     spdlog::debug("read = {}", num_read);
 
     return num_read;
+}
+
+long long ReadBytesInFile(MultiPartFile& multifile, char* buffer, tOffset to_read)
+{
+    // Start at first usable file chunk
+    // Advance through file chunks, advancing buffer pointer
+    // Until last requested byte was read
+    // Or error occured
+
+    tOffset bytes_read{ 0 };
+
+    // Lookup item containing initial bytes at requested offset
+    const auto& cumul_sizes = multifile.cumulativeSize_;
+    const tOffset common_header_length = multifile.commonHeaderLength_;
+    const std::string& bucket_name = multifile.bucketname_;
+    const auto& filenames = multifile.filenames_;
+    char* buffer_pos = buffer;
+    tOffset& offset = multifile.offset_;
+    const tOffset offset_bak = offset;      // in case of irrecoverable error, leave the multifile in its starting state
+
+    auto greater_than_offset_it = std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
+    size_t idx = static_cast<size_t>(std::distance(cumul_sizes.begin(), greater_than_offset_it));
+
+    spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset, *greater_than_offset_it);
+
+
+    auto download_and_update = [&](const std::string& filename, tOffset read_start, tOffset read_end) -> tOffset {
+        tOffset range_bytes_read = DownloadFileRangeToBuffer(bucket_name, filename, buffer_pos,
+            static_cast<int64_t>(read_start), static_cast<int64_t>(read_end));
+        if (-1 == range_bytes_read)
+        {
+            return -1;
+        }
+
+        to_read -= range_bytes_read;
+        bytes_read += range_bytes_read;
+        buffer_pos += range_bytes_read;
+        offset += range_bytes_read;
+
+        return range_bytes_read;
+        };
+
+
+    //first file read
+
+    const tOffset file_start = (idx == 0) ? offset : offset - cumul_sizes[idx - 1] + common_header_length;
+    const tOffset read_end = std::min(file_start + to_read, file_start + cumul_sizes[idx] - offset);
+    tOffset expected_read = read_end - file_start;
+
+    tOffset actual_read = download_and_update(filenames[idx], file_start, read_end);
+    if (-1 == actual_read)
+    {
+        offset = offset_bak;
+        return -1;
+    }
+    if (actual_read < expected_read)
+    {
+        spdlog::debug("End of file encountered");
+        return bytes_read;
+    }
+
+    // continue with the next files
+    while (to_read)
+    {
+        // read the missing bytes in the next files as necessary
+        idx++;
+        const tOffset start = common_header_length;
+        const tOffset end = std::min(start + to_read, start + cumul_sizes[idx] - cumul_sizes[idx - 1]);
+        expected_read = end - start;
+
+        actual_read = download_and_update(filenames[idx], start, end);
+        if (-1 == actual_read)
+        {
+            offset = offset_bak;
+            return -1;
+        }
+        if (actual_read < expected_read)
+        {
+            spdlog::debug("End of file encountered");
+            return bytes_read;
+        }
+    }
+
+    return bytes_read;
 }
 
 bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::string& object_name)
@@ -605,11 +687,7 @@ long long int driver_getFileSize(const char* filename)
 
     std::string bucket_name;
     std::string object_name;
-
     INIT_NAMES_OR_ERROR(filename, bucket_name, object_name, -1);
-
-    /*GetBucketAndObjectNames(filename, bucket_name, object_name);
-    ERROR_NO_NAME(bucket_name, objectn_name, -1);*/
 
     return GetFileSize(bucket_name, object_name);
 }
@@ -662,8 +740,6 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
             std::move(cumulativeSize),
             total_size
         });
-        /*h.total_size_ = h.cumulativeSize_[0];
-        return kSuccess;*/
     }
 
     // multifile
@@ -686,9 +762,6 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
         }
 
         push_back_data(list_it);
-        //auto last_size_it = h.cumulativeSize_.rbegin();
-        //const auto size_before_last_it = last_size_it + 1;
-        //*last_size_it += *size_before_last_it;
 
         if (same_header)
         {
@@ -701,7 +774,6 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
             if (same_header)
             {
                 cumulativeSize.back() -= header_size;
-                //*last_size_it -= header_size;
             }
         }
     }
@@ -719,85 +791,19 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
     });
 }
 
-//int AccumulateNamesAndSizes(MultiPartFile& h)
-//{
-//    auto push_back_data = [](MultiPartFile& h, gcs::ListObjectsIterator& list_it) {
-//        h.filenames_.push_back((*list_it)->name());
-//        h.cumulativeSize_.push_back(static_cast<long long>((*list_it)->size()));
-//        };
-//
-//    const std::string& bucket_name{ h.bucketname_ };
-//    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ h.filename_ });
-//    auto list_it = list.begin();
-//    const auto list_end = list.end();
-//
-//    if (list_end == list_it)
-//    {
-//        //no file, or not a file
-//        return kFailure;
-//    }
-//
-//    if (!(*list_it))
-//    {
-//        //unusable data
-//        return kFailure;
-//    }
-//
-//    push_back_data(h, list_it);
-//
-//    list_it++;
-//    if (list_end == list_it)
-//    {
-//        //unique file
-//        h.total_size_ = h.cumulativeSize_[0];
-//        return kSuccess;
-//    }
-//
-//    // multifile
-//    // check headers
-//    const std::string header = ReadHeader(bucket_name, h.filenames_[0]);
-//    if (header.empty())
-//    {
-//        return kFailure;
-//    }
-//    const long long header_size = static_cast<long long>(header.size());
-//    bool same_header{ true };
-//
-//    for (; list_it != list.end(); list_it++)
-//    {
-//        if (!(*list_it))
-//        {
-//            //unusable data
-//            return kFailure;
-//        }
-//
-//        push_back_data(h, list_it);
-//        auto last_size_it = h.cumulativeSize_.rbegin();
-//        const auto size_before_last_it = last_size_it + 1;
-//        *last_size_it += *size_before_last_it;
-//
-//        if (same_header)
-//        {
-//            const std::string curr_header = ReadHeader(bucket_name, *(h.filenames_.crbegin()));
-//            if (curr_header.empty())
-//            {
-//                return kFailure;
-//            }
-//            same_header = (header == curr_header);
-//            if (same_header)
-//            {
-//                *last_size_it -= header_size;
-//            }
-//        }
-//    }
-//    if (same_header) {
-//       h.commonHeaderLength_ = header_size;
-//    }
-//
-//    h.total_size_ = *(h.cumulativeSize_.rbegin());
-//
-//    return kSuccess;
-//}
+WriterPtr MakeWriterPtr(const std::string& bucketname, const std::string& objectname)
+{
+    auto writer = client.WriteObject(bucketname, objectname);
+    if (!writer) {
+        spdlog::error("Error initializing write stream");// : {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
+        return nullptr;
+    }
+    WriterPtr writer_struct{ new WriteFile };
+    writer_struct->bucketname_ = std::move(bucketname);
+    writer_struct->filename_ = std::move(objectname);
+    writer_struct->writer_ = std::move(writer);
+    return writer_struct;
+}
 
 void* driver_fopen(const char* filename, char mode)
 {
@@ -813,51 +819,29 @@ void* driver_fopen(const char* filename, char mode)
 
     std::string bucketname;
     std::string objectname;
-
     INIT_NAMES_OR_ERROR(filename, bucketname, objectname, nullptr);
-
-    /*GetBucketAndObjectNames(filename, bucketname, objectname);
-
-    if (bucketname.empty() || objectname.empty())
-    {
-        spdlog::error("Error parsing URL.");
-        return nullptr;
-    }*/
 
     switch (mode) {
     case 'r':
     {
-        auto reader_struct = MakeReaderPtr(bucketname, objectname);
-        if (!reader_struct)
+        auto maybe_reader = MakeReaderPtr(bucketname, objectname);
+        if (!maybe_reader)
         {
-            //reader_struct is unusable
-            spdlog::error(reader_struct.status().message());
+            //maybe_reader is unusable
+            spdlog::error(maybe_reader.status().message());
             return nullptr;
         }
 
-        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_struct).value());
-
-        /*ReaderPtr reader_struct{ new MultiPartFile };
-        reader_struct->bucketname_ = std::move(bucketname);
-        reader_struct->filename_ = std::move(objectname);
-        if (kFailure == AccumulateNamesAndSizes(*reader_struct))
-        {
-            return nullptr;
-        }
-
-        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_struct));*/
+        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(maybe_reader).value());
     }
     case 'w':
     {
-        auto writer = client.WriteObject(bucketname, objectname);
-        if (!writer) {
-            spdlog::error("Error initializing write stream");// : {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
+        auto writer_struct = MakeWriterPtr(bucketname, objectname);
+        if (!writer_struct)
+        {
             return nullptr;
         }
-        WriterPtr writer_struct{ new WriteFile };
-        writer_struct->bucketname_ = std::move(bucketname);
-        writer_struct->filename_ = std::move(objectname);
-        writer_struct->writer_ = std::move(writer);
+
         return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
     }
     case 'a':
@@ -1070,63 +1054,7 @@ long long int driver_fread(void* ptr, size_t size, size_t count, void* stream)
         spdlog::debug("offset = {} to_read = {}", offset, to_read);
     }
 
-    // Start at first usable file chunk
-    // Advance through file chunks, advancing buffer pointer
-    // Until last requested byte was read
-    // Or error occured
-
-    tOffset bytes_read{ 0 };
-
-    // Lookup item containing initial bytes at requested offset
-    const auto& cumul_sizes = h.cumulativeSize_;
-    const tOffset common_header_length = h.commonHeaderLength_;
-    const std::string& bucket_name = h.bucketname_;
-    const auto& filenames = h.filenames_;
-    char* buffer_pos = reinterpret_cast<char*>(ptr);
-
-    auto greater_than_offset_it = std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
-    size_t idx = static_cast<size_t>(std::distance(cumul_sizes.begin(), greater_than_offset_it));
-
-    spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset, *greater_than_offset_it);
-
-
-    auto download_and_update = [&](tOffset read_start, tOffset read_end) -> tOffset {
-        tOffset range_bytes_read = DownloadFileRangeToBuffer(bucket_name, filenames[idx], buffer_pos,
-            static_cast<int64_t>(read_start), static_cast<int64_t>(read_end));
-
-        to_read -= range_bytes_read;
-        bytes_read += range_bytes_read;
-        buffer_pos += range_bytes_read;
-
-        return range_bytes_read;
-        };
-
-
-    //first file read
-
-    const tOffset file_start = (idx == 0) ? offset : offset - cumul_sizes[idx - 1] + common_header_length;
-    const tOffset read_end = std::min(file_start + to_read, file_start + cumul_sizes[idx] - offset);
-
-    if (download_and_update(file_start, read_end) == -1)
-    {
-        return -1;
-    }
-
-    while (to_read)
-    {
-        // read the missing bytes in the next files as necessary
-        idx++;
-        const tOffset start = common_header_length;
-        const tOffset end = std::min(start + to_read, start + cumul_sizes[idx] - cumul_sizes[idx - 1]);
-
-        if (download_and_update(start, end) == -1)
-        {
-            return -1;
-        }
-    }
-
-    h.offset_ += bytes_read;
-    return bytes_read;
+    return ReadBytesInFile(h, reinterpret_cast<char*>(ptr), to_read);
 }
 
 long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* stream)
