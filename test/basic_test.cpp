@@ -1078,7 +1078,8 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
@@ -1086,7 +1087,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     test_reader->Reader().offset_ = cast_mock_size_0;
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 1, test_reader), 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 1, test_reader), 1);
     EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_read_params_1.content[0]);
 
@@ -1098,7 +1099,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 2, test_reader), 2);
+    EXPECT_EQ(driver_fread(buff_data, size, 2, test_reader), 2);
     EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_content_0[mock_size_0 - 1]);
     EXPECT_EQ(buff[1], mock_content_1[0]);
@@ -1113,10 +1114,10 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(to_read), test_reader), to_read);
+    EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(to_read), test_reader), to_read);
     EXPECT_EQ(test_reader->Reader().offset_, to_read);
-    EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-    EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1, mock_size_1 - 1), 0);
+    EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+    EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1, mock_size_1 - 1), 0);
 
 
     // tests reading the whole file
@@ -1131,12 +1132,12 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_2)));
-        EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
+        EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
         EXPECT_EQ(test_reader->Reader().offset_, filesize);
-        EXPECT_EQ(std::strlen(buff), filesize);
-        EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1, mock_size_1), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0 + mock_size_1, mock_content_2, mock_size_2), 0);
+        EXPECT_EQ(std::strlen(buff_data), filesize);
+        EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1, mock_size_1), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0 + mock_size_1, mock_content_2, mock_size_2), 0);
         };
 
     // read the whole file
@@ -1144,8 +1145,6 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
 
     // try to read more than the whole file
     test_whole_file(filesize + 1);
-
-    delete[] buff;
 }
 
 TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
@@ -1184,7 +1183,8 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
@@ -1192,7 +1192,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     test_reader->Reader().offset_ = cast_mock_size_0;
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 1, test_reader), 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 1, test_reader), 1);
     EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_read_params_1.content[hdr_size]);
 
@@ -1204,7 +1204,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 2, test_reader), 2);
+    EXPECT_EQ(driver_fread(buff_data, size, 2, test_reader), 2);
     EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_content_0[mock_size_0 - 1]);
     EXPECT_EQ(buff[1], mock_content_1[hdr_size]);
@@ -1220,10 +1220,10 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(to_read), test_reader), to_read);
+    EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(to_read), test_reader), to_read);
     EXPECT_EQ(test_reader->Reader().offset_, to_read);
-    EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-    EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1 + hdr_size, read_in_file1), 0);
+    EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+    EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1 + hdr_size, read_in_file1), 0);
 
 
     // tests reading the whole file
@@ -1238,12 +1238,12 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_2)));
-        EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
+        EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
         EXPECT_EQ(test_reader->Reader().offset_, filesize);
-        EXPECT_EQ(std::strlen(buff), filesize);
-        EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1 + hdr_size, mock_size_1 - hdr_size), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0 + mock_size_1 - hdr_size, mock_content_2 + hdr_size, mock_size_2 - hdr_size), 0);
+        EXPECT_EQ(std::strlen(buff_data), filesize);
+        EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1 + hdr_size, mock_size_1 - hdr_size), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0 + mock_size_1 - hdr_size, mock_content_2 + hdr_size, mock_size_2 - hdr_size), 0);
         };
 
     // read the whole file
@@ -1251,8 +1251,6 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
 
     // try to read more than the whole file
     test_whole_file(filesize + 1);
-
-    delete[] buff;
 }
 
 TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
@@ -1289,7 +1287,8 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
@@ -1300,7 +1299,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
 
         set_mock_calls();
 
-        EXPECT_EQ(driver_fread(buff, size, to_read, test_reader), -1);
+        EXPECT_EQ(driver_fread(buff_data, size, to_read, test_reader), -1);
         EXPECT_EQ(test_reader->Reader().offset_, offset_before_read);
         };
 
@@ -1322,6 +1321,5 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
                 .WillOnce(READ_MOCK_LAMBDA_FAILURE);
             });
     }
-
-    delete[] buff;
 }
+
