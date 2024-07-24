@@ -136,10 +136,17 @@ protected:
 
     void TearDown() override
     {
+        GetHandles()->clear();
         test_unsetClient();
     }
 
 public:
+
+    static constexpr const char* mock_bucket = "mock_bucket";
+    static constexpr const char* mock_object = "mock_object";
+    static constexpr const char* mock_uri = "gs://mock_bucket/mock_object";
+
+
     static void TearDownTestSuite()
     {
         ASSERT_EQ(driver_disconnect(), kSuccess);
@@ -202,10 +209,17 @@ public:
         long long total_size_{ 0 };
     };
 
+    struct WriteFile
+    {
+        std::string bucketname_;
+        std::string filename_;
+        gcs::ObjectWriteStream writer_;
+    };
+
     enum class HandleType { kRead, kWrite, kAppend };
 
     using ReaderPtr = std::unique_ptr<MultiPartFile>;
-    using WriterPtr = std::unique_ptr<gcs::ObjectWriteStream>;
+    using WriterPtr = std::unique_ptr<WriteFile>;
 
     union ClientVariant
     {
@@ -254,12 +268,17 @@ public:
         }
 
         MultiPartFile& Reader() { return *(var.reader); }
-        gcs::ObjectWriteStream& Writer() { return *(var.writer); }
+        WriteFile& Writer() { return *(var.writer); }
     };
 
     using HandlePtr = std::unique_ptr<Handle>;
 
     using HandleContainer = std::vector<HandlePtr>;
+
+    HandleContainer* GetHandles() { return reinterpret_cast<HandleContainer*>(test_getActiveHandles()); }
+
+    void CheckHandlesEmpty() { ASSERT_TRUE(GetHandles()->empty()); }
+    void CheckHandlesSize(size_t size) { ASSERT_EQ(GetHandles()->size(), size); }
 
     //TODO would be nice to have a generic version, but cannot find the way in C++11
     // 
@@ -316,15 +335,21 @@ public:
         return driver_fopen("gs://mock_bucket/mock_file", 'r');
     }
 
+    void* OpenWriteOnly()
+    {
+        return driver_fopen(mock_uri, 'w');
+    }
 
     void OpenSuccess(const MultiPartFile& expected)
     {
         void* res = OpenReadOnly();
         ASSERT_NE(res, nullptr);
+
+        CheckHandlesSize(1);
+
         Handle* res_cast{ reinterpret_cast<Handle*>(res) };
         ASSERT_EQ(res_cast->type, HandleType::kRead);
         ASSERT_EQ(*res_cast->var.reader, expected);
-        ASSERT_EQ(driver_fclose(res), kSuccess);
     }
 
 
@@ -332,7 +357,7 @@ public:
     {
         void* res = OpenReadOnly();
         EXPECT_EQ(res, nullptr);
-        ASSERT_EQ(driver_fclose(res), kFailure);
+        CheckHandlesEmpty();
     }
 
 
@@ -379,6 +404,11 @@ bool operator==(const GCSDriverTestFixture::MultiPartFile& op1, const GCSDriverT
         && op1.total_size_ == op2.total_size_);
 }
 
+bool operator==(const GCSDriverTestFixture::WriteFile& op1, const GCSDriverTestFixture::WriteFile& op2)
+{
+    return (op1.bucketname_ == op2.bucketname_
+        && op1.filename_ == op2.filename_);
+}
 
 gcs::ObjectMetadata MakeObjectMetadata(const std::string& bucket_name, const std::string& name, int64_t generation, uint64_t size)
 {
@@ -539,8 +569,6 @@ TEST_F(GCSDriverTestFixture, Open_InvalidURIs_AllModes)
 
 TEST_F(GCSDriverTestFixture, Close)
 {
-    HandleContainer* active_handles = reinterpret_cast<HandleContainer*>(test_getActiveHandles());
-
     void* read_h = test_addReaderHandle(
         "mock_bucket",
         "mock_object",
@@ -565,40 +593,42 @@ TEST_F(GCSDriverTestFixture, Close)
 
     Handle unknown(HandleType::kRead);
 
+    auto check_handle = [&](void* h) { ASSERT_EQ(static_cast<void*>(GetHandles()->front().get()), h); };
+
     // null pointer
-    ASSERT_EQ(active_handles->size(), 3);
+    CheckHandlesSize(3);
     ASSERT_EQ(driver_fclose(nullptr), kFailure);
-    ASSERT_EQ(active_handles->size(), 3);
-    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), read_h);
+    CheckHandlesSize(3);
+    check_handle(read_h);
 
     // address unknown
     ASSERT_EQ(driver_fclose(&unknown), kFailure);
-    ASSERT_EQ(active_handles->size(), 3);
-    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), read_h);
+    CheckHandlesSize(3);
+    check_handle(read_h);
 
     // close read_h
     // additional post-condition: write_h, that was the last handle, must have been swapped to the front
     ASSERT_EQ(driver_fclose(read_h), kSuccess);
-    ASSERT_EQ(active_handles->size(), 2);
-    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), write_h);
+    CheckHandlesSize(2);
+    check_handle(write_h);
 
     // try to close read_h handle again
     ASSERT_EQ(driver_fclose(read_h), kFailure);
-    ASSERT_EQ(active_handles->size(), 2);
-    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), write_h);
+    CheckHandlesSize(2);
+    check_handle(write_h);
 
     // close write_h
     ASSERT_EQ(driver_fclose(write_h), kSuccess);
-    ASSERT_EQ(active_handles->size(), 1);
-    ASSERT_EQ(static_cast<void*>(active_handles->front().get()), another_read_h);
+    CheckHandlesSize(1);
+    check_handle(another_read_h);
 
     // close last handle
     ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
-    ASSERT_TRUE(active_handles->empty());
+    CheckHandlesEmpty();
 
     // try closing a handle again while container is empty
     ASSERT_EQ(driver_fclose(read_h), kFailure);
-    ASSERT_TRUE(active_handles->empty());
+    CheckHandlesEmpty();
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess)
