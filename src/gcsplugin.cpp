@@ -902,8 +902,9 @@ int driver_fclose(void* stream)
     auto stream_it = FindHandle(stream);
     ERROR_NO_STREAM(stream_it, kFailure);
     auto& h_ptr = *stream_it;
+    const HandleType type = h_ptr->type;
 
-    if (HandleType::kWrite == h_ptr->type)
+    if (HandleType::kWrite == type || HandleType::kAppend == type)
     {
         //close the stream to flush all remaining bytes in the put area
         auto& writer = h_ptr->GetWriter().writer_;
