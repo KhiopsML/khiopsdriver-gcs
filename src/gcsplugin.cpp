@@ -1286,7 +1286,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
 
     auto read_and_write = [&](gcs::ObjectReadStream& from, bool skip_header = false, std::streamsize header_size = 0) {
         
-        if (!from.IsOpen() || !from)
+        if (!from)
         {
             spdlog::error("Error initializing download stream: {} {}", (int)(from.status().code()), from.status().message());
             return false;
