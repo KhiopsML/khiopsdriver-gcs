@@ -77,11 +77,11 @@ union ClientVariant
     {
         switch (type)
         {
-        case HandleType::kWrite:
+        case HandleType::kRead:
             new (&reader) ReaderPtr;
             break;
+        case HandleType::kWrite:
         case HandleType::kAppend:
-        case HandleType::kRead:
         default:
             new (&writer) WriterPtr;
             break;
@@ -106,8 +106,8 @@ struct Handle
         switch (type)
         {
         case HandleType::kRead: var.reader.~ReaderPtr(); break;
-        case HandleType::kWrite: var.writer.~WriterPtr(); break;
         case HandleType::kAppend:
+        case HandleType::kWrite: var.writer.~WriterPtr(); break;
         default: break;
         }
     }
