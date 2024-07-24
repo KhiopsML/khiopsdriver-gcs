@@ -118,24 +118,6 @@ struct Handle
 
 using HandlePtr = std::unique_ptr<Handle>;
 
-//TODO would be nice to have a generic version, but cannot find the way in C++11
-// 
-// 
-
-//HandlePtr MakeHandlePtrFromReader(ReaderPtr&& reader_ptr)
-//{
-//    HandlePtr h{ new Handle(HandleType::kRead) };
-//    h->var.reader = std::move(reader_ptr);
-//    return h;
-//}
-//
-//HandlePtr MakeHandlePtrFromWriter(WriterPtr&& writer_ptr)
-//{
-//    std::unique_ptr<Handle> h{ new Handle(HandleType::kWrite) };
-//    h->var.writer = std::move(writer_ptr);
-//    return h;
-//}
-
 
 void InitHandle(Handle& h, ReaderPtr&& r_ptr)
 {
@@ -176,13 +158,8 @@ HandleIt FindHandle(void* handle)
         });
 }
 
-void EraseRemove(HandleIt pos)// void* handle)//std::vector<std::unique_ptr<Handle>>::iterator pos)
+void EraseRemove(HandleIt pos)
 {
-    /*auto to_erase = FindHandle(handle);
-    if (to_erase == active_handles.end())
-    {
-        return kFailure;
-    }*/
     *pos = std::move(active_handles.back());
     active_handles.pop_back();
 }
@@ -191,7 +168,6 @@ void EraseRemove(HandleIt pos)// void* handle)//std::vector<std::unique_ptr<Hand
 long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     const std::string& object_name,
     char* buffer,
-    //std::size_t buffer_length,
     std::int64_t start_range,
     std::int64_t end_range)
 {
@@ -202,7 +178,7 @@ long long int DownloadFileRangeToBuffer(const std::string& bucket_name,
     }
 
     reader.read(buffer, end_range - start_range);
-    if (reader.bad()/* || reader.fail()*/) {
+    if (reader.bad()) {
         spdlog::error("Error during read: {} {}", (int)(reader.status().code()), reader.status().message());
         return -1;
     }
@@ -301,7 +277,6 @@ bool ParseGcsUri(const std::string& gcs_uri, std::string& bucket_name, std::stri
 {
     char const* prefix = "gs://";
     const size_t prefix_size{ std::strlen(prefix) };
-    //const size_t prefix_size{prefix.}
     if (gcs_uri.compare(0, prefix_size, prefix) != 0) {
         spdlog::error("Invalid GCS URI: {}", gcs_uri);
         return false;
@@ -563,12 +538,6 @@ int driver_fileExists(const char* sFilePathName)
     std::string object_name;
 
     INIT_NAMES_OR_ERROR(sFilePathName, bucket_name, object_name, kFalse);
-    /*GetBucketAndObjectNames(sFilePathName, bucket_name, object_name);
-
-    if (bucket_name.empty() || object_name.empty())
-    {
-        return kFalse;
-    }*/
 
     auto status_or_metadata_list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
     const auto first_item_it = status_or_metadata_list.begin();
@@ -697,7 +666,7 @@ long long int driver_getFileSize(const char* filename)
     return GetFileSize(bucket_name, object_name);
 }
 
-gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::string& objectname)
+gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string objectname)
 {
     std::vector<std::string> filenames;
     std::vector<long long> cumulativeSize;
@@ -737,8 +706,8 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
         //unique file
         const tOffset total_size = cumulativeSize.back();
         return ReaderPtr(new MultiPartFile{
-            bucketname,
-            objectname,
+            std::move(bucketname),
+            std::move(objectname),
             0,
             0,
             std::move(filenames),
@@ -786,8 +755,8 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
     tOffset total_size = cumulativeSize.back();
 
     return ReaderPtr(new MultiPartFile{
-        bucketname,
-        objectname,
+        std::move(bucketname),
+        std::move(objectname),
         0,
         same_header ? header_size : 0,
         std::move(filenames),
@@ -796,18 +765,31 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(const std::string& bucketname, const std::
     });
 }
 
-WriterPtr MakeWriterPtr(const std::string& bucketname, const std::string& objectname)
+gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname, std::string objectname)
 {
     auto writer = client.WriteObject(bucketname, objectname);
-    if (!writer) {
-        spdlog::error("Error initializing write stream");// : {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
-        return nullptr;
+    if (!writer)
+    {
+        return writer.last_status();
     }
     WriterPtr writer_struct{ new WriteFile };
     writer_struct->bucketname_ = std::move(bucketname);
     writer_struct->filename_ = std::move(objectname);
     writer_struct->writer_ = std::move(writer);
     return writer_struct;
+}
+
+template<typename StreamPtr, HandleType Type>
+Handle* RegisterStream(std::function<gc::StatusOr<StreamPtr>(std::string, std::string)> MakeStreamPtr, std::string&& bucket, std::string&& object)
+{
+    auto maybe_stream = MakeStreamPtr(std::move(bucket), std::move(object));
+    if (!maybe_stream)
+    {
+        spdlog::error("Error while opening stream: {}", maybe_stream.status().message());
+        return nullptr;
+    }
+
+    return InsertHandle<StreamPtr, Type>(std::move(maybe_stream).value());
 }
 
 void* driver_fopen(const char* filename, char mode)
@@ -829,25 +811,11 @@ void* driver_fopen(const char* filename, char mode)
     switch (mode) {
     case 'r':
     {
-        auto maybe_reader = MakeReaderPtr(bucketname, objectname);
-        if (!maybe_reader)
-        {
-            //maybe_reader is unusable
-            spdlog::error(maybe_reader.status().message());
-            return nullptr;
-        }
-
-        return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(maybe_reader).value());
+        return RegisterStream<ReaderPtr, HandleType::kRead>(MakeReaderPtr, std::move(bucketname), std::move(objectname));
     }
     case 'w':
     {
-        auto writer_struct = MakeWriterPtr(bucketname, objectname);
-        if (!writer_struct)
-        {
-            return nullptr;
-        }
-
-        return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
+        return RegisterStream<WriterPtr, HandleType::kWrite>(MakeWriterPtr, std::move(bucketname), std::move(objectname));
     }
     case 'a':
     {
@@ -860,7 +828,7 @@ void* driver_fopen(const char* filename, char mode)
         // - rewrite the existing content
         // - return a handle to the open writing streamhere will temporarily open the existing file, gather
         
-        auto maybe_reader = MakeReaderPtr(bucketname, objectname);
+        auto maybe_reader = MakeReaderPtr(bucketname, objectname);  // no move, the strings are needed below
         if (!maybe_reader)
         {
             // the data is unusable
@@ -885,13 +853,15 @@ void* driver_fopen(const char* filename, char mode)
         }
 
         // content is available for copy, if the file can be opened to write in it
-        auto out_stream = MakeWriterPtr(bucketname, objectname);
+        Handle* out_stream = RegisterStream<WriterPtr, HandleType::kAppend>(MakeWriterPtr, std::move(bucketname), std::move(objectname));
+
         if (!out_stream)
         {
             return nullptr;
         }
 
-        auto& writer = out_stream->writer_;
+        auto& writer = out_stream->GetWriter().writer_;
+
         if (!writer.write(content.data(), content_size))
         {
             auto last_status = writer.last_status();
@@ -900,7 +870,7 @@ void* driver_fopen(const char* filename, char mode)
         }
 
         // content successfully rewritten, return the handle to the writer
-        return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(out_stream));
+        return out_stream;
     }
     default:
         spdlog::error("Invalid open mode {}", mode);
@@ -1287,9 +1257,6 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
 
     INIT_NAMES_OR_ERROR(sSourceFilePathName, bucket_name, object_name, kFailure);
 
-    /*ParseGcsUri(sSourceFilePathName, bucket_name, object_name);
-    FallbackToDefaultBucket(bucket_name);*/
-
     auto maybe_reader = MakeReaderPtr(bucket_name, object_name);
     if (!maybe_reader)
     {
@@ -1357,7 +1324,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         {
             // short read, copy what remains, if any
             const std::streamsize rem = from.gcount();
-            if (rem > 0 && !file_stream.write(buf_data, rem))// !write_to_file(rem))
+            if (rem > 0 && !file_stream.write(buf_data, rem))
             {
                 // something went wrong on write side, abort
                 spdlog::error("Error while writing data to local file");
