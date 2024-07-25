@@ -7,7 +7,15 @@
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <sstream>
+#include <iostream>
+#include <fstream>  
+#include <sstream>  
+
+#include <boost/process/environment.hpp>
+
+#include <boost/uuid/uuid.hpp>            // uuid class
+#include <boost/uuid/uuid_generators.hpp> // generators
+#include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
 #include <gtest/gtest.h>
 #include "google/cloud/storage/testing/mock_client.h"
@@ -74,6 +82,64 @@ TEST(GCSDriverTest, GetMultipartFileSize)
 {
 	ASSERT_EQ(driver_connect(), kSuccess);
 	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-00000000000*.txt"), 5585568);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, GetFileSizeNonexistentFailure)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/non_existent_file.txt"), -1);
+    ASSERT_STRNE(driver_getlasterror(), NULL);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure)
+{
+    auto env = boost::this_process::environment();
+    env["GCP_TOKEN"] = "/tmp/notoken.json";
+	ASSERT_EQ(driver_connect(), kFailure);
+    env.erase("GCP_TOKEN");
+}
+
+void setup_bad_credentials() {
+    std::stringstream tempCredsFile;
+#ifdef _WIN32
+	tempCredsFile << std::getenv("TEMP") << "\\creds-" << boost::uuids::random_generator()() << ".json";
+#else
+	tempCredsFile << "/tmp/creds-" << boost::uuids::random_generator()() << ".json";
+#endif
+    std::ofstream outfile (tempCredsFile.str());
+    outfile << "{}" << std::endl;
+    outfile.close();
+    auto env = boost::this_process::environment();
+    env["GCP_TOKEN"] = tempCredsFile.str();
+}
+
+void cleanup_bad_credentials() {
+    auto env = boost::this_process::environment();
+    env.erase("GCP_TOKEN");
+}
+
+TEST(GCSDriverTest, GetFileSizeInvalidCredentialsFailure)
+{
+    setup_bad_credentials();
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), -1);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+    cleanup_bad_credentials();
+}
+
+TEST(GCSDriverTest, RmDir)
+{
+    ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_rmdir("dummy"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, mkDir)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_mkdir("dummy"), kSuccess);
 	ASSERT_EQ(driver_disconnect(), kSuccess);
 }
 

@@ -39,9 +39,8 @@ gcs::Client client;
 // Global bucket name
 std::string globalBucketName;
 
-HandleContainer active_handles;
-
-
+// Last error
+std::string lastError;
 
 void InitHandle(Handle& h, ReaderPtr&& r_ptr)
 {
@@ -395,20 +394,25 @@ int driver_connect()
     std::string project = GetEnvironmentVariableOrDefault("CLOUD_ML_PROJECT_ID", "");
     if (!project.empty())
     {
-        options.set<gc::QuotaUserOption>(std::move(project));
+        options.set<gc::UserProjectOption>(std::move(project));
     }
 
     std::string gcp_token_filename = GetEnvironmentVariableOrDefault("GCP_TOKEN", "");
-    //if (!gcp_token_filename.empty())
-    //{
-    //    // Initialize from token file
-    //    client = 
-    //}
-    //else
+    if (!gcp_token_filename.empty())
     {
-        // Fallback to standard credentials discovery
-        client = gcs::Client{ std::move(options) };
+        // Initialize from token file
+        std::ifstream t(gcp_token_filename);
+        std::stringstream buffer;
+        buffer << t.rdbuf();
+        if (t.fail()) {
+            return kFailure;
+        }
+        std::shared_ptr<gc::Credentials> creds = gc::MakeServiceAccountCredentials(buffer.str());
+        options.set<gc::UnifiedCredentialsOption>(std::move(creds));
     }
+
+    // Create client with configured options
+    client = gcs::Client{ std::move(options) };
 
     bIsConnected = true;
     return kSuccess;
@@ -534,6 +538,11 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
     if (list_end == list_it)
     {
         //no file, or not a file
+        std::string error_message = "No such file or directory";
+
+        spdlog::error("GetFileSize {}: {}", object_name, error_message);
+        lastError = std::string(error_message);
+
         return -1;
     }
 
@@ -541,6 +550,10 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
     if (!object_metadata)
     {
         //unusable data
+        std::string error_message = object_metadata.status().message();
+        spdlog::error("GetFileSize {}: {} {}", object_name, StatusCodeToString(object_metadata.status().code()), error_message);
+        lastError = std::string(error_message);
+
         return -1;
     }
 
@@ -938,6 +951,9 @@ const char* driver_getlasterror()
 {
     spdlog::debug("getlasterror");
 
+    if (!lastError.empty()) {
+        return lastError.c_str();
+    }
     return NULL;
 }
 
@@ -1149,7 +1165,7 @@ int driver_rmdir(const char* filename)
 
     assert(driver_isConnected());
     spdlog::debug("Remove dir (does nothing...)");
-    return 1;
+    return kSuccess;
 }
 
 int driver_mkdir(const char* filename)
@@ -1163,7 +1179,7 @@ int driver_mkdir(const char* filename)
     spdlog::debug("mkdir {}", filename);
 
     assert(driver_isConnected());
-    return 1;
+    return kSuccess;
 }
 
 long long int driver_diskFreeSpace(const char* filename)
