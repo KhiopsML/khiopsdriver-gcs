@@ -1416,3 +1416,102 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
     }
 }
 
+TEST_F(GCSDriverTestFixture, OpenWriteMode_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    constexpr const char* upload_id = "mock_upload_id";
+
+    EXPECT_CALL(*mock_client, CreateResumableUpload)
+        .WillOnce(Return(CreateResumableUploadResponse{ upload_id }));
+    
+    
+    WriteFile expected;
+    expected.bucketname_ = mock_bucket;
+    expected.filename_ = mock_object;
+
+    void* stream = OpenWriteOnly();
+    ASSERT_NE(stream, nullptr);
+
+    CheckHandlesSize(1);
+    ASSERT_EQ(GetHandles()->front().get(), stream);
+    
+    const auto stream_cast = reinterpret_cast<Handle*>(stream);
+    ASSERT_EQ(stream_cast->type, HandleType::kWrite);
+    
+    const auto& writer = stream_cast->Writer();
+    ASSERT_EQ(writer, expected);
+
+    const auto& sub_writer = writer.writer_;
+    ASSERT_EQ(sub_writer.resumable_session_id(), upload_id);
+    ASSERT_TRUE(sub_writer.last_status().ok());
+}
+
+TEST_F(GCSDriverTestFixture, OpenWriteMode_FailClientWriteObject)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    constexpr const char* upload_id = "mock_upload_id";
+
+    EXPECT_CALL(*mock_client, CreateResumableUpload)
+        .WillOnce(Return(gc::Status(gc::StatusCode::kUnknown, "Mock failure")));
+
+    ASSERT_EQ(OpenWriteOnly(), nullptr);
+    CheckHandlesEmpty();
+}
+
+TEST_F(GCSDriverTestFixture, Write_BadArgs)
+{
+    struct Params
+    {
+        void* ptr_;
+        size_t size_;
+        size_t count_;
+        void* stream_;
+    };
+
+    Handle unknown_stream(HandleType::kRead);
+    
+    char dummy_buffer[8] = {};
+    
+    void* wrong_type = test_addReaderHandle(
+        mock_bucket,
+        mock_object,
+        0,
+        0,
+        { "mock_file" },
+        { 1 },
+        1
+    );
+
+    void* legit_stream = test_addWriterHandle();
+
+    std::vector<Params> test_params = {                                                 // fails because
+        Params{nullptr, 0, 0, nullptr},                                                 // stream == nullptr
+        Params{nullptr, 0, 0, &unknown_stream},                                         // ptr == nullptr
+        Params{&dummy_buffer, 0, 0, &unknown_stream},                                   // size == 0
+        Params{&dummy_buffer, 1, 0, &unknown_stream},                                   // stream unknown
+        Params{&dummy_buffer, 1, 0, wrong_type},                                        // wrong stream variant
+        Params{&dummy_buffer, 2, std::numeric_limits<size_t>::max(), legit_stream}      // numbers would overflow
+    };
+
+    // state of the driver before calls to fwrite. these must not be changed by the calls.
+    auto handles = GetHandles();
+    const size_t handles_size = handles->size();
+    std::vector<Handle*> initial_handles;
+    for (const auto& h : *handles)
+    {
+        initial_handles.push_back(h.get());
+    }
+
+    // the test
+    for (const Params& p : test_params)
+    {
+        ASSERT_EQ(driver_fwrite(p.ptr_, p.size_, p.count_, p.stream_), -1);
+        ASSERT_EQ(handles_size, handles->size());
+        for (size_t i = 0; i < handles_size; i++)
+        {
+            ASSERT_EQ(initial_handles[i], (*handles)[i].get());
+        }
+    }
+}
