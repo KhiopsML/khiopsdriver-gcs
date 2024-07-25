@@ -40,7 +40,7 @@ extern "C"
         const std::vector<long long int>& cumulativeSize,
         long long total_size);
 
-    VISIBLE void* test_addWriterHandle();
+    VISIBLE void* test_addWriterHandle(bool appendMode = false, bool create_with_mock_client = false, std::string bucketname = {}, std::string objectname = {});
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Several functions defined below have the same semantic as those defined in the ANSI C API.

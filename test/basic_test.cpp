@@ -261,8 +261,8 @@ public:
             switch (type)
             {
             case HandleType::kRead: var.reader.~ReaderPtr(); break;
-            case HandleType::kWrite: var.writer.~WriterPtr(); break;
             case HandleType::kAppend:
+            case HandleType::kWrite: var.writer.~WriterPtr(); break;
             default: break;
             }
         }
@@ -391,6 +391,21 @@ public:
         *mock_file_2.offset = 0;
     }
 
+    using DriverState = std::vector<Handle*>;
+
+    DriverState RecordDriverState()
+    {
+        const auto handles = GetHandles();
+        DriverState res;
+        res.reserve(handles->size());
+
+        for (const auto& h : *handles)
+        {
+            res.push_back(h.get());
+        }
+
+        return res;
+    }
 };
 
 bool operator==(const GCSDriverTestFixture::MultiPartFile& op1, const GCSDriverTestFixture::MultiPartFile& op2)
@@ -1451,8 +1466,6 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_FailClientWriteObject)
 {
     using gcs::internal::CreateResumableUploadResponse;
 
-    constexpr const char* upload_id = "mock_upload_id";
-
     EXPECT_CALL(*mock_client, CreateResumableUpload)
         .WillOnce(Return(gc::Status(gc::StatusCode::kUnknown, "Mock failure")));
 
@@ -1496,22 +1509,115 @@ TEST_F(GCSDriverTestFixture, Write_BadArgs)
     };
 
     // state of the driver before calls to fwrite. these must not be changed by the calls.
-    auto handles = GetHandles();
-    const size_t handles_size = handles->size();
-    std::vector<Handle*> initial_handles;
-    for (const auto& h : *handles)
-    {
-        initial_handles.push_back(h.get());
-    }
-
+    const DriverState initial_state = RecordDriverState();
+    
     // the test
     for (const Params& p : test_params)
     {
         ASSERT_EQ(driver_fwrite(p.ptr_, p.size_, p.count_, p.stream_), -1);
-        ASSERT_EQ(handles_size, handles->size());
-        for (size_t i = 0; i < handles_size; i++)
-        {
-            ASSERT_EQ(initial_handles[i], (*handles)[i].get());
-        }
+        ASSERT_EQ(initial_state, RecordDriverState());
     }
 }
+
+TEST_F(GCSDriverTestFixture, Write_FailOnWrite)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+
+    // to test a bad writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    void* stream_write = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_write, nullptr);
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // the attempt to write needs to pass an amount of data
+    // sufficiently large to exceed the maximum size of the put area
+    // and trigger the request to upload to the server
+    std::vector<char> dummy_buffer(1024*1024*8);
+
+    // the test
+    EXPECT_CALL(*mock_client, UploadChunk)
+        .WillOnce(Return(google::cloud::Status{
+            google::cloud::StatusCode::kUnknown, "Failing, just because." }));
+
+    ASSERT_EQ(driver_fwrite(dummy_buffer.data(), 1, dummy_buffer.size(), stream_write), -1);
+    ASSERT_EQ(initial_state, RecordDriverState());
+}
+
+TEST_F(GCSDriverTestFixture, Write_NoUpload_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+
+    // to test a good writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    void* stream_write = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_write, nullptr);
+
+    void* stream_append = test_addWriterHandle(true, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_append, nullptr);
+
+    std::vector<void*> stream_ptrs = { stream_write, stream_append };
+
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // this test checks that a stream remains good when its underlying put area
+    // is not yet at capacity.
+    constexpr size_t nb_bytes{ 8 };
+    char dummy_buffer[nb_bytes] = {};
+
+    // the test
+    for (void* stream : stream_ptrs)
+    {
+        ASSERT_EQ(driver_fwrite(&dummy_buffer, 1, nb_bytes, stream), nb_bytes);
+        ASSERT_EQ(initial_state, RecordDriverState());
+    }
+}
+
+TEST_F(GCSDriverTestFixture, Write_Upload_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    // to test a good writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    void* stream = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream, nullptr);
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // this test checks the handling of a succesful upload
+    constexpr size_t nb_bytes{ 1024 * 1024 * 8 };
+    std::vector<char> dummy_buffer(nb_bytes);
+
+    //the test
+    using gcs::internal::QueryResumableUploadResponse;
+
+    gcs::ObjectMetadata expected_metadata;
+
+    EXPECT_CALL(*mock_client, UploadChunk)
+        .WillOnce(Return(QueryResumableUploadResponse{
+                /*.committed_size=*/absl::nullopt,
+                /*.object_metadata=*/expected_metadata }));
+
+    ASSERT_EQ(driver_fwrite(dummy_buffer.data(), 1, nb_bytes, stream), nb_bytes);
+    ASSERT_EQ(initial_state, RecordDriverState());
+}
+
+//EXPECT_CALL(*mock_client, UploadChunk)
+    //    .WillOnce(Return(QueryResumableUploadResponse{
+    //            /*.committed_size=*/absl::nullopt,
+    //            /*.object_metadata=*/expected_metadata }));

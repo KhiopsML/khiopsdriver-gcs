@@ -408,10 +408,33 @@ void* test_addReaderHandle(
     return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_ptr));
 }
 
-void* test_addWriterHandle()
+void* test_addWriterHandle(bool appendMode, bool create_with_mock_client, std::string bucketname, std::string objectname)
 {
-    WriterPtr writer_ptr{ new WriteFile };
-    return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_ptr));
+    if (!create_with_mock_client)
+    {
+        if (appendMode)
+        {
+            return InsertHandle<WriterPtr, HandleType::kAppend>(WriterPtr(new WriteFile));
+        }
+        return InsertHandle<WriterPtr, HandleType::kWrite>(WriterPtr(new WriteFile));
+    }
+
+    auto writer = client.WriteObject(bucketname, objectname);
+    if (!writer)
+    {
+        return nullptr;
+    }
+
+    WriterPtr writer_struct{ new WriteFile };
+    writer_struct->bucketname_ = std::move(bucketname);
+    writer_struct->filename_ = std::move(objectname);
+    writer_struct->writer_ = std::move(writer);
+
+    if (appendMode)
+    {
+        return InsertHandle<WriterPtr, HandleType::kAppend>(std::move(writer_struct));
+    }
+    return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
 }
 
 const char* driver_getDriverName()
@@ -1110,7 +1133,7 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
     ERROR_NO_STREAM(stream_it, -1);
     Handle& stream_h = **stream_it;
 
-    if (HandleType::kWrite != stream_h.type)
+    if (HandleType::kWrite != stream_h.type && HandleType::kAppend != stream_h.type)
     {
         spdlog::error("Cannot write on not writing stream");
         return -1;
