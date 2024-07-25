@@ -3,120 +3,44 @@
 #endif
 
 #include "gcsplugin.h"
-#include "google/cloud/storage/client.h"
-#include "google/cloud/rest_options.h"
-#include "spdlog/spdlog.h"
+#include "gcsplugin_types.h"
 
 #include <algorithm>
 #include <assert.h>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <google/cloud/rest_options.h>
 #include <limits>
+#include <limits.h>
 #include <memory>
 
-#include <limits.h>
+#include "google/cloud/rest_options.h"
+#include "google/cloud/storage/client.h"
 #include <google/cloud/storage/object_write_stream.h>
+
+#include "spdlog/spdlog.h"
+
+
+using namespace gcsplugin;
+
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+
 
 constexpr const char* version = "0.1.0";
 constexpr const char* driver_name = "GCS driver";
 constexpr const char* driver_scheme = "gs";
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
+
 bool bIsConnected = false;
 
-namespace gc = ::google::cloud;
-namespace gcs = gc::storage;
 gcs::Client client;
 // Global bucket name
 std::string globalBucketName;
 
-using tOffset = long long;
+HandleContainer active_handles;
 
-constexpr int kSuccess{ 1 };
-constexpr int kFailure{ 0 };
-
-constexpr int kFalse{ 0 };
-constexpr int kTrue{ 1 };
-
-struct MultiPartFile
-{
-    std::string bucketname_;
-    std::string filename_;
-    tOffset offset_{ 0 };
-    // Added for multifile support
-    tOffset commonHeaderLength_{ 0 };
-    std::vector<std::string> filenames_;
-    std::vector<long long int> cumulativeSize_;
-    tOffset total_size_{ 0 };
-};
-
-struct WriteFile
-{
-    std::string bucketname_;
-    std::string filename_;
-    gcs::ObjectWriteStream writer_;
-};
-
-enum class HandleType { kRead, kWrite, kAppend };
-
-using Reader = MultiPartFile;
-using Writer = WriteFile;
-using ReaderPtr = std::unique_ptr<Reader>;
-using WriterPtr = std::unique_ptr<Writer>;
-
-union ClientVariant
-{
-    ReaderPtr reader;
-    WriterPtr writer;
-
-    //  no default ctor is allowed since member have non trivial ctors
-    //  the chosen variant must be initialized by placement new
-    explicit ClientVariant(HandleType type)
-    {
-        switch (type)
-        {
-        case HandleType::kRead:
-            new (&reader) ReaderPtr;
-            break;
-        case HandleType::kWrite:
-        case HandleType::kAppend:
-        default:
-            new (&writer) WriterPtr;
-            break;
-        }
-    }
-
-    ~ClientVariant() {}
-};
-
-struct Handle
-{
-    HandleType type;
-    ClientVariant var;
-
-    Handle(HandleType p_type)
-        : type{ p_type }
-        , var(p_type)
-    {}
-
-    ~Handle()
-    {
-        switch (type)
-        {
-        case HandleType::kRead: var.reader.~ReaderPtr(); break;
-        case HandleType::kAppend:
-        case HandleType::kWrite: var.writer.~WriterPtr(); break;
-        default: break;
-        }
-    }
-
-    Reader& GetReader() { return *(var.reader); }
-    Writer& GetWriter() { return *(var.writer); }
-};
-
-using HandlePtr = std::unique_ptr<Handle>;
 
 
 void InitHandle(Handle& h, ReaderPtr&& r_ptr)
@@ -136,13 +60,6 @@ HandlePtr MakeHandleFromVariant(VariantPtr&& var_ptr)
     InitHandle(*h, std::move(var_ptr));
     return h;
 }
-
-
-using HandleContainer = std::vector<HandlePtr>;
-using HandleIt = HandleContainer::iterator;
-
-HandleContainer active_handles;
-
 
 template<typename VariantPtr, HandleType Type>
 Handle* InsertHandle(VariantPtr&& var_ptr)

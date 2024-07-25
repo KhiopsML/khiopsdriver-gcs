@@ -50,7 +50,7 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT(CMAKE_BUILD_TYPE STREQUAL "Relea
 	setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage --gtest_output=xml:coverage.junit.xml)
 endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_types.h src/gcsplugin.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
