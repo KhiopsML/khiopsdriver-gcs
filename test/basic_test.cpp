@@ -1,27 +1,25 @@
-#include <gtest/gtest.h>
-#include "google/cloud/storage/testing/mock_client.h"
+#include "gcsplugin.h"
+#include "gcsplugin_internal.h"
 
 #include <array>
 #include <cstring>
 #include <functional>
 #include <iostream>
 #include <limits>
-#include <sstream>
 #include <memory>
+#include <sstream>
 
-#include "../src/gcsplugin.h"
+#include <gtest/gtest.h>
+#include "google/cloud/storage/testing/mock_client.h"
+
+
+using namespace gcsplugin;
 
 namespace gc = ::google::cloud;
 namespace gcs = gc::storage;
 
 using ::testing::Return;
 using LOReturnType = gc::StatusOr<gcs::internal::ListObjectsResponse>;
-
-constexpr int kSuccess{ 1 };
-constexpr int kFailure{ 0 };
-
-constexpr int kFalse{ 0 };
-constexpr int kTrue{ 1 };
 
 
 TEST(GCSDriverTest, GetDriverName)
@@ -122,8 +120,6 @@ constexpr std::array<const char*, 4> test_files = {
                                         return google::cloud::make_status_or<std::unique_ptr<gcs::internal::ObjectReadSource>>(std::move(mock_source));} \
 
 
-
-
 class GCSDriverTestFixture : public ::testing::Test
 {
 protected:
@@ -136,10 +132,17 @@ protected:
 
     void TearDown() override
     {
+        GetHandles()->clear();
         test_unsetClient();
     }
 
 public:
+
+    static constexpr const char* mock_bucket = "mock_bucket";
+    static constexpr const char* mock_object = "mock_object";
+    static constexpr const char* mock_uri = "gs://mock_bucket/mock_object";
+
+
     static void TearDownTestSuite()
     {
         ASSERT_EQ(driver_disconnect(), kSuccess);
@@ -190,139 +193,31 @@ public:
         EXPECT_CALL(*mock_client, ListObjects).WillOnce(Return<LOReturnType>(std::move(result)));
     }
 
-    struct MultiPartFile
-    {
-        std::string bucketname_;
-        std::string filename_;
-        long long offset_{ 0 };
-        // Added for multifile support
-        long long commonHeaderLength_{ 0 };
-        std::vector<std::string> filenames_;
-        std::vector<long long int> cumulativeSize_;
-        long long total_size_{ 0 };
-    };
+    HandleContainer* GetHandles() { return reinterpret_cast<HandleContainer*>(test_getActiveHandles()); }
 
-    enum class HandleType { kRead, kWrite, kAppend };
-
-    using ReaderPtr = std::unique_ptr<MultiPartFile>;
-    using WriterPtr = std::unique_ptr<gcs::ObjectWriteStream>;
-
-    union ClientVariant
-    {
-        ReaderPtr reader;
-        WriterPtr writer;
-
-        //  no default ctor is allowed since member have non trivial ctors
-        //  the chosen variant must be initialized by placement new
-        explicit ClientVariant(HandleType type)
-        {
-            switch (type)
-            {
-            case HandleType::kWrite:
-                new (&writer) WriterPtr;
-                break;
-            case HandleType::kAppend:
-            case HandleType::kRead:
-            default:
-                new (&reader) ReaderPtr;
-                break;
-            }
-        }
-
-        ~ClientVariant() {}
-    };
-
-    struct Handle
-    {
-        HandleType type;
-        ClientVariant var;
-
-        Handle(HandleType p_type)
-            : type{ p_type }
-            , var(p_type)
-        {}
-
-        ~Handle()
-        {
-            switch (type)
-            {
-            case HandleType::kRead: var.reader.~ReaderPtr(); break;
-            case HandleType::kWrite: var.writer.~WriterPtr(); break;
-            case HandleType::kAppend:
-            default: break;
-            }
-        }
-
-        MultiPartFile& Reader() { return *(var.reader); }
-        gcs::ObjectWriteStream& Writer() { return *(var.writer); }
-    };
-
-    using HandlePtr = std::unique_ptr<Handle>;
-
-    //TODO would be nice to have a generic version, but cannot find the way in C++11
-    // 
-    // 
-
-    HandlePtr MakeHandlePtrFromReader(ReaderPtr&& reader_ptr)
-    {
-        HandlePtr h{ new Handle(HandleType::kRead) };
-        h->var.reader = std::move(reader_ptr);
-        return h;
-    }
-
-    HandlePtr MakeHandlePtrFromWriter(WriterPtr&& writer_ptr)
-    {
-        std::unique_ptr<Handle> h{ new Handle(HandleType::kWrite) };
-        h->var.writer = std::move(writer_ptr);
-        return h;
-    }
-
-    void ResetReader(Handle& handle, ReaderPtr&& file)
-    {
-        handle.var.reader = std::move(file);// .reset(file);
-    }
-
-    void ResetWriter(Handle& handle, WriterPtr&& stream)
-    {
-        handle.var.writer = std::move(stream);// .reset(stream);
-    }
-
-    HandlePtr MakeReaderHandle(ReaderPtr&& file)
-    {
-        HandlePtr h_ptr(new Handle(HandleType::kRead));
-        ResetReader(*h_ptr, std::move(file));
-        return h_ptr;
-    }
-
-    HandlePtr MakeWriterHandle(WriterPtr&& stream)
-    {
-        HandlePtr h_ptr(new Handle(HandleType::kWrite));
-        ResetWriter(*h_ptr, std::move(stream));
-        return h_ptr;
-    }
-
-    struct ReadSimulatorParams
-    {
-        const char* content;
-        size_t content_size;
-        size_t* offset;
-    };
-
+    void CheckHandlesEmpty() { ASSERT_TRUE(GetHandles()->empty()); }
+    void CheckHandlesSize(size_t size) { ASSERT_EQ(GetHandles()->size(), size); }
 
     void* OpenReadOnly()
     {
         return driver_fopen("gs://mock_bucket/mock_file", 'r');
     }
 
+    void* OpenWriteOnly()
+    {
+        return driver_fopen(mock_uri, 'w');
+    }
 
-    void OpenSuccess(const MultiPartFile& expected)
+    void OpenSuccess(const Reader& expected)
     {
         void* res = OpenReadOnly();
         ASSERT_NE(res, nullptr);
+
+        CheckHandlesSize(1);
+
         Handle* res_cast{ reinterpret_cast<Handle*>(res) };
         ASSERT_EQ(res_cast->type, HandleType::kRead);
-        ASSERT_EQ(*res_cast->var.reader, expected);
-        ASSERT_EQ(driver_fclose(res), kSuccess);
+        ASSERT_EQ(res_cast->GetReader(), expected);
     }
 
 
@@ -330,11 +225,18 @@ public:
     {
         void* res = OpenReadOnly();
         EXPECT_EQ(res, nullptr);
-        ASSERT_EQ(driver_fclose(res), kFailure);
+        CheckHandlesEmpty();
     }
 
 
     // simulate the answer to a reading request
+    struct ReadSimulatorParams
+    {
+        const char* content;
+        size_t content_size;
+        size_t* offset;
+    };
+
     gcs::internal::ReadSourceResult SimulateRead(void* buf, size_t n, ReadSimulatorParams& args)
     {
         size_t& offset = *args.offset;
@@ -364,18 +266,23 @@ public:
         *mock_file_2.offset = 0;
     }
 
-};
 
-bool operator==(const GCSDriverTestFixture::MultiPartFile& op1, const GCSDriverTestFixture::MultiPartFile& op2)
-{
-    return (op1.bucketname_ == op2.bucketname_
-        && op1.filename_ == op2.filename_
-        && op1.offset_ == op2.offset_
-        && op1.commonHeaderLength_ == op2.commonHeaderLength_
-        && op1.filenames_ == op2.filenames_
-        && op1.cumulativeSize_ == op2.cumulativeSize_
-        && op1.total_size_ == op2.total_size_);
-}
+    using DriverState = std::vector<Handle*>;
+
+    DriverState RecordDriverState()
+    {
+        const auto handles = GetHandles();
+        DriverState res;
+        res.reserve(handles->size());
+
+        for (const auto& h : *handles)
+        {
+            res.push_back(h.get());
+        }
+
+        return res;
+    }
+};
 
 
 gcs::ObjectMetadata MakeObjectMetadata(const std::string& bucket_name, const std::string& name, int64_t generation, uint64_t size)
@@ -526,9 +433,77 @@ TEST_F(GCSDriverTestFixture, GetFileSize)
     ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), -1);
 }
 
-TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_InvalidURIs)
+TEST_F(GCSDriverTestFixture, Open_InvalidURIs_AllModes)
 {
-    CheckInvalidURIs(driver_fopen, 'r', nullptr);
+    constexpr char modes[3] = { 'r', 'w', 'a' };
+    for (char m : modes)
+    {
+        CheckInvalidURIs(driver_fopen, m, nullptr);
+    }
+}
+
+TEST_F(GCSDriverTestFixture, Close)
+{
+    void* read_h = test_addReaderHandle(
+        "mock_bucket",
+        "mock_object",
+        0,
+        0,
+        { "mock_name" },
+        { 1 },
+        1
+    );
+
+    void* another_read_h = test_addReaderHandle(
+        "mock_bucket",
+        "mock_object",
+        0,
+        0,
+        { "mock_name" },
+        { 1 },
+        1
+    );
+
+    void* write_h = test_addWriterHandle();
+
+    Handle unknown(HandleType::kRead);
+
+    auto check_handle = [&](void* h) { ASSERT_EQ(static_cast<void*>(GetHandles()->front().get()), h); };
+
+    // null pointer
+    CheckHandlesSize(3);
+    ASSERT_EQ(driver_fclose(nullptr), kFailure);
+    CheckHandlesSize(3);
+    check_handle(read_h);
+
+    // address unknown
+    ASSERT_EQ(driver_fclose(&unknown), kFailure);
+    CheckHandlesSize(3);
+    check_handle(read_h);
+
+    // close read_h
+    // additional post-condition: write_h, that was the last handle, must have been swapped to the front
+    ASSERT_EQ(driver_fclose(read_h), kSuccess);
+    CheckHandlesSize(2);
+    check_handle(write_h);
+
+    // try to close read_h handle again
+    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    CheckHandlesSize(2);
+    check_handle(write_h);
+
+    // close write_h
+    ASSERT_EQ(driver_fclose(write_h), kSuccess);
+    CheckHandlesSize(1);
+    check_handle(another_read_h);
+
+    // close last handle
+    ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
+    CheckHandlesEmpty();
+
+    // try closing a handle again while container is empty
+    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    CheckHandlesEmpty();
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess)
@@ -551,13 +526,6 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileFailure)
 {
     PrepareListObjects({});
     OpenFailure();
-}
-
-TEST_F(GCSDriverTestFixture, CloseFileFailure)
-{
-    // try closing a handle not present
-    Handle dummy_handle(HandleType::kRead);
-    ASSERT_EQ(driver_fclose(&dummy_handle), kFailure);
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess)
@@ -658,37 +626,27 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureO
     OpenFailure();
 }
 
+
+
 TEST_F(GCSDriverTestFixture, Seek_BadArgs)
 {
     constexpr int seek_failure{ -1 };
 
-    ReaderPtr one_file(new MultiPartFile{
+    void* manual_handle_reader = test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        {"mock_file"},
-        {0},
+        { "mock_file" },
+        { 0 },
         0
-        });
+    );
 
-    /*auto one_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        {"mock_file"},
-        {0},
-        0
-    };*/
-
-    HandlePtr handle_reader = MakeReaderHandle(std::move(one_file));
-
-    Handle dummy_writer(HandleType::kWrite);
+    void* manual_handle_writer = test_addWriterHandle();
 
     ASSERT_EQ(driver_fseek(nullptr, 0, std::ios::beg), seek_failure);
-    ASSERT_EQ(driver_fseek(handle_reader.get(), 0, -1), seek_failure);           // unrecognised whence
-    ASSERT_EQ(driver_fseek(&dummy_writer, 0, std::ios::beg), seek_failure);      // attempted seek on writer 
+    ASSERT_EQ(driver_fseek(manual_handle_reader, 0, -1), seek_failure);                 // unrecognised whence
+    ASSERT_EQ(driver_fseek(manual_handle_writer, 0, std::ios::beg), seek_failure);      // attempted seek on writer 
 }
 
 TEST_F(GCSDriverTestFixture, SeekFromStart)
@@ -708,8 +666,8 @@ TEST_F(GCSDriverTestFixture, SeekFromStart)
             int res{ 0 };
             ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::beg));
             ASSERT_EQ(res, v.expected_result);
-            ASSERT_EQ(sample.Reader().offset_, v.expected_result == seek_failure ? sample_starting_offset : v.offset);
-            sample.Reader().offset_ = sample_starting_offset;
+            ASSERT_EQ(sample.GetReader().offset_, v.expected_result == seek_failure ? sample_starting_offset : v.offset);
+            sample.GetReader().offset_ = sample_starting_offset;
         }
         };
 
@@ -717,27 +675,15 @@ TEST_F(GCSDriverTestFixture, SeekFromStart)
     constexpr long long filesize{ 10 };
     constexpr long long starting_offset{ 1 };
 
-    ReaderPtr one_file(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
-        starting_offset,
         0,
-        {"mock_file"},
-        {filesize},
-        filesize
-        });
-
-    /*auto one_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        starting_offset,
         0,
-        {"mock_file"},
-        {filesize},
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(one_file));
+        { "mock_file" },
+        { 0 },
+        0
+    ));
 
     std::vector<TestParams> test_values = {
         TestParams{0, seek_success},
@@ -756,27 +702,14 @@ TEST_F(GCSDriverTestFixture, SeekFromStart)
 
     // multifile
 
-    ReaderPtr multi_file(new MultiPartFile{
+    test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        {"mock_file_0", "mock_file_1", "mock_file_3"},
-        {filesize, 2 * filesize, 3 * filesize},
-        3 * filesize
-        });
-
-    /*auto multi_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        {"mock_file_0", "mock_file_1", "mock_file_3"},
-        {filesize, 2 * filesize, 3 * filesize},
-        3 * filesize
-    };*/
-
-    ResetReader(*test_reader, std::move(multi_file));
+        { "mock_file_0", "mock_file_1", "mock_file_3" },
+        { filesize, 2 * filesize, 3 * filesize },
+        3 * filesize));
 
     std::vector<TestParams> test_values_multifile = {
         TestParams{0, seek_success},
@@ -809,8 +742,8 @@ TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset)
             int res{ 0 };
             ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::cur));
             ASSERT_EQ(res, v.expected_result);
-            ASSERT_EQ(sample.Reader().offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
-            sample.Reader().offset_ = sample_starting_offset;
+            ASSERT_EQ(sample.GetReader().offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
+            sample.GetReader().offset_ = sample_starting_offset;
         }
         };
 
@@ -819,27 +752,14 @@ TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset)
     constexpr long long starting_offset{ 5 };
     constexpr long long gap_to_end{ filesize - starting_offset - 1 };
 
-    ReaderPtr one_file(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         starting_offset,
         0,
-        {"mock_file"},
-        {filesize},
-        filesize
-        });
-
-    /*auto one_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        starting_offset,
-        0,
-        {"mock_file"},
-        {filesize},
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(one_file));
+        { "mock_file" },
+        { filesize },
+        filesize));
 
     std::vector<TestParams> test_values = {
         TestParams{0, seek_success},
@@ -856,28 +776,16 @@ TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset)
     test_func(test_values, *test_reader, starting_offset);
 
     // special case: starting offset is 0
-
-    ReaderPtr one_file_special_case(new MultiPartFile{
+    
+    test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        {"mock_file"},
-        {filesize},
+        { "mock_file" },
+        { filesize },
         filesize
-        });
-
-    /*auto one_file_special_case = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        {"mock_file"},
-        {filesize},
-        filesize
-    };*/
-
-    ResetReader(*test_reader, std::move(one_file_special_case));
+    ));
 
     std::vector<TestParams> special_test_values = { TestParams{std::numeric_limits<long long>::max(), seek_success} };
     test_func(special_test_values, *test_reader, 0);
@@ -900,8 +808,8 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd)
             int res{ 0 };
             ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::end));
             ASSERT_EQ(res, v.expected_result);
-            ASSERT_EQ(sample.Reader().offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
-            sample.Reader().offset_ = sample_starting_offset;
+            ASSERT_EQ(sample.GetReader().offset_, v.expected_result == seek_failure ? sample_starting_offset : sample_starting_offset + v.offset);
+            sample.GetReader().offset_ = sample_starting_offset;
         }
         };
 
@@ -909,28 +817,16 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd)
     constexpr long long filesize{ 10 };
     constexpr long long starting_offset{ filesize - 1 };
 
-    ReaderPtr one_file(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         starting_offset,
         0,
-        {"mock_file"},
-        {filesize},
+        { "mock_file" },
+        { filesize },
         filesize
-        });
-
-    /*auto one_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        starting_offset,
-        0,
-        {"mock_file"},
-        {filesize},
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(one_file));
-
+    ));
+    
     std::vector<TestParams> test_values = {
         TestParams{0, seek_success},
         TestParams{-starting_offset , seek_success},
@@ -943,28 +839,16 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd)
     test_func(test_values, *test_reader, starting_offset);
 
     // special case: file of size 0, offset 0
-
-    ReaderPtr one_file_special_case(new MultiPartFile{
+    
+    test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        {"mock_file"},
-        {0},
+        { "mock_file" },
+        { 0 },
         0
-        });
-
-    /*auto one_file_special_case = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        {"mock_file"},
-        {0},
-        0
-    };*/
-
-    ResetReader(*test_reader, std::move(one_file_special_case));
+    ));
 
     std::vector<TestParams> special_test_values = { TestParams{std::numeric_limits<long long>::max(), seek_success} };
     test_func(special_test_values, *test_reader, 0);
@@ -974,55 +858,47 @@ TEST_F(GCSDriverTestFixture, Read_BadArgs)
 {
     constexpr long long max_pos{ std::numeric_limits<long long>::max() };
 
-    HandlePtr dummy_handle = MakeReaderHandle(ReaderPtr(new MultiPartFile()));
+    Handle* dummy_handle = reinterpret_cast<Handle*>(test_addReaderHandle(
+        "mock_bucket",
+        "mock_file",
+        0,
+        0,
+        { "mock_file" },
+        { 1 },
+        1));
+
     char dummy_buff[1];
 
     // null stream
     ASSERT_EQ(driver_fread(nullptr, 0, 0, nullptr), -1);
 
     // null buffer
-    ASSERT_EQ(driver_fread(nullptr, 0, 0, dummy_handle.get()), -1);
+    ASSERT_EQ(driver_fread(nullptr, 0, 0, dummy_handle), -1);
 
     // size of 0
-    ASSERT_EQ(driver_fread(dummy_buff, 0, 0, dummy_handle.get()), -1);
+    ASSERT_EQ(driver_fread(dummy_buff, 0, 0, dummy_handle), -1);
 
     // size and / or count too large
     constexpr size_t large_size{ static_cast<size_t>(std::numeric_limits<long long>::max()) };
     constexpr size_t count{ 4 };
-    ASSERT_EQ(driver_fread(dummy_buff, large_size, count, dummy_handle.get()), -1);
+    ASSERT_EQ(driver_fread(dummy_buff, large_size, count, dummy_handle), -1);
 
     // size and count within numerical limits, but file position would go beyond numerical limit during read
     constexpr long long large_file_size{ max_pos - 1 };
     
-    ReaderPtr dummy_file(new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        large_file_size - 1,
-        0,
-        {"mock_file"},
-        {large_file_size},
-        large_file_size
-        });
+    auto& reader_ref = dummy_handle->GetReader();
+    reader_ref.offset_ = large_file_size - 1;
+    reader_ref.cumulativeSize_ = { large_file_size };
+    reader_ref.total_size_ = large_file_size;
     
-    /*auto dummy_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        large_file_size - 1,
-        0,
-        {"mock_file"},
-        {large_file_size},
-        large_file_size
-    };*/
-
-    ResetReader(*dummy_handle, std::move(dummy_file));
-
     constexpr size_t size{ 10 };
 
-    ASSERT_EQ(driver_fread(dummy_buff, size, count, dummy_handle.get()), -1);
+    ASSERT_EQ(driver_fread(dummy_buff, size, count, dummy_handle), -1);
 
     // read attempt on a writer stream
-    HandlePtr dummy_writer = MakeWriterHandle(WriterPtr(new gcs::ObjectWriteStream));
-    ASSERT_EQ(driver_fread(dummy_buff, 1, 1, dummy_writer.get()), -1);
+    Handle* dummy_writer_handle = reinterpret_cast<Handle*>(test_addWriterHandle());
+
+    ASSERT_EQ(driver_fread(dummy_buff, 1, 1, dummy_writer_handle), -1);
 }
 
 TEST_F(GCSDriverTestFixture, Read_OneFile)
@@ -1034,7 +910,7 @@ TEST_F(GCSDriverTestFixture, Read_OneFile)
 
     constexpr long long filesize{ static_cast<long long>(mock_size) };
 
-    ReaderPtr mock_one_file(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
@@ -1042,78 +918,63 @@ TEST_F(GCSDriverTestFixture, Read_OneFile)
         { "mock_file" },
         { filesize },
         filesize
-        });
+    ));
 
-    /*auto mock_one_file = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        { "mock_file" },
-        { filesize },
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(mock_one_file));
     char buff[16] = {};
 
     constexpr size_t size{ sizeof(uint8_t) };
 
 
     // special case: 0 bytes to read
-    ASSERT_EQ(driver_fread(buff, size, 0, test_reader.get()), 0);
-
+    ASSERT_EQ(driver_fread(buff, size, 0, test_reader), 0);
 
     //special case: offset > filesize, trying to read at least one byte
-    test_reader->Reader().offset_ = filesize + 1;
-    //mock_one_file->offset_ = filesize + 1;
+    test_reader->GetReader().offset_ = filesize + 1;
 
-    ASSERT_EQ(driver_fread(buff, size, 1, test_reader.get()), -1);
+    ASSERT_EQ(driver_fread(buff, size, 1, test_reader), -1);
 
 
     //basic case: offset 0, 1 byte to read
-    test_reader->Reader().offset_ = 0;
-    //mock_one_file->offset_ = 0;
+    test_reader->GetReader().offset_ = 0;
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params)));
-    ASSERT_EQ(driver_fread(buff, size, 1, test_reader.get()), 1);
+    ASSERT_EQ(driver_fread(buff, size, 1, test_reader), 1);
     ASSERT_EQ(buff[0], mock_read_params.content[0]);
-    ASSERT_EQ(test_reader->Reader().offset_, 1);
-
+    ASSERT_EQ(test_reader->GetReader().offset_, 1);
 
 
     auto sync_offset = [&](long long off) {
-        test_reader->Reader().offset_ = off;
-        *mock_read_params.offset = static_cast<size_t>(test_reader->Reader().offset_);
+        test_reader->GetReader().offset_ = off;
+        *mock_read_params.offset = static_cast<size_t>(test_reader->GetReader().offset_);
         };
 
     //basic case: 0 < offset < filesize-1, 1 byte to read
     sync_offset(1);
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params)));
-    ASSERT_EQ(driver_fread(buff, size, 1, test_reader.get()), 1);
+    ASSERT_EQ(driver_fread(buff, size, 1, test_reader), 1);
     ASSERT_EQ(buff[0], mock_read_params.content[1]);
-    ASSERT_EQ(test_reader->Reader().offset_, 2);
+    ASSERT_EQ(test_reader->GetReader().offset_, 2);
 
 
     //basic case: offset == filesize - 1, 1 byte to read
     sync_offset(filesize - 1);
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params)));
-    ASSERT_EQ(driver_fread(buff, size, 1, test_reader.get()), 1);
+    ASSERT_EQ(driver_fread(buff, size, 1, test_reader), 1);
     ASSERT_EQ(buff[0], mock_read_params.content[filesize - 1]);
-    ASSERT_EQ(test_reader->Reader().offset_, filesize);
+    ASSERT_EQ(test_reader->GetReader().offset_, filesize);
 
 
     auto test_one_file_read_n_bytes = [&](long long offset) {
         sync_offset(offset);
-        const long long bytes_to_read = filesize - 1 - test_reader->Reader().offset_;
+        const long long bytes_to_read = filesize - 1 - test_reader->GetReader().offset_;
         const size_t cast_btr = static_cast<size_t>(bytes_to_read);
 
         EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params)));
-        ASSERT_EQ(driver_fread(buff, size, cast_btr, test_reader.get()), bytes_to_read);
+        ASSERT_EQ(driver_fread(buff, size, cast_btr, test_reader), bytes_to_read);
         ASSERT_EQ(std::strncmp(buff, mock_content + offset, cast_btr), 0);
-        ASSERT_EQ(test_reader->Reader().offset_, offset + cast_btr);
+        ASSERT_EQ(test_reader->GetReader().offset_, offset + cast_btr);
         };
 
     const std::vector<long long> one_file_read_n_bytes_test_values = {
@@ -1133,9 +994,9 @@ TEST_F(GCSDriverTestFixture, Read_OneFile)
         const long long available{ filesize - offset };
 
         EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params)));
-        ASSERT_EQ(driver_fread(buff, size, static_cast<size_t>(2 * filesize), test_reader.get()), available);
+        ASSERT_EQ(driver_fread(buff, size, static_cast<size_t>(2 * filesize), test_reader), available);
         ASSERT_EQ(std::strncmp(buff, mock_content + offset, static_cast<size_t>(available)), 0);
-        ASSERT_EQ(test_reader->Reader().offset_, filesize);
+        ASSERT_EQ(test_reader->GetReader().offset_, filesize);
         };
 
     // offset tests
@@ -1167,27 +1028,15 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
 
     const long long filesize{ cast_mock_size_0 + cast_mock_size_1 + cast_mock_size_2 };
 
-    ReaderPtr mock_n_files_one_header(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
+        { "mock_file_0", "mock_file_1", "mock_file_2" },
         { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1, filesize },
         filesize
-        });
-
-    /*auto mock_n_files_one_header = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
-        { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1, filesize },
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(mock_n_files_one_header));
+    ));
 
     size_t mock_offset_0{ 0 };
     size_t mock_offset_1{ 0 };
@@ -1197,33 +1046,34 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
     // read 1 byte from start of an intermediate file
-    test_reader->Reader().offset_ = cast_mock_size_0;
+    test_reader->GetReader().offset_ = cast_mock_size_0;
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 1, test_reader.get()), 1);
-    EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 1, test_reader), 1);
+    EXPECT_EQ(test_reader->GetReader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_read_params_1.content[0]);
 
     // read a small amount of bytes overlapping two file fragments
-    test_reader->Reader().offset_ = cast_mock_size_0 - 1;
+    test_reader->GetReader().offset_ = cast_mock_size_0 - 1;
     *mock_read_params_0.offset = mock_size_0 - 1;
     *mock_read_params_1.offset = 0;
 
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 2, test_reader.get()), 2);
-    EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 2, test_reader), 2);
+    EXPECT_EQ(test_reader->GetReader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_content_0[mock_size_0 - 1]);
     EXPECT_EQ(buff[1], mock_content_1[0]);
 
     // read more than mock_size_0 and less than mock_size_0 + mock_size_1 bytes from the start of the file
-    test_reader->Reader().offset_ = 0;
+    test_reader->GetReader().offset_ = 0;
     *mock_read_params_0.offset = 0;
     *mock_read_params_1.offset = 0;
 
@@ -1232,16 +1082,16 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(to_read), test_reader.get()), to_read);
-    EXPECT_EQ(test_reader->Reader().offset_, to_read);
-    EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-    EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1, mock_size_1 - 1), 0);
+    EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(to_read), test_reader), to_read);
+    EXPECT_EQ(test_reader->GetReader().offset_, to_read);
+    EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+    EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1, mock_size_1 - 1), 0);
 
 
     // tests reading the whole file
 
     auto test_whole_file = [&](long long bytes_to_read) {
-        test_reader->Reader().offset_ = 0;
+        test_reader->GetReader().offset_ = 0;
         *mock_read_params_0.offset = 0;
         *mock_read_params_1.offset = 0;
         *mock_read_params_2.offset = 0;
@@ -1250,12 +1100,12 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_2)));
-        EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(bytes_to_read), test_reader.get()), filesize);
-        EXPECT_EQ(test_reader->Reader().offset_, filesize);
-        EXPECT_EQ(std::strlen(buff), filesize);
-        EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1, mock_size_1), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0 + mock_size_1, mock_content_2, mock_size_2), 0);
+        EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
+        EXPECT_EQ(test_reader->GetReader().offset_, filesize);
+        EXPECT_EQ(std::strlen(buff_data), filesize);
+        EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1, mock_size_1), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0 + mock_size_1, mock_content_2, mock_size_2), 0);
         };
 
     // read the whole file
@@ -1263,8 +1113,6 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader)
 
     // try to read more than the whole file
     test_whole_file(filesize + 1);
-
-    delete[] buff;
 }
 
 TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
@@ -1285,27 +1133,15 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
 
     const long long filesize{ cast_mock_size_0 + cast_mock_size_1 - cast_hdr_size + cast_mock_size_2 - cast_hdr_size };
 
-    ReaderPtr mock_n_files_common_header(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
+        { "mock_file_0", "mock_file_1", "mock_file_2" },
         { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1 - cast_hdr_size, filesize },
         filesize
-        });
-
-    /*auto mock_n_files_common_header = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
-        { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1 - cast_hdr_size, filesize },
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(mock_n_files_common_header));
+    ));
 
     size_t mock_offset_0{ 0 };
     size_t mock_offset_1{ hdr_size };
@@ -1315,33 +1151,34 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
     // read 1 byte from start of an intermediate file
-    test_reader->Reader().offset_ = cast_mock_size_0;
+    test_reader->GetReader().offset_ = cast_mock_size_0;
 
     EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 1, test_reader.get()), 1);
-    EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 1, test_reader), 1);
+    EXPECT_EQ(test_reader->GetReader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_read_params_1.content[hdr_size]);
 
     // read a small amount of bytes overlapping two file fragments
-    test_reader->Reader().offset_ = cast_mock_size_0 - 1;
+    test_reader->GetReader().offset_ = cast_mock_size_0 - 1;
     *mock_read_params_0.offset = mock_size_0 - 1;
     *mock_read_params_1.offset = hdr_size;
 
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, 2, test_reader.get()), 2);
-    EXPECT_EQ(test_reader->Reader().offset_, cast_mock_size_0 + 1);
+    EXPECT_EQ(driver_fread(buff_data, size, 2, test_reader), 2);
+    EXPECT_EQ(test_reader->GetReader().offset_, cast_mock_size_0 + 1);
     EXPECT_EQ(buff[0], mock_content_0[mock_size_0 - 1]);
     EXPECT_EQ(buff[1], mock_content_1[hdr_size]);
 
     // read more than mock_size_0 and less than mock_size_0 + mock_size_1 (excluding header size) bytes from the start of the file
-    test_reader->Reader().offset_ = 0;
+    test_reader->GetReader().offset_ = 0;
     *mock_read_params_0.offset = 0;
     *mock_read_params_1.offset = hdr_size;
 
@@ -1351,16 +1188,16 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)));
-    EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(to_read), test_reader.get()), to_read);
-    EXPECT_EQ(test_reader->Reader().offset_, to_read);
-    EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-    EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1 + hdr_size, read_in_file1), 0);
+    EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(to_read), test_reader), to_read);
+    EXPECT_EQ(test_reader->GetReader().offset_, to_read);
+    EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+    EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1 + hdr_size, read_in_file1), 0);
 
 
     // tests reading the whole file
 
     auto test_whole_file = [&](long long bytes_to_read) {
-        test_reader->Reader().offset_ = 0;
+        test_reader->GetReader().offset_ = 0;
         *mock_read_params_0.offset = 0;
         *mock_read_params_1.offset = hdr_size;
         *mock_read_params_2.offset = hdr_size;
@@ -1369,12 +1206,12 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_0)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_1)))
             .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_read_params_2)));
-        EXPECT_EQ(driver_fread(buff, size, static_cast<size_t>(bytes_to_read), test_reader.get()), filesize);
-        EXPECT_EQ(test_reader->Reader().offset_, filesize);
-        EXPECT_EQ(std::strlen(buff), filesize);
-        EXPECT_EQ(std::strncmp(buff, mock_content_0, mock_size_0), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0, mock_content_1 + hdr_size, mock_size_1 - hdr_size), 0);
-        EXPECT_EQ(std::strncmp(buff + mock_size_0 + mock_size_1 - hdr_size, mock_content_2 + hdr_size, mock_size_2 - hdr_size), 0);
+        EXPECT_EQ(driver_fread(buff_data, size, static_cast<size_t>(bytes_to_read), test_reader), filesize);
+        EXPECT_EQ(test_reader->GetReader().offset_, filesize);
+        EXPECT_EQ(std::strlen(buff_data), filesize);
+        EXPECT_EQ(std::strncmp(buff_data, mock_content_0, mock_size_0), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0, mock_content_1 + hdr_size, mock_size_1 - hdr_size), 0);
+        EXPECT_EQ(std::strncmp(buff_data + mock_size_0 + mock_size_1 - hdr_size, mock_content_2 + hdr_size, mock_size_2 - hdr_size), 0);
         };
 
     // read the whole file
@@ -1382,8 +1219,6 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_CommonHeader)
 
     // try to read more than the whole file
     test_whole_file(filesize + 1);
-
-    delete[] buff;
 }
 
 TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
@@ -1402,27 +1237,15 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
 
     const long long filesize{ cast_mock_size_0 + cast_mock_size_1 + cast_mock_size_2 };
 
-    ReaderPtr mock_n_files_one_header(new MultiPartFile{
+    Handle* test_reader = reinterpret_cast<Handle*>(test_addReaderHandle(
         "mock_bucket",
         "mock_file",
         0,
         0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
+        { "mock_file_0", "mock_file_1", "mock_file_2" },
         { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1, filesize },
         filesize
-        });
-
-    /*auto mock_n_files_one_header = new MultiPartFile{
-        "mock_bucket",
-        "mock_file",
-        0,
-        0,
-        { "mock_file_0", "mock_file_1", "mock_file_2"},
-        { cast_mock_size_0, cast_mock_size_0 + cast_mock_size_1, filesize },
-        filesize
-    };*/
-
-    HandlePtr test_reader = MakeReaderHandle(std::move(mock_n_files_one_header));
+    ));
 
     size_t mock_offset_0{ 0 };
     size_t mock_offset_1{ 0 };
@@ -1432,38 +1255,22 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
     ReadSimulatorParams mock_read_params_1{ mock_content_1, mock_size_1, &mock_offset_1 };
     ReadSimulatorParams mock_read_params_2{ mock_content_2, mock_size_2, &mock_offset_2 };
 
-    char* buff = new char[2 * static_cast<size_t>(filesize)] {};
+    std::vector<char> buff(2 * static_cast<size_t>(filesize));
+    char* buff_data = buff.data();
 
     constexpr size_t size{ sizeof(uint8_t) };
 
-    /*auto sync_offset = [&](long long offset) {
-        mock_n_files_one_header.offset_ = offset;
-        *mock_read_params_0.offset = static_cast<size_t>(offset);
-        };
-
-    auto check_after_fail = [&](long long expected_offset) {
-        EXPECT_EQ(mock_n_files_one_header.offset_, expected_offset);
-        EXPECT_EQ(std::strlen(buff), 0);
-        };*/
 
     auto test_func = [&](long long offset_before_read, size_t to_read, std::function<void()> set_mock_calls) {
-        test_reader->Reader().offset_ = offset_before_read;
+        test_reader->GetReader().offset_ = offset_before_read;
         *mock_read_params_0.offset = static_cast<size_t>(offset_before_read);
 
         set_mock_calls();
 
-        EXPECT_EQ(driver_fread(buff, size, to_read, test_reader.get()), -1);
-        EXPECT_EQ(test_reader->Reader().offset_, offset_before_read);
+        EXPECT_EQ(driver_fread(buff_data, size, to_read, test_reader), -1);
+        EXPECT_EQ(test_reader->GetReader().offset_, offset_before_read);
         };
 
-    /*auto test_fail_first_read = [&](long long offset_before_read) {
-        sync_offset(offset_before_read);
-
-        EXPECT_CALL(*mock_client, ReadObject).WillOnce(READ_MOCK_LAMBDA_FAILURE);
-        EXPECT_EQ(driver_fread(buff, size, 1, &mock_n_files_one_header), -1);
-
-        check_after_fail(offset_before_read);
-        };*/
 
         //fail at first read
     const std::vector<long long> fail_first_read_test_values = { 0, cast_mock_size_0 - 1, cast_mock_size_0 };
@@ -1474,7 +1281,7 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
 
     //fail at subsequent read
     const std::vector<long long> fail_other_read_test_values = { 0, cast_mock_size_0 - 1 };
-    for (long long i : fail_first_read_test_values)
+    for (long long i : fail_other_read_test_values)
     {
         test_func(i, static_cast<size_t>(filesize), [&]() {
             EXPECT_CALL(*mock_client, ReadObject)
@@ -1482,6 +1289,195 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures)
                 .WillOnce(READ_MOCK_LAMBDA_FAILURE);
             });
     }
-
-    delete[] buff;
 }
+
+TEST_F(GCSDriverTestFixture, OpenWriteMode_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    constexpr const char* upload_id = "mock_upload_id";
+
+    EXPECT_CALL(*mock_client, CreateResumableUpload)
+        .WillOnce(Return(CreateResumableUploadResponse{ upload_id }));
+    
+    
+    WriteFile expected;
+    expected.bucketname_ = mock_bucket;
+    expected.filename_ = mock_object;
+
+    void* stream = OpenWriteOnly();
+    ASSERT_NE(stream, nullptr);
+
+    CheckHandlesSize(1);
+    ASSERT_EQ(GetHandles()->front().get(), stream);
+    
+    const auto stream_cast = reinterpret_cast<Handle*>(stream);
+    ASSERT_EQ(stream_cast->type, HandleType::kWrite);
+    
+    const auto& writer = stream_cast->GetWriter();
+    ASSERT_EQ(writer, expected);
+
+    const auto& sub_writer = writer.writer_;
+    ASSERT_EQ(sub_writer.resumable_session_id(), upload_id);
+    ASSERT_TRUE(sub_writer.last_status().ok());
+}
+
+TEST_F(GCSDriverTestFixture, OpenWriteMode_FailClientWriteObject)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    EXPECT_CALL(*mock_client, CreateResumableUpload)
+        .WillOnce(Return(gc::Status(gc::StatusCode::kUnknown, "Mock failure")));
+
+    ASSERT_EQ(OpenWriteOnly(), nullptr);
+    CheckHandlesEmpty();
+}
+
+TEST_F(GCSDriverTestFixture, Write_BadArgs)
+{
+    struct Params
+    {
+        void* ptr_;
+        size_t size_;
+        size_t count_;
+        void* stream_;
+    };
+
+    Handle unknown_stream(HandleType::kRead);
+    
+    char dummy_buffer[8] = {};
+    
+    void* wrong_type = test_addReaderHandle(
+        mock_bucket,
+        mock_object,
+        0,
+        0,
+        { "mock_file" },
+        { 1 },
+        1
+    );
+
+    void* legit_stream = test_addWriterHandle();
+
+    std::vector<Params> test_params = {                                                 // fails because
+        Params{nullptr, 0, 0, nullptr},                                                 // stream == nullptr
+        Params{nullptr, 0, 0, &unknown_stream},                                         // ptr == nullptr
+        Params{&dummy_buffer, 0, 0, &unknown_stream},                                   // size == 0
+        Params{&dummy_buffer, 1, 0, &unknown_stream},                                   // stream unknown
+        Params{&dummy_buffer, 1, 0, wrong_type},                                        // wrong stream variant
+        Params{&dummy_buffer, 2, std::numeric_limits<size_t>::max(), legit_stream}      // numbers would overflow
+    };
+
+    // state of the driver before calls to fwrite. these must not be changed by the calls.
+    const DriverState initial_state = RecordDriverState();
+    
+    // the test
+    for (const Params& p : test_params)
+    {
+        ASSERT_EQ(driver_fwrite(p.ptr_, p.size_, p.count_, p.stream_), -1);
+        ASSERT_EQ(initial_state, RecordDriverState());
+    }
+}
+
+TEST_F(GCSDriverTestFixture, Write_FailOnWrite)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+
+    // to test a bad writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    void* stream_write = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_write, nullptr);
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // the attempt to write needs to pass an amount of data
+    // sufficiently large to exceed the maximum size of the put area
+    // and trigger the request to upload to the server
+    std::vector<char> dummy_buffer(1024*1024*8);
+
+    // the test
+    EXPECT_CALL(*mock_client, UploadChunk)
+        .WillOnce(Return(google::cloud::Status{
+            google::cloud::StatusCode::kUnknown, "Failing, just because." }));
+
+    ASSERT_EQ(driver_fwrite(dummy_buffer.data(), 1, dummy_buffer.size(), stream_write), -1);
+    ASSERT_EQ(initial_state, RecordDriverState());
+}
+
+TEST_F(GCSDriverTestFixture, Write_NoUpload_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+
+    // to test a good writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    void* stream_write = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_write, nullptr);
+
+    void* stream_append = test_addWriterHandle(true, true, mock_bucket, mock_object);
+    ASSERT_NE(stream_append, nullptr);
+
+    std::vector<void*> stream_ptrs = { stream_write, stream_append };
+
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // this test checks that a stream remains good when its underlying put area
+    // is not yet at capacity.
+    constexpr size_t nb_bytes{ 8 };
+    char dummy_buffer[nb_bytes] = {};
+
+    // the test
+    for (void* stream : stream_ptrs)
+    {
+        ASSERT_EQ(driver_fwrite(&dummy_buffer, 1, nb_bytes, stream), nb_bytes);
+        ASSERT_EQ(initial_state, RecordDriverState());
+    }
+}
+
+TEST_F(GCSDriverTestFixture, Write_Upload_OK)
+{
+    using gcs::internal::CreateResumableUploadResponse;
+
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    // to test a good writing, a "valid" stream is required, obtained below
+    // through the mocked call to create such stream
+    void* stream = test_addWriterHandle(false, true, mock_bucket, mock_object);
+    ASSERT_NE(stream, nullptr);
+
+    // driver state before test
+    const DriverState initial_state = RecordDriverState();
+
+    // this test checks the handling of a succesful upload
+    constexpr size_t nb_bytes{ 1024 * 1024 * 8 };
+    std::vector<char> dummy_buffer(nb_bytes);
+
+    //the test
+    using gcs::internal::QueryResumableUploadResponse;
+
+    gcs::ObjectMetadata expected_metadata;
+
+    EXPECT_CALL(*mock_client, UploadChunk)
+        .WillOnce(Return(QueryResumableUploadResponse{
+                /*.committed_size=*/absl::nullopt,
+                /*.object_metadata=*/expected_metadata }));
+
+    ASSERT_EQ(driver_fwrite(dummy_buffer.data(), 1, nb_bytes, stream), nb_bytes);
+    ASSERT_EQ(initial_state, RecordDriverState());
+}
+
+//EXPECT_CALL(*mock_client, UploadChunk)
+    //    .WillOnce(Return(QueryResumableUploadResponse{
+    //            /*.committed_size=*/absl::nullopt,
+    //            /*.object_metadata=*/expected_metadata }));

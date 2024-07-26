@@ -25,7 +25,7 @@ target_compile_options(basic_test
 )
 
 target_include_directories(basic_test
-  PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
+  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
          ${${PROJECT_NAME}_SOURCE_DIR}/src)
 
 target_link_libraries(basic_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage khiopsdriver_file_gcs)
