@@ -42,6 +42,10 @@ std::string globalBucketName;
 // Last error
 std::string lastError;
 
+HandleContainer active_handles;
+
+
+
 void InitHandle(Handle& h, ReaderPtr&& r_ptr)
 {
     h.var.reader = std::move(r_ptr);
