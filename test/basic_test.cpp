@@ -108,18 +108,18 @@ TEST(GCSDriverTest, DirExists)
 
 TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure)
 {
-    constexpr char* badtoken = "GCP_TOKEN=/tmp/notoken.json";
-    constexpr char* notoken = "GCP_TOKEN=";
+    constexpr const char* badtoken = "GCP_TOKEN=/tmp/notoken.json";
+    constexpr const char* notoken = "GCP_TOKEN=";
 #ifdef _WIN32
-    _putenv(badtoken);
+    _putenv((char*)badtoken);
 #else
-    putenv(badtoken);
+    putenv((char*)badtoken);
 #endif
 	ASSERT_EQ(driver_connect(), kFailure);
 #ifdef _WIN32
-    _putenv(notoken);
+    _putenv((char*)notoken);
 #else
-    putenv(notoken);
+    putenv((char*)notoken);
 #endif
 }
 
@@ -142,12 +142,13 @@ void setup_bad_credentials() {
 #endif
 }
 
-void cleanup_bad_credentials() {
-    constexpr char* notoken = "GCP_TOKEN=";
+void cleanup_bad_credentials()
+{
+    constexpr const char* notoken = "GCP_TOKEN=";
 #ifdef _WIN32
-    _putenv(notoken);
+    _putenv((char*)notoken);
 #else
-    putenv(notoken);
+    putenv((char*)notoken);
 #endif
 }
 
