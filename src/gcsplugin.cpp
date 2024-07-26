@@ -851,13 +851,13 @@ int driver_fclose(void* stream)
 
     if (!stream)
     {
-        return kFailure;
+        return kCloseEOF;
     }
 
     spdlog::debug("fclose {}", (void*)stream);
 
     auto stream_it = FindHandle(stream);
-    ERROR_NO_STREAM(stream_it, kFailure);
+    ERROR_NO_STREAM(stream_it, kCloseEOF);
     auto& h_ptr = *stream_it;
     const HandleType type = h_ptr->type;
 
@@ -875,7 +875,7 @@ int driver_fclose(void* stream)
 
     EraseRemove(stream_it);
 
-    return kSuccess;
+    return kCloseSuccess;
 }
 
 

@@ -53,6 +53,9 @@ namespace gcsplugin
     constexpr int kSuccess{ 1 };
     constexpr int kFailure{ 0 };
 
+    constexpr int kCloseSuccess{ 0 };
+    constexpr int kCloseEOF{ -1 };
+
     constexpr int kFalse{ 0 };
     constexpr int kTrue{ 1 };
 

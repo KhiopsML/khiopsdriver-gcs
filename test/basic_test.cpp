@@ -556,37 +556,37 @@ TEST_F(GCSDriverTestFixture, Close)
 
     // null pointer
     CheckHandlesSize(3);
-    ASSERT_EQ(driver_fclose(nullptr), kFailure);
+    ASSERT_EQ(driver_fclose(nullptr), kCloseEOF);
     CheckHandlesSize(3);
     check_handle(read_h);
 
     // address unknown
-    ASSERT_EQ(driver_fclose(&unknown), kFailure);
+    ASSERT_EQ(driver_fclose(&unknown), kCloseEOF);
     CheckHandlesSize(3);
     check_handle(read_h);
 
     // close read_h
     // additional post-condition: write_h, that was the last handle, must have been swapped to the front
-    ASSERT_EQ(driver_fclose(read_h), kSuccess);
+    ASSERT_EQ(driver_fclose(read_h), kCloseSuccess);
     CheckHandlesSize(2);
     check_handle(write_h);
 
     // try to close read_h handle again
-    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
     CheckHandlesSize(2);
     check_handle(write_h);
 
     // close write_h
-    ASSERT_EQ(driver_fclose(write_h), kSuccess);
+    ASSERT_EQ(driver_fclose(write_h), kCloseSuccess);
     CheckHandlesSize(1);
     check_handle(another_read_h);
 
     // close last handle
-    ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
+    ASSERT_EQ(driver_fclose(another_read_h), kCloseSuccess);
     CheckHandlesEmpty();
 
     // try closing a handle again while container is empty
-    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
     CheckHandlesEmpty();
 }
 
