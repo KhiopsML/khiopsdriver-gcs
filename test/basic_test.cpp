@@ -7,7 +7,15 @@
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <sstream>
+#include <iostream>
+#include <fstream>  
+#include <sstream>  
+
+#include <boost/process/environment.hpp>
+
+#include <boost/uuid/uuid.hpp>            // uuid class
+#include <boost/uuid/uuid_generators.hpp> // generators
+#include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
 #include <gtest/gtest.h>
 #include "google/cloud/storage/testing/mock_client.h"
@@ -74,6 +82,82 @@ TEST(GCSDriverTest, GetMultipartFileSize)
 {
 	ASSERT_EQ(driver_connect(), kSuccess);
 	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/Adult-split-00000000000*.txt"), 5585568);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, GetFileSizeNonexistentFailure)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/non_existent_file.txt"), -1);
+    ASSERT_STRNE(driver_getlasterror(), NULL);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, FileExists)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_exist("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, DirExists)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_exist("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+#ifndef _WIN32
+// Setting of environment variables does not work on Windows
+TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure)
+{
+    auto env = boost::this_process::environment();
+    env["GCP_TOKEN"] = "/tmp/notoken.json";
+	ASSERT_EQ(driver_connect(), kFailure);
+    env.erase("GCP_TOKEN");
+}
+
+void setup_bad_credentials() {
+    std::stringstream tempCredsFile;
+#ifdef _WIN32
+	tempCredsFile << std::getenv("TEMP") << "\\creds-" << boost::uuids::random_generator()() << ".json";
+#else
+	tempCredsFile << "/tmp/creds-" << boost::uuids::random_generator()() << ".json";
+#endif
+    std::ofstream outfile (tempCredsFile.str());
+    outfile << "{}" << std::endl;
+    outfile.close();
+    auto env = boost::this_process::environment();
+    env["GCP_TOKEN"] = tempCredsFile.str();
+}
+
+void cleanup_bad_credentials() {
+    auto env = boost::this_process::environment();
+    env.erase("GCP_TOKEN");
+}
+
+TEST(GCSDriverTest, GetFileSizeInvalidCredentialsFailure)
+{
+    setup_bad_credentials();
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), -1);
+    ASSERT_STRNE(driver_getlasterror(), NULL);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+    cleanup_bad_credentials();
+}
+#endif
+
+TEST(GCSDriverTest, RmDir)
+{
+    ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_rmdir("dummy"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, mkDir)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_mkdir("dummy"), kSuccess);
 	ASSERT_EQ(driver_disconnect(), kSuccess);
 }
 
@@ -472,37 +556,37 @@ TEST_F(GCSDriverTestFixture, Close)
 
     // null pointer
     CheckHandlesSize(3);
-    ASSERT_EQ(driver_fclose(nullptr), kFailure);
+    ASSERT_EQ(driver_fclose(nullptr), kCloseEOF);
     CheckHandlesSize(3);
     check_handle(read_h);
 
     // address unknown
-    ASSERT_EQ(driver_fclose(&unknown), kFailure);
+    ASSERT_EQ(driver_fclose(&unknown), kCloseEOF);
     CheckHandlesSize(3);
     check_handle(read_h);
 
     // close read_h
     // additional post-condition: write_h, that was the last handle, must have been swapped to the front
-    ASSERT_EQ(driver_fclose(read_h), kSuccess);
+    ASSERT_EQ(driver_fclose(read_h), kCloseSuccess);
     CheckHandlesSize(2);
     check_handle(write_h);
 
     // try to close read_h handle again
-    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
     CheckHandlesSize(2);
     check_handle(write_h);
 
     // close write_h
-    ASSERT_EQ(driver_fclose(write_h), kSuccess);
+    ASSERT_EQ(driver_fclose(write_h), kCloseSuccess);
     CheckHandlesSize(1);
     check_handle(another_read_h);
 
     // close last handle
-    ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
+    ASSERT_EQ(driver_fclose(another_read_h), kCloseSuccess);
     CheckHandlesEmpty();
 
     // try closing a handle again while container is empty
-    ASSERT_EQ(driver_fclose(read_h), kFailure);
+    ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
     CheckHandlesEmpty();
 }
 
@@ -1301,7 +1385,7 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_OK)
         .WillOnce(Return(CreateResumableUploadResponse{ upload_id }));
     
     
-    WriteFile expected;
+    gcsplugin::WriteFile expected;
     expected.bucketname_ = mock_bucket;
     expected.filename_ = mock_object;
 
