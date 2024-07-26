@@ -1382,7 +1382,7 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_OK)
         .WillOnce(Return(CreateResumableUploadResponse{ upload_id }));
     
     
-    WriteFile expected;
+    gcsplugin::WriteFile expected;
     expected.bucketname_ = mock_bucket;
     expected.filename_ = mock_object;
 
