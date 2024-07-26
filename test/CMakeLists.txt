@@ -28,7 +28,7 @@ target_include_directories(basic_test
   PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
 
 set_property(TARGET basic_test PROPERTY
-  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
   
 target_link_libraries(basic_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage khiopsdriver_file_gcs)
 
