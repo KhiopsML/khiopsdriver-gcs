@@ -125,6 +125,7 @@ TEST(GCSDriverTest, GetFileSizeInvalidCredentialsFailure)
     setup_bad_credentials();
 	ASSERT_EQ(driver_connect(), kSuccess);
 	ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), -1);
+    ASSERT_STRNE(driver_getlasterror(), NULL);
 	ASSERT_EQ(driver_disconnect(), kSuccess);
     cleanup_bad_credentials();
 }

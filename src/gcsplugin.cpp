@@ -1145,7 +1145,7 @@ int driver_remove(const char* filename)
     INIT_NAMES_OR_ERROR(filename, bucket_name, object_name, kFailure);
 
     const auto status = client.DeleteObject(bucket_name, object_name);
-    if (!status.ok()) {
+    if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
         spdlog::error("Error deleting object: {} {}", (int)(status.code()), status.message());
         return kFailure;
     }
