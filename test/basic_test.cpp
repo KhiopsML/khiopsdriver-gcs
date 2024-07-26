@@ -10,8 +10,7 @@
 #include <iostream>
 #include <fstream>  
 #include <sstream>  
-
-#include <boost/process/environment.hpp>
+#include <stdlib.h>
 
 #include <boost/uuid/uuid.hpp>            // uuid class
 #include <boost/uuid/uuid_generators.hpp> // generators
@@ -109,10 +108,19 @@ TEST(GCSDriverTest, DirExists)
 
 TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure)
 {
-    auto env = boost::this_process::environment();
-    env["GCP_TOKEN"] = "/tmp/notoken.json";
+    constexpr char* badtoken = "GCP_TOKEN=/tmp/notoken.json";
+    constexpr char* notoken = "GCP_TOKEN=";
+#ifdef _WIN32
+    _putenv(badtoken);
+#else
+    putenv(badtoken);
+#endif
 	ASSERT_EQ(driver_connect(), kFailure);
-    env.erase("GCP_TOKEN");
+#ifdef _WIN32
+    _putenv(notoken);
+#else
+    putenv(notoken);
+#endif
 }
 
 void setup_bad_credentials() {
@@ -125,13 +133,22 @@ void setup_bad_credentials() {
     std::ofstream outfile (tempCredsFile.str());
     outfile << "{}" << std::endl;
     outfile.close();
-    auto env = boost::this_process::environment();
-    env["GCP_TOKEN"] = tempCredsFile.str();
+    std::stringstream envVar;
+    envVar << "GCP_TOKEN=" << tempCredsFile.str();
+#ifdef _WIN32
+    _putenv(envVar.str());
+#else
+    putenv((char*)(envVar.str().c_str()));
+#endif
 }
 
 void cleanup_bad_credentials() {
-    auto env = boost::this_process::environment();
-    env.erase("GCP_TOKEN");
+    constexpr char* notoken = "GCP_TOKEN=";
+#ifdef _WIN32
+    _putenv(notoken);
+#else
+    putenv(notoken);
+#endif
 }
 
 TEST(GCSDriverTest, GetFileSizeInvalidCredentialsFailure)
