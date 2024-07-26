@@ -93,6 +93,20 @@ TEST(GCSDriverTest, GetFileSizeNonexistentFailure)
 	ASSERT_EQ(driver_disconnect(), kSuccess);
 }
 
+TEST(GCSDriverTest, FileExists)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_exist("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
+TEST(GCSDriverTest, DirExists)
+{
+	ASSERT_EQ(driver_connect(), kSuccess);
+	ASSERT_EQ(driver_exist("gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/"), kSuccess);
+	ASSERT_EQ(driver_disconnect(), kSuccess);
+}
+
 TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure)
 {
     auto env = boost::this_process::environment();
