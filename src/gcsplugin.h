@@ -25,23 +25,6 @@ extern "C"
 {
 #endif /* __cplusplus */
 
-    VISIBLE void test_setClient(::google::cloud::storage::Client && mock_client);
-
-    VISIBLE void test_unsetClient();
-
-    VISIBLE void* test_getActiveHandles();
-
-    VISIBLE void* test_addReaderHandle(
-        const std::string& bucket,
-        const std::string& object,
-        long long offset,
-        long long commonHeaderLength,
-        const std::vector<std::string>& filenames,
-        const std::vector<long long int>& cumulativeSize,
-        long long total_size);
-
-    VISIBLE void* test_addWriterHandle(bool appendMode = false, bool create_with_mock_client = false, std::string bucketname = {}, std::string objectname = {});
-
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Several functions defined below have the same semantic as those defined in the ANSI C API.
 	// Obviously, driver_fopen corresponds to fopen in the C ANSI and so on for driver_fclose, driver_fread, driver_fread, driver_fwrite....

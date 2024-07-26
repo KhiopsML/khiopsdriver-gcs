@@ -6,6 +6,48 @@
 
 #include <google/cloud/storage/object_write_stream.h>
 
+#if defined(__unix__) || defined(__unix) || \
+    (defined(__APPLE__) && defined(__MACH__))
+#define __unix_or_mac__
+#else
+#define __windows__
+#endif
+
+#ifdef __unix_or_mac__ 
+#define VISIBLE __attribute__((visibility("default")))
+#else
+/* Windows Visual C++ only */
+#define VISIBLE __declspec(dllexport)
+#endif
+
+/* Use of C linkage from C++ */
+#ifdef __cplusplus
+extern "C"
+{
+#endif /* __cplusplus */
+
+    VISIBLE void test_setClient(::google::cloud::storage::Client && mock_client);
+
+    VISIBLE void test_unsetClient();
+
+    VISIBLE void* test_getActiveHandles();
+
+    VISIBLE void* test_addReaderHandle(
+        const std::string& bucket,
+        const std::string& object,
+        long long offset,
+        long long commonHeaderLength,
+        const std::vector<std::string>& filenames,
+        const std::vector<long long int>& cumulativeSize,
+        long long total_size);
+
+    VISIBLE void* test_addWriterHandle(bool appendMode = false, bool create_with_mock_client = false, std::string bucketname = {}, std::string objectname = {});
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif /* __cplusplus */
+
+
 namespace gcsplugin
 {
     constexpr int kSuccess{ 1 };

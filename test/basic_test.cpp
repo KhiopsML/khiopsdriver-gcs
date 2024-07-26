@@ -1,5 +1,5 @@
 #include "gcsplugin.h"
-#include "gcsplugin_types.h"
+#include "gcsplugin_internal.h"
 
 #include <array>
 #include <cstring>

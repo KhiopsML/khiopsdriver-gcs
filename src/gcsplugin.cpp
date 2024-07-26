@@ -3,7 +3,7 @@
 #endif
 
 #include "gcsplugin.h"
-#include "gcsplugin_types.h"
+#include "gcsplugin_internal.h"
 
 #include <algorithm>
 #include <assert.h>
