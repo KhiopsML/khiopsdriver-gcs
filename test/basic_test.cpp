@@ -136,7 +136,7 @@ void setup_bad_credentials() {
     std::stringstream envVar;
     envVar << "GCP_TOKEN=" << tempCredsFile.str();
 #ifdef _WIN32
-    _putenv(envVar.str());
+    _putenv((char*)(envVar.str().c_str()));
 #else
     putenv((char*)(envVar.str().c_str()));
 #endif
