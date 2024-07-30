@@ -13,6 +13,7 @@
 #include <limits>
 #include <limits.h>
 #include <memory>
+#include <sstream>
 
 #include "google/cloud/rest_options.h"
 #include "google/cloud/storage/client.h"
@@ -44,7 +45,10 @@ std::string lastError;
 
 HandleContainer active_handles;
 
-
+void LogBadStatus(const gc::Status& status, const std::string& message)
+{
+    spdlog::error("{}: {} {}", message, gc::StatusCodeToString(status.code()), status.message());
+}
 
 void InitHandle(Handle& h, ReaderPtr&& r_ptr)
 {
@@ -290,6 +294,68 @@ bool WillSizeCountProductOverflow(size_t size, size_t count)
     return false;
 }
 
+gc::StatusOr<gcs::ListObjectsReader> ListObjects(const std::string& bucket_name, const std::string& object_name)
+{
+    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
+    auto first = list.begin();
+    if (first == list.end())
+    {
+        return gc::Status{ gc::StatusCode::kNotFound, "Error while searching object : not found" };
+    }
+    if (!first->ok())
+    {
+        return std::move(*first).status();
+    }
+    return list;
+}
+
+// pre condition: stream is of a writing type. do not call otherwise.
+gc::Status CloseWriterStream(Handle& stream)
+{
+    gc::StatusOr<gcs::ObjectMetadata> maybe_meta;
+    std::ostringstream err_msg_os;
+
+    //close the stream to flush all remaining bytes in the put area
+    auto& writer = stream.GetWriter().writer_;
+    writer.Close();
+    maybe_meta = writer.metadata();
+    if (!maybe_meta)
+    {
+        err_msg_os << "Error during upload";
+    }
+    else if (HandleType::kAppend == stream.type)
+    {
+        // the tmp file is valid and ready for composition with the source
+        const auto& writer_h = stream.GetWriter();
+        const std::string& bucket = writer_h.bucketname_;
+        const std::string& append_source = writer_h.filename_;
+        const std::string& dest = writer_h.append_target_;
+        std::vector<gcs::ComposeSourceObject> source_objects = { {dest, {}, {}}, {append_source, {}, {}} };
+        maybe_meta = client.ComposeObject(bucket, std::move(source_objects), dest);
+
+        // whatever happened, delete the tmp file
+        gc::Status delete_status = client.DeleteObject(bucket, append_source);
+
+        // TODO: what to do with an error on Delete?
+        (void)delete_status;
+
+        // if composition failed, nothing is written, the source did not change. signal it
+        if (!maybe_meta)
+        {
+            err_msg_os << "Error while uploading the data to append";
+        }
+    }
+
+    if (maybe_meta)
+    {
+        return {};
+    }
+    
+    const gc::Status& status = maybe_meta.status();
+    err_msg_os << ": " << maybe_meta.status().message();
+    return gc::Status{ status.code(), err_msg_os.str() };
+}
+
 // Implementation of driver functions
 void test_setClient(::google::cloud::storage::Client&& mock_client)
 {
@@ -487,16 +553,10 @@ int driver_fileExists(const char* sFilePathName)
 
     INIT_NAMES_OR_ERROR(sFilePathName, bucket_name, object_name, kFalse);
 
-    auto status_or_metadata_list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
-    const auto first_item_it = status_or_metadata_list.begin();
-    if (first_item_it == status_or_metadata_list.end())
+    auto maybe_list = ListObjects(bucket_name, object_name);
+    if (!maybe_list)
     {
-        spdlog::debug("Object does not exist");
-        return kFalse;
-    }
-    if (!(*first_item_it))
-    {
-        spdlog::error("Error checking object");
+        LogBadStatus(maybe_list.status(), "Error checking if file exists");
         return kFalse;
     }
 
@@ -535,33 +595,18 @@ std::string ReadHeader(const std::string& bucket_name, const std::string& filena
 
 long long GetFileSize(const std::string& bucket_name, const std::string& object_name)
 {
-    auto list = client.ListObjects(bucket_name, gcs::MatchGlob{ object_name });
-    auto list_it = list.begin();
-    const auto list_end = list.end();
-
-    if (list_end == list_it)
+    auto maybe_list = ListObjects(bucket_name, object_name);
+    if (!maybe_list)
     {
-        //no file, or not a file
-        std::string error_message = "No such file or directory";
-
-        spdlog::error("GetFileSize {}: {}", object_name, error_message);
-        lastError = std::string(error_message);
-
+        LogBadStatus(maybe_list.status(), "Error reading file size");
         return -1;
     }
 
-    const auto object_metadata = std::move(*list_it);
-    if (!object_metadata)
-    {
-        //unusable data
-        std::string error_message = object_metadata.status().message();
-        spdlog::error("GetFileSize {}: {} {}", object_name, StatusCodeToString(object_metadata.status().code()), error_message);
-        lastError = std::string(error_message);
+    auto list_it = maybe_list->begin();
+    const auto list_end = maybe_list->end();
 
-        return -1;
-    }
-
-    long long total_size = static_cast<long long>(object_metadata->size());
+    const auto first_object_metadata = std::move(*list_it);
+    long long total_size = static_cast<long long>(first_object_metadata->size());
 
     list_it++;
     if (list_end == list_it)
@@ -572,7 +617,7 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
 
     // multifile
     // check headers
-    const std::string header = ReadHeader(bucket_name, object_metadata->name());
+    const std::string header = ReadHeader(bucket_name, first_object_metadata->name());
     if (header.empty())
     {
         return -1;
@@ -581,7 +626,7 @@ long long GetFileSize(const std::string& bucket_name, const std::string& object_
     int header_to_subtract{ 0 };
     bool same_header{ true };
 
-    for (; list_it != list.end(); list_it++)
+    for (; list_it != list_end; list_it++)
     {
         if (same_header)
         {
@@ -638,22 +683,14 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string object
         cumulativeSize.push_back(size);
         };
 
-    auto list = client.ListObjects(bucketname, gcs::MatchGlob{ objectname });
-    auto list_it = list.begin();
-    const auto list_end = list.end();
-
-    if (list_end == list_it)
+    auto maybe_list = ListObjects(bucketname, objectname);
+    if (!maybe_list)
     {
-        //no file, or not a file
-        return gc::Status(gc::StatusCode::kNotFound, "no file found");
+        return std::move(maybe_list).status();
     }
 
-    if (!(*list_it))
-    {
-        auto& status = (*list_it).status();
-        //unusable data
-        return gc::Status(status.code(), status.message());
-    }
+    auto list_it = maybe_list->begin();
+    const auto list_end = maybe_list->end();
 
     push_back_data(list_it);
 
@@ -683,13 +720,12 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string object
     const long long header_size = static_cast<long long>(header.size());
     bool same_header{ true };
 
-    for (; list_it != list.end(); list_it++)
+    for (; list_it != list_end; list_it++)
     {
         if (!(*list_it))
         {
-            auto& status = (*list_it).status();
             //unusable data
-            return gc::Status(status.code(), status.message());
+            return std::move(*list_it).status();
         }
 
         push_back_data(list_it);
@@ -736,17 +772,36 @@ gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname, std::string object
     return writer_struct;
 }
 
+
 template<typename StreamPtr, HandleType Type>
-Handle* RegisterStream(std::function<gc::StatusOr<StreamPtr>(std::string, std::string)> MakeStreamPtr, std::string&& bucket, std::string&& object)
+gc::StatusOr<Handle*> RegisterStream(std::function<gc::StatusOr<StreamPtr>(std::string, std::string)> MakeStreamPtr, std::string&& bucket, std::string&& object)
 {
     auto maybe_stream = MakeStreamPtr(std::move(bucket), std::move(object));
     if (!maybe_stream)
     {
-        spdlog::error("Error while opening stream: {}", maybe_stream.status().message());
-        return nullptr;
+        return std::move(maybe_stream).status();
     }
-
     return InsertHandle<StreamPtr, Type>(std::move(maybe_stream).value());
+}
+
+gc::StatusOr<Handle*> RegisterReader(std::string&& bucket, std::string&& object)
+{
+    return RegisterStream<ReaderPtr, HandleType::kRead>(MakeReaderPtr, std::move(bucket), std::move(object));
+}
+
+gc::StatusOr<Handle*> RegisterWriter(std::string&& bucket, std::string&& object)
+{
+    return RegisterStream<WriterPtr, HandleType::kWrite>(MakeWriterPtr, std::move(bucket), std::move(object));
+}
+
+gc::StatusOr<Handle*> RegisterWriterForAppend(std::string&& bucket, std::string&& tmp, std::string append_target)
+{
+    auto maybe_handle = RegisterStream<WriterPtr, HandleType::kAppend>(MakeWriterPtr, std::move(bucket), std::move(tmp));
+    if (maybe_handle)
+    {
+        (*maybe_handle)->GetWriter().append_target_ = std::move(append_target);
+    }
+    return maybe_handle;
 }
 
 void* driver_fopen(const char* filename, char mode)
@@ -765,75 +820,76 @@ void* driver_fopen(const char* filename, char mode)
     std::string objectname;
     INIT_NAMES_OR_ERROR(filename, bucketname, objectname, nullptr);
 
+    gc::StatusOr<Handle*> maybe_handle;
+    std::string err_msg;
+
     switch (mode) {
     case 'r':
     {
-        return RegisterStream<ReaderPtr, HandleType::kRead>(MakeReaderPtr, std::move(bucketname), std::move(objectname));
+        maybe_handle = RegisterReader(std::move(bucketname), std::move(objectname));
+        err_msg = "Error while opening reader stream";
+        break;
     }
     case 'w':
     {
-        return RegisterStream<WriterPtr, HandleType::kWrite>(MakeWriterPtr, std::move(bucketname), std::move(objectname));
+        maybe_handle = RegisterWriter(std::move(bucketname), std::move(objectname));
+        err_msg = "Error while opening writer stream";
+        break;
     }
     case 'a':
     {
         // GCS does not as yet provide a way to add data to existing files.
         // This will be the process to emulate an append:
-        // - create a multifile struct with the metadata required for a read
-        // - gather all the content
-        // - close the reading stream
-        // - open a writing stream with the same name
-        // - rewrite the existing content
-        // - return a handle to the open writing streamhere will temporarily open the existing file, gather
-        
-        auto maybe_reader = MakeReaderPtr(bucketname, objectname);  // no move, the strings are needed below
-        if (!maybe_reader)
+        // - check existence of the target object
+        // - open a temporary write object to upload the new data
+        // - compose, as defined by GCS, the source with the new temporary object
+        // 
+        // The actual composition will happen on closing of the append stream
+
+        auto maybe_list = ListObjects(bucketname, objectname);
+        if (!maybe_list)
         {
-            // the data is unusable
-            spdlog::error("Error while opening file: {}", maybe_reader.status().message());
-            return nullptr;
+            maybe_handle = std::move(maybe_list).status();
+            err_msg = "Error opening file in append mode";
+            break;
         }
 
-        auto& reader_ptr = maybe_reader.value();
-        const long long content_size = reader_ptr->total_size_;
-        std::vector<char> content(static_cast<size_t>(content_size));
-
-        const long long bytes_read = ReadBytesInFile(*reader_ptr, content.data(), content_size);
-        if (bytes_read == -1)
+        //go to end of list to get the target file name
+        auto list_it = maybe_list->begin();
+        const auto list_end = maybe_list->end();
+        auto to_last_item = list_it;
+        list_it++;
+        while (list_end != list_it)
         {
-            spdlog::error("Error while reading file");
-            return nullptr;
-        }
-        else if (bytes_read < content_size)
-        {
-            spdlog::error("Error while reading file: end of file encountered prematurely");
-            return nullptr;
+            to_last_item = list_it;
+            list_it++;
         }
 
-        // content is available for copy, if the file can be opened to write in it
-        Handle* out_stream = RegisterStream<WriterPtr, HandleType::kAppend>(MakeWriterPtr, std::move(bucketname), std::move(objectname));
-
-        if (!out_stream)
+        if (!to_last_item->ok())
         {
-            return nullptr;
+            // data is unusable
+            maybe_handle = std::move(*to_last_item).status();
+            err_msg = "Error opening file in append mode";
+            break;
         }
 
-        auto& writer = out_stream->GetWriter().writer_;
-
-        if (!writer.write(content.data(), content_size))
-        {
-            auto last_status = writer.last_status();
-            spdlog::error("Error while rewriting previous file content: {} {}", (int)(last_status.code()), last_status.message());
-            return nullptr;
-        }
-
-        // content successfully rewritten, return the handle to the writer
-        return out_stream;
+        // get a writer handle
+        maybe_handle = RegisterWriterForAppend(std::move(bucketname), "tmp_object_to_append", to_last_item->value().name());
+        err_msg = "Error opening file in append mode, cannot open tmp object";
+        break;
     }
     default:
         spdlog::error("Invalid open mode {}", mode);
         return nullptr;
     }
 
+    if (!maybe_handle)
+    {
+        LogBadStatus(maybe_handle.status(), err_msg);
+        return nullptr;
+    }
+
+    return *maybe_handle;
 }
 
 
@@ -859,21 +915,21 @@ int driver_fclose(void* stream)
     auto stream_it = FindHandle(stream);
     ERROR_NO_STREAM(stream_it, kCloseEOF);
     auto& h_ptr = *stream_it;
-    const HandleType type = h_ptr->type;
 
-    if (HandleType::kWrite == type || HandleType::kAppend == type)
+    gc::Status status;
+
+    if (HandleType::kRead != h_ptr->type)
     {
-        //close the stream to flush all remaining bytes in the put area
-        auto& writer = h_ptr->GetWriter().writer_;
-        writer.Close();
-        auto& status = writer.metadata();
-        if (!status)
-        {
-            spdlog::error("Error during upload: {} {}", static_cast<int>(status.status().code()), status.status().message());
-        }
+        status = CloseWriterStream(*h_ptr);
     }
 
     EraseRemove(stream_it);
+
+    if (!status.ok())
+    {
+        LogBadStatus(status, "Error while closing writer stream");
+        return kFailure;
+    }
 
     return kCloseSuccess;
 }
@@ -1070,7 +1126,9 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
     ERROR_NO_STREAM(stream_it, -1);
     Handle& stream_h = **stream_it;
 
-    if (HandleType::kWrite != stream_h.type && HandleType::kAppend != stream_h.type)
+    const HandleType type = stream_h.type;
+
+    if (HandleType::kRead == type)
     {
         spdlog::error("Cannot write on not writing stream");
         return -1;
@@ -1094,8 +1152,7 @@ long long int driver_fwrite(const void* ptr, size_t size, size_t count, void* st
     writer.write(static_cast<const char*>(ptr), to_write);
     if (writer.bad())
     {
-        auto last_status = writer.last_status();
-        spdlog::error("Error during upload: {} {}", (int)(last_status.code()), last_status.message());
+        LogBadStatus(writer.last_status(), "Error during upload");
         return -1;
     }
     spdlog::debug("Write status after write: good {}, bad {}, fail {}",

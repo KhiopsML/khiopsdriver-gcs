@@ -78,6 +78,7 @@ namespace gcsplugin
     {
         std::string bucketname_;
         std::string filename_;
+        std::string append_target_;
         google::cloud::storage::ObjectWriteStream writer_;
     };
 
