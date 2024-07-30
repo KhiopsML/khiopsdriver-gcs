@@ -490,8 +490,39 @@ int driver_connect()
 
 int driver_disconnect()
 {
+    // loop on the still active handles to close as necessary and remove. clear() on the container would do it
+    // but the procedures would fail silently.
+    std::vector<gc::Status> failures;
+    for (auto& h_ptr : active_handles)
+    {
+        // the writing streams need to be closed
+        const HandleType type = h_ptr->type;
+        if (HandleType::kRead != type)
+        {
+            gc::Status status = CloseWriterStream(*h_ptr);
+            if (!status.ok())
+            {
+                failures.push_back(std::move(status));
+            }
+        }
+    }
+    active_handles.clear();
+
     bIsConnected = false;
-    return kSuccess;
+
+    if (failures.empty())
+    {
+        return kSuccess;
+    }
+
+    std::ostringstream os;
+    os << "Errors occured during disconnection:\n";
+    for (const auto& status : failures)
+    {
+        os << status << '\n';
+    }
+    spdlog::error(os.str());
+    return kFailure;
 }
 
 int driver_isConnected()
