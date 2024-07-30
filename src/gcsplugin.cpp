@@ -1207,7 +1207,7 @@ int driver_remove(const char* filename)
 
     const auto status = client.DeleteObject(bucket_name, object_name);
     if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
-        spdlog::error("Error deleting object: {} {}", (int)(status.code()), status.message());
+        LogBadStatus(status, "Error deleting object");
         return kFailure;
     }
 
@@ -1279,7 +1279,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
     if (!maybe_reader)
     {
         //reader_struct is unusable
-        spdlog::error(maybe_reader.status().message());
+        LogBadStatus(std::move(maybe_reader).status(), "Error while opening Remote file");
         return kFailure;
     }
 
@@ -1306,7 +1306,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         
         if (!from)
         {
-            spdlog::error("Error initializing download stream: {} {}", (int)(from.status().code()), from.status().message());
+            LogBadStatus(from.status(), "Error initializing download stream");
             return false;
         }
 
@@ -1317,14 +1317,16 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
             if (!from.read(waste.data(), header_size))
             {
                 // check failure reasons to give feedback
+                std::string err_msg;
                 if (from.eof())
                 {
-                    spdlog::error("Error reading header. Shorter header than expected");
+                    err_msg = "Error reading header. Shorter header than expected";
                 }
                 else if (from.bad())
                 {
-                    spdlog::error("Error reading header. Read failed");
+                    err_msg = "Error reading header. Read failed";
                 }
+                LogBadStatus(from.status(), err_msg);
                 return false;
             }
         }
@@ -1352,7 +1354,7 @@ int driver_copyToLocal(const char* sSourceFilePathName, const char* sDestFilePat
         else if (from.bad())
         {
             // something went wrong on read side
-            spdlog::error("Error while reading from cloud storage");
+            LogBadStatus(from.status(), "Error while reading from cloud storage");
             return false;
         }
 
@@ -1426,7 +1428,7 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
     // Create a WriteObject stream
     auto writer = client.WriteObject(bucket_name, object_name);
     if (!writer || !writer.IsOpen()) {
-        spdlog::error("Error initializing upload stream: {} {}", (int)(writer.metadata().status().code()), writer.metadata().status().message());
+        LogBadStatus(writer.metadata().status(), "Error initializing upload stream to remote storage");
         return kFailure;
     }
 
@@ -1439,7 +1441,7 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
     // what made the process stop?
     if (!writer)
     {
-        spdlog::error("Error while copying to remote storage");
+        LogBadStatus(writer.last_status(), "Error while copying to remote storage");
         return kFailure;
 
     }
@@ -1462,10 +1464,9 @@ int driver_copyFromLocal(const char* sSourceFilePathName, const char* sDestFileP
     // Close the GCS WriteObject stream to complete the upload
     writer.Close();
 
-    auto& status = writer.metadata();
-    if (!status) {
-        spdlog::error("Error during file upload: {} {}", (int)(status.status().code()), status.status().message());
-
+    auto& maybe_meta = writer.metadata();
+    if (!maybe_meta) {
+        LogBadStatus(maybe_meta.status(), "Error during file upload to remote storage");
         return kFailure;
     }
 
