@@ -581,7 +581,12 @@ int driver_fileExists(const char *sFilePathName)
     ERROR_ON_NAMES(maybe_parsed_names, kFalse);
 
     auto maybe_list = ListObjects(maybe_parsed_names->bucket, maybe_parsed_names->object);
-    RETURN_ON_ERROR(maybe_list, "Error checking if file exists", kFalse);
+    if (!maybe_list) {
+        if (maybe_list.status().code() != gc::StatusCode::kNotFound) {
+            LogBadStatus((maybe_list).status(), ("Error checking if file exists"));
+        }
+        return kFalse;
+    }
 
     spdlog::debug("file {} exists!", sFilePathName);
     return kTrue; // L'objet existe
@@ -848,8 +853,9 @@ void *driver_fopen(const char *filename, char mode)
         auto maybe_list = ListObjects(names.bucket, names.object);
         if (!maybe_list)
         {
-            maybe_handle = std::move(maybe_list).status();
-            err_msg = "Error opening file in append mode";
+            // If file doesn't exist, fallback to write mode
+            maybe_handle = RegisterWriter(std::move(names.bucket), std::move(names.object));
+            err_msg = "Error while opening writer stream";
             break;
         }
 
