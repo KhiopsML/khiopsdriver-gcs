@@ -691,18 +691,7 @@ long long int driver_getFileSize(const char *filename)
 gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string objectname)
 {
     std::vector<std::string> filenames;
-    std::vector<long long> cumulativeSize;
-
-    auto push_back_data = [&](gcs::ListObjectsIterator &list_it)
-    {
-        filenames.push_back((*list_it)->name());
-        long long size = static_cast<long long>((*list_it)->size());
-        if (!cumulativeSize.empty())
-        {
-            size += cumulativeSize.back();
-        }
-        cumulativeSize.push_back(size);
-    };
+    std::vector<long long> cumulative_sizes;
 
     auto maybe_list = ListObjects(bucketname, objectname);
     RETURN_STATUS_ON_ERROR(maybe_list);
@@ -710,60 +699,64 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string object
     auto list_it = maybe_list->begin();
     const auto list_end = maybe_list->end();
 
-    push_back_data(list_it);
+    filenames.push_back((*list_it)->name());
+    cumulative_sizes.push_back(static_cast<long long>((*list_it)->size()));
+    long long common_header_size{0};
 
     list_it++;
     if (list_end == list_it)
     {
-        // unique file
-        const tOffset total_size = cumulativeSize.back();
-        return ReaderPtr(new MultiPartFile{
-            std::move(bucketname),
-            std::move(objectname),
-            0,
-            0,
-            std::move(filenames),
-            std::move(cumulativeSize),
-            total_size});
+        // unique file, jump to end
+        goto make_struct;
     }
 
-    // multifile
-    // check headers
-    auto maybe_header = ReadHeader(bucketname, filenames.front());
-    RETURN_STATUS_ON_ERROR(maybe_header);
-
-    const std::string& header = *maybe_header;
-    const long long header_size = static_cast<long long>(header.size());
-    bool same_header{true};
-
-    for (; list_it != list_end; list_it++)
     {
-        RETURN_STATUS_ON_ERROR(*list_it);
+        // multifile
+        // check headers
+        auto maybe_header = ReadHeader(bucketname, filenames.front());
+        RETURN_STATUS_ON_ERROR(maybe_header);
 
-        push_back_data(list_it);
+        const std::string& header = *maybe_header;
+        const long long header_size = static_cast<long long>(header.size());
+        bool same_header{true};
 
-        if (same_header)
+        for (; list_it != list_end; list_it++)
         {
-            auto maybe_curr_header = ReadHeader(bucketname, filenames.back());
-            RETURN_STATUS_ON_ERROR(maybe_curr_header);
+            RETURN_STATUS_ON_ERROR(*list_it);
 
-            same_header = (header == *maybe_curr_header);
+            filenames.push_back((*list_it)->name());
+            cumulative_sizes.push_back(
+                cumulative_sizes.back() + static_cast<long long>((*list_it)->size()));
+
             if (same_header)
             {
-                cumulativeSize.back() -= header_size;
+                auto maybe_curr_header = ReadHeader(bucketname, filenames.back());
+                RETURN_STATUS_ON_ERROR(maybe_curr_header);
+                same_header = (header == *maybe_curr_header);
+            }
+        }
+
+        // if headers remained the same, adjust cumulative_sizes
+        if (same_header)
+        {
+            common_header_size = header_size;
+            for (size_t i = 0; i < cumulative_sizes.size(); i++)
+            {
+                cumulative_sizes[i] -= (i*common_header_size);
             }
         }
     }
 
-    tOffset total_size = cumulativeSize.back();
+make_struct:
 
+    tOffset total_size = cumulative_sizes.back();
     return ReaderPtr(new MultiPartFile{
         std::move(bucketname),
         std::move(objectname),
         0,
-        same_header ? header_size : 0,
+        common_header_size,
         std::move(filenames),
-        std::move(cumulativeSize),
+        std::move(cumulative_sizes),
         total_size});
 }
 
