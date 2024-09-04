@@ -704,12 +704,7 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string object
     long long common_header_size{0};
 
     list_it++;
-    if (list_end == list_it)
-    {
-        // unique file, jump to end
-        goto make_struct;
-    }
-
+    if (list_end != list_it)
     {
         // multifile
         // check headers
@@ -746,8 +741,6 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname, std::string object
             }
         }
     }
-
-make_struct:
 
     tOffset total_size = cumulative_sizes.back();
     return ReaderPtr(new MultiPartFile{
