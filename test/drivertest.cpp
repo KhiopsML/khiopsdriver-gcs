@@ -13,6 +13,7 @@ int test(const char *file_name_input, const char *file_name_output, const char *
 int launch_test(const char *inputFilename, int nBufferSize);
 int copyFile(const char *file_name_input, const char *file_name_output, int nBufferSize);
 int copyFileWithFseek(const char *file_name_input, const char *file_name_output, int nBufferSize);
+int copyFileWithAppend(const char *file_name_input, const char *file_name_output, int nBufferSize);
 int removeFile(const char *filename);
 int compareSize(const char *file_name_output, long long int filesize);
 
@@ -192,6 +193,15 @@ int test(const char *file_name_input, const char *file_name_output, const char *
 		removeFile(file_name_output);
 	}
 
+	// Test copying files with append
+	printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
+	copy_status = copyFileWithAppend(file_name_input, file_name_output, nBufferSize);
+	if (copy_status == kSuccess)
+	{
+		compareSize(file_name_output, filesize);
+		removeFile(file_name_output);
+	}
+
 	// Copy to local
 	if (copy_status == kSuccess)
 	{
@@ -321,6 +331,67 @@ int copyFileWithFseek(const char *file_name_input, const char *file_name_output,
 			}
 		}
 		driver_fclose(fileoutput);
+		delete[](buffer);
+	}
+	driver_fclose(fileinput);
+	return copy_status;
+}
+
+// Copy file_name_input to file_name_output by steps of 1Kb
+int copyFileWithAppend(const char *file_name_input, const char *file_name_output, int nBufferSize)
+{
+	// Make sure output file doesn't exist
+	driver_remove(file_name_output);
+
+	// Opens for read
+	void *fileinput = driver_fopen(file_name_input, 'r');
+	if (fileinput == NULL)
+	{
+		printf("error : %s : %s\n", file_name_input, driver_getlasterror());
+		return kFailure;
+	}
+
+	int copy_status = kSuccess;
+
+	if (copy_status == kSuccess)
+	{
+		// Reads the file by steps of nBufferSize and writes to the output file at each step
+		char *buffer = new char[nBufferSize + 1]();
+		long long int sizeRead = nBufferSize;
+		long long int sizeWrite;
+		driver_fseek(fileinput, 0, SEEK_SET);
+		while (sizeRead == nBufferSize && copy_status == kSuccess)
+		{
+			sizeRead = driver_fread(buffer, sizeof(char), nBufferSize, fileinput);
+			if (sizeRead == -1)
+			{
+				copy_status = kFailure;
+				printf("error while reading %s : %s\n", file_name_input, driver_getlasterror());
+			}
+			else
+			{
+				void *fileoutput = driver_fopen(file_name_output, 'a');
+				if (fileoutput == NULL)
+				{
+					printf("error : %s : %s\n", file_name_input, driver_getlasterror());
+					copy_status = kFailure;
+				}
+
+				sizeWrite = driver_fwrite(buffer, sizeof(char), (size_t)sizeRead, fileoutput);
+				if (sizeWrite == -1)
+				{
+					copy_status = kFailure;
+					printf("error while writing %s : %s\n", file_name_output, driver_getlasterror());
+				}
+
+				int closeStatus = driver_fclose(fileoutput);
+				if (closeStatus != 0) {
+					copy_status = kFailure;
+					printf("error while closing %s : %s\n", file_name_output, driver_getlasterror());
+				}
+			}
+		}
+
 		delete[](buffer);
 	}
 	driver_fclose(fileinput);

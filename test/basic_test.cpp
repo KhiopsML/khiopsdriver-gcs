@@ -548,7 +548,12 @@ TEST_F(GCSDriverTestFixture, Close)
         1
     );
 
-    void* write_h = test_addWriterHandle();
+    // to test close on a writing stream, a "valid" stream is required, obtained below
+    // through the mocked call
+    ON_CALL(*mock_client, CreateResumableUpload)
+        .WillByDefault(Return(gcs::internal::CreateResumableUploadResponse{ "mock_upload_id" }));
+
+    void* write_h = test_addWriterHandle(false, true, mock_bucket, mock_object);
 
     Handle unknown(HandleType::kRead);
 
@@ -575,8 +580,15 @@ TEST_F(GCSDriverTestFixture, Close)
     ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
     CheckHandlesSize(2);
     check_handle(write_h);
+    
 
     // close write_h
+    gcs::ObjectMetadata expected_metadata;
+    EXPECT_CALL(*mock_client, UploadChunk)
+        .WillOnce(Return(gcs::internal::QueryResumableUploadResponse{
+        /*.committed_size=*/absl::nullopt,
+        /*.object_metadata=*/expected_metadata }));
+
     ASSERT_EQ(driver_fclose(write_h), kCloseSuccess);
     CheckHandlesSize(1);
     check_handle(another_read_h);

@@ -56,6 +56,7 @@ void *get_shared_library_function(void *library_handle, const char *function_nam
 void test(const char *file_name_input, const char *file_name_output, const char *file_name_local);
 void copyFile(const char *file_name_input, const char *file_name_output);
 void copyFileWithFseek(const char *file_name_input, const char *file_name_output);
+void copyFileWithAppend(const char *file_name_input, const char *file_name_output);
 void removeFile(const char *filename);
 void compareSize(const char *file_name_output, long long int filesize);
 
@@ -237,6 +238,7 @@ void test(const char *file_name_input, const char *file_name_output, const char 
 	// Opens for write if the driver is not read-only
 	else
 	{
+
 		// Test copying files
 		printf("Copy %s to %s\n", file_name_input, file_name_output);
 		copyFile(file_name_input, file_name_output);
@@ -249,6 +251,15 @@ void test(const char *file_name_input, const char *file_name_output, const char 
 		// Test copying files with fseek
 		printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
 		copyFileWithFseek(file_name_input, file_name_output);
+		if (!global_error)
+		{
+			compareSize(file_name_output, filesize);
+			removeFile(file_name_output);
+		}
+		
+		// Test copying files with append
+		printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
+		copyFileWithAppend(file_name_input, file_name_output);
 		if (!global_error)
 		{
 			compareSize(file_name_output, filesize);
@@ -422,6 +433,60 @@ void copyFileWithFseek(const char *file_name_input, const char *file_name_output
 			}
 		}
 		ptr_driver_fclose(fileoutput);
+		delete[](buffer);
+	}
+	ptr_driver_fclose(fileinput);
+}
+
+// Copy file_name_input to file_name_output by steps of 1Kb by using append mode
+void copyFileWithAppend(const char *file_name_input, const char *file_name_output)
+{
+	// Make sure output file doesn't exist
+	ptr_driver_remove(file_name_output);
+
+	// Opens for read
+	void *fileinput = ptr_driver_fopen(file_name_input, 'r');
+	if (fileinput == NULL)
+	{
+		printf("error : %s : %s\n", file_name_input, ptr_driver_getlasterror());
+		global_error = 1;
+		return;
+	}
+
+	if (!global_error)
+	{
+		// Reads the file by steps of nBufferSize and writes to the output file at each step
+		char *buffer = new char[nBufferSize];
+		long long int sizeRead = nBufferSize;
+		long long int sizeWrite;
+		ptr_driver_fseek(fileinput, 0, SEEK_SET);
+		while (sizeRead == nBufferSize && !global_error)
+		{
+			sizeRead = ptr_driver_fread(buffer, sizeof(char), nBufferSize, fileinput);
+			if (sizeRead == -1)
+			{
+				global_error = 1;
+				printf("error while reading %s : %s\n", file_name_input, ptr_driver_getlasterror());
+			}
+			else
+			{
+				void *fileoutput = ptr_driver_fopen(file_name_output, 'a');
+				if (fileoutput == NULL)
+				{
+					printf("error : %s : %s\n", file_name_input, ptr_driver_getlasterror());
+					global_error = 1;
+				}
+
+				sizeWrite = ptr_driver_fwrite(buffer, sizeof(char), (size_t)sizeRead, fileoutput);
+				if (sizeWrite == -1)
+				{
+					global_error = 1;
+					printf("error while writing %s : %s\n", file_name_output, ptr_driver_getlasterror());
+				}
+
+				ptr_driver_fclose(fileoutput);
+			}
+		}
 		delete[](buffer);
 	}
 	ptr_driver_fclose(fileinput);
