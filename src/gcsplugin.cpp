@@ -845,6 +845,7 @@ void *driver_fopen(const char *filename, char mode)
         // GCS does not as yet provide a way to add data to existing files.
         // This will be the process to emulate an append:
         // - check existence of the target object
+        //   - if file does not exist, fallback to write mode
         // - open a temporary write object to upload the new data
         // - compose, as defined by GCS, the source with the new temporary object
         //
@@ -853,8 +854,17 @@ void *driver_fopen(const char *filename, char mode)
         auto maybe_list = ListObjects(names.bucket, names.object);
         if (!maybe_list)
         {
-            // If file doesn't exist, fallback to write mode
-            maybe_handle = RegisterWriter(std::move(names.bucket), std::move(names.object));
+            auto& status = maybe_list.status();
+            if (gc::StatusCode::kNotFound == status.code())
+            {
+                // file doesn't exist, fallback to write mode
+                maybe_handle = RegisterWriter(std::move(names.bucket), std::move(names.object));
+            }
+            else
+            {
+                // genuine error
+                maybe_handle = status;
+            }
             err_msg = "Error while opening writer stream";
             break;
         }
