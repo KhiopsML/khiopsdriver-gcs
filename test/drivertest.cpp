@@ -197,15 +197,16 @@ int test(const char *file_name_input, const char *file_name_output,
   if (copy_status == kSuccess) {
     printf("Copy %s to %s\n", file_name_input, file_name_output);
     copy_status = copyFile(file_name_input, file_name_output, nBufferSize);
-  }
-  if (copy_status == kSuccess) {
-    copy_status = compareSize(file_name_output, filesize);
-    if (copy_status != kSuccess)
-      printf("File sizes are different!\n");
-    else
-      copy_status = compareFiles(file_name_local, file_name_output);
-    if (copy_status != kSuccess)
-      printf("File contents are different!\n");
+
+    if (copy_status == kSuccess) {
+      copy_status = compareSize(file_name_output, filesize);
+      if (copy_status != kSuccess)
+        printf("File sizes are different!\n");
+      else
+        copy_status = compareFiles(file_name_local, file_name_output);
+      if (copy_status != kSuccess)
+        printf("File contents are different!\n");
+    }
     removeFile(file_name_output);
   }
 
@@ -214,15 +215,16 @@ int test(const char *file_name_input, const char *file_name_output,
     printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
     copy_status =
         copyFileWithFseek(file_name_input, file_name_output, nBufferSize);
-  }
-  if (copy_status == kSuccess) {
-    copy_status = compareSize(file_name_output, filesize);
-    if (copy_status != kSuccess)
-      printf("File sizes are different!\n");
-    else
-      copy_status = compareFiles(file_name_local, file_name_output);
-    if (copy_status != kSuccess)
-      printf("File contents are different!\n");
+
+    if (copy_status == kSuccess) {
+      copy_status = compareSize(file_name_output, filesize);
+      if (copy_status != kSuccess)
+        printf("File sizes are different!\n");
+      else
+        copy_status = compareFiles(file_name_local, file_name_output);
+      if (copy_status != kSuccess)
+        printf("File contents are different!\n");
+    }
     removeFile(file_name_output);
   }
 
@@ -232,16 +234,16 @@ int test(const char *file_name_input, const char *file_name_output,
            file_name_output);
     copy_status =
         copyFileWithAppend(file_name_input, file_name_output, nBufferSize);
-  }
-  if (copy_status == kSuccess) {
-    copy_status = compareSize(file_name_output, filesize);
-    copy_status = compareSize(file_name_output, filesize);
-    if (copy_status != kSuccess)
-      printf("File sizes are different!\n");
-    else
-      copy_status = compareFiles(file_name_local, file_name_output);
-    if (copy_status != kSuccess)
-      printf("File contents are different!\n");
+
+    if (copy_status == kSuccess) {
+      copy_status = compareSize(file_name_output, filesize);
+      if (copy_status != kSuccess)
+        printf("File sizes are different!\n");
+      else
+        copy_status = compareFiles(file_name_local, file_name_output);
+      if (copy_status != kSuccess)
+        printf("File contents are different!\n");
+    }
     removeFile(file_name_output);
   }
 
