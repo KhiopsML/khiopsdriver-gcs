@@ -1,77 +1,77 @@
 {
-    "version": 3,
-    "cmakeMinimumRequired": {
-        "major": 3,
-        "minor": 21,
-        "patch": 0
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ninja-multi-vcpkg",
+      "displayName": "Ninja Multi-Config with vcpkg",
+      "description": "Configure with vcpkg toolchain and generate Ninja project files for all configurations",
+      "binaryDir": "${sourceDir}/builds/${presetName}",
+      "generator": "Ninja Multi-Config",
+      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
-    "configurePresets": [
-        {
-            "name": "ninja-multi-vcpkg",
-            "displayName": "Ninja Multi-Config with vcpkg",
-            "description": "Configure with vcpkg toolchain and generate Ninja project files for all configurations",
-            "binaryDir": "${sourceDir}/builds/${presetName}",
-            "generator": "Ninja Multi-Config",
-            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-        },
-        {
-            "name": "ninja-multi-vcpkg-debug",
-            "displayName": "Ninja Multi-Config with vcpkg (Debug)",
-            "inherits": "ninja-multi-vcpkg",
-            "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "ninja-multi-vcpkg-release",
-            "displayName": "Ninja Multi-Config with vcpkg (Release)",
-            "inherits": "ninja-multi-vcpkg",
-            "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        }
-    ],
-    "buildPresets": [
-        {
-            "name": "ninja-vcpkg-debug",
-            "configurePreset": "ninja-multi-vcpkg-debug",
-            "displayName": "Build (Debug)",
-            "description": "Build with Ninja/vcpkg (Debug)",
-            "configuration": "Debug"
-        },
-        {
-            "name": "ninja-vcpkg-release",
-            "configurePreset": "ninja-multi-vcpkg-release",
-            "displayName": "Build (Release)",
-            "description": "Build with Ninja/vcpkg (Release)",
-            "configuration": "Release"
-        }
-    ],
-    "testPresets": [
-        {
-            "name": "test-ninja-vcpkg",
-            "configurePreset": "ninja-multi-vcpkg",
-            "hidden": true
-        },
-        {
-            "name": "test-debug",
-            "description": "Test (Debug)",
-            "displayName": "Test (Debug)",
-            "configuration": "Debug",
-            "inherits": [
-                "test-ninja-vcpkg"
-            ]
-        },
-        {
-            "name": "test-release",
-            "description": "Test (Release)",
-            "displayName": "Test (Release)",
-            "configuration": "Release",
-            "inherits": [
-                "test-ninja-vcpkg"
-            ]
-        }
-    ]
+    {
+      "name": "ninja-multi-vcpkg-debug",
+      "displayName": "Ninja Multi-Config with vcpkg (Debug)",
+      "inherits": "ninja-multi-vcpkg",
+      "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ninja-multi-vcpkg-release",
+      "displayName": "Ninja Multi-Config with vcpkg (Release)",
+      "inherits": "ninja-multi-vcpkg",
+      "binaryDir": "${sourceDir}/builds/ninja-multi-vcpkg",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja-vcpkg-debug",
+      "configurePreset": "ninja-multi-vcpkg-debug",
+      "displayName": "Build (Debug)",
+      "description": "Build with Ninja/vcpkg (Debug)",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-vcpkg-release",
+      "configurePreset": "ninja-multi-vcpkg-release",
+      "displayName": "Build (Release)",
+      "description": "Build with Ninja/vcpkg (Release)",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-ninja-vcpkg",
+      "configurePreset": "ninja-multi-vcpkg",
+      "hidden": true
+    },
+    {
+      "name": "test-debug",
+      "description": "Test (Debug)",
+      "displayName": "Test (Debug)",
+      "configuration": "Debug",
+      "inherits": [
+        "test-ninja-vcpkg"
+      ]
+    },
+    {
+      "name": "test-release",
+      "description": "Test (Release)",
+      "displayName": "Test (Release)",
+      "configuration": "Release",
+      "inherits": [
+        "test-ninja-vcpkg"
+      ]
+    }
+  ]
 }
