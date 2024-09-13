@@ -1146,7 +1146,7 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 
   // Allocate a relay buffer
   constexpr size_t buf_size{1024 * 1024};
-  std::array<char, buf_size> buffer{};
+  std::vector<char> buffer(buf_size);
   char *buf_data = buffer.data();
 
   // create a waste buffer now, so the lambdas can reference it
