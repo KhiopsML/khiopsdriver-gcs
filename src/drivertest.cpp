@@ -17,6 +17,13 @@
 #include <windows.h>
 #include "errhandlingapi.h"
 #endif
+#include <string>
+#include <fstream>
+#include <iostream>
+
+#include "google/cloud/storage/client.h"
+
+namespace gcs = google::cloud::storage;
 
 /* API functions definition, that must be defined in the library */
 const char *(*ptr_driver_getDriverName)();
@@ -59,6 +66,7 @@ void copyFileWithFseek(const char *file_name_input, const char *file_name_output
 void copyFileWithAppend(const char *file_name_input, const char *file_name_output);
 void removeFile(const char *filename);
 void compareSize(const char *file_name_output, long long int filesize);
+void compareFiles(std::string local_file_path, std::string gcs_uri);
 
 /* error indicator in case of error */
 int global_error = 0;
@@ -238,34 +246,6 @@ void test(const char *file_name_input, const char *file_name_output, const char 
 	// Opens for write if the driver is not read-only
 	else
 	{
-
-		// Test copying files
-		printf("Copy %s to %s\n", file_name_input, file_name_output);
-		copyFile(file_name_input, file_name_output);
-		if (!global_error)
-		{
-			compareSize(file_name_output, filesize);
-			removeFile(file_name_output);
-		}
-
-		// Test copying files with fseek
-		printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
-		copyFileWithFseek(file_name_input, file_name_output);
-		if (!global_error)
-		{
-			compareSize(file_name_output, filesize);
-			removeFile(file_name_output);
-		}
-		
-		// Test copying files with append
-		printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
-		copyFileWithAppend(file_name_input, file_name_output);
-		if (!global_error)
-		{
-			compareSize(file_name_output, filesize);
-			removeFile(file_name_output);
-		}
-
 		// Copy to local if this optional function is available in the librairy
 		if (!global_error && ptr_driver_copyToLocal != NULL)
 		{
@@ -275,6 +255,39 @@ void test(const char *file_name_input, const char *file_name_output, const char 
 				printf("Error while copying : %s\n", ptr_driver_getlasterror());
 			else
 				printf("copy %s to local is done\n", file_name_input);
+		}
+
+		// Test copying files
+		printf("Copy %s to %s\n", file_name_input, file_name_output);
+		copyFile(file_name_input, file_name_output);
+		if (!global_error)
+		{
+			compareSize(file_name_output, filesize);
+			if (!global_error && ptr_driver_copyToLocal != NULL)
+				compareFiles(file_name_local, file_name_output);
+			removeFile(file_name_output);
+		}
+
+		// Test copying files with fseek
+		printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
+		copyFileWithFseek(file_name_input, file_name_output);
+		if (!global_error)
+		{
+			compareSize(file_name_output, filesize);
+			if (!global_error && ptr_driver_copyToLocal != NULL)
+				compareFiles(file_name_local, file_name_output);
+			removeFile(file_name_output);
+		}
+		
+		// Test copying files with append
+		printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
+		copyFileWithAppend(file_name_input, file_name_output);
+		if (!global_error)
+		{
+			compareSize(file_name_output, filesize);
+			if (!global_error && ptr_driver_copyToLocal != NULL)
+				compareFiles(file_name_local, file_name_output);
+			removeFile(file_name_output);
 		}
 
 		// Copy from local if this optional function is available in the librairy
@@ -520,6 +533,42 @@ void compareSize(const char *file_name_output, long long int filesize)
 	else
 	{
 		printf("something's wrong : %s is missing\n", file_name_output);
+		global_error = 1;
+	}
+}
+
+void compareFiles(std::string local_file_path, std::string gcs_uri)
+{
+    // Lire le fichier local
+    std::ifstream local_file(local_file_path);
+    if (!local_file) {
+        std::cerr << "Failure reading local file" << std::endl;
+        global_error = 1;
+    }
+    std::string local_content((std::istreambuf_iterator<char>(local_file)), std::istreambuf_iterator<char>());
+    
+    // Créer un client GCS
+    auto client = gcs::Client::CreateDefaultClient().value();
+
+    // Télécharger l'objet GCS
+    char const *prefix = "gs://";
+    const size_t prefix_size{std::strlen(prefix)};
+    const size_t pos = gcs_uri.find('/', prefix_size);
+    std::string bucket_name = gcs_uri.substr(prefix_size, pos - prefix_size);
+	std::string object_name = gcs_uri.substr(pos + 1);
+    std::string gcs_content;
+    auto object_metadata = client.GetObjectMetadata(bucket_name, object_name);
+    if (!object_metadata) {
+        std::cerr << "Failure retrieving object from GCS" << std::endl;
+        global_error = 1;
+    }
+
+    auto reader = client.ReadObject(bucket_name, object_name);
+    std::string gcs_data((std::istreambuf_iterator<char>(reader)), std::istreambuf_iterator<char>());
+
+    // Comparer les contenus
+    if (local_content != gcs_data) {
+		std::cerr << "Files are different" << std::endl;
 		global_error = 1;
 	}
 }

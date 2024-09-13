@@ -3,10 +3,15 @@
 #include "../src/gcsplugin.h"
 
 #include <sstream>
+#include <fstream>
 
 #include <boost/uuid/uuid.hpp>            // uuid class
 #include <boost/uuid/uuid_generators.hpp> // generators
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
+
+#include "google/cloud/storage/client.h"
+
+namespace gcs = google::cloud::storage;
 
 /* functions prototype */
 int test(const char *file_name_input, const char *file_name_output, const char *file_name_local, int nBufferSize);
@@ -16,6 +21,7 @@ int copyFileWithFseek(const char *file_name_input, const char *file_name_output,
 int copyFileWithAppend(const char *file_name_input, const char *file_name_output, int nBufferSize);
 int removeFile(const char *filename);
 int compareSize(const char *file_name_output, long long int filesize);
+int compareFiles(std::string local_file_path, std::string gcs_uri);
 
 constexpr int kSuccess{ 1 };
 constexpr int kFailure{ 0 };
@@ -175,34 +181,7 @@ int test(const char *file_name_input, const char *file_name_output, const char *
 
 	int copy_status = kSuccess;
 	
-	// Test copying files
-	printf("Copy %s to %s\n", file_name_input, file_name_output);
-	copy_status = copyFile(file_name_input, file_name_output, nBufferSize);
-	if (copy_status == kSuccess)
-	{
-		compareSize(file_name_output, filesize);
-		//removeFile(file_name_output);
-	}
-
-	// Test copying files with fseek
-	printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
-	copy_status = copyFileWithFseek(file_name_input, file_name_output, nBufferSize);
-	if (copy_status == kSuccess)
-	{
-		compareSize(file_name_output, filesize);
-		removeFile(file_name_output);
-	}
-
-	// Test copying files with append
-	printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
-	copy_status = copyFileWithAppend(file_name_input, file_name_output, nBufferSize);
-	if (copy_status == kSuccess)
-	{
-		compareSize(file_name_output, filesize);
-		removeFile(file_name_output);
-	}
-
-	// Copy to local
+	// Copy to local, copied file will be used to verify results of copy operations
 	if (copy_status == kSuccess)
 	{
 		printf("Copy to local %s to %s ...\n", file_name_input, file_name_local);
@@ -211,6 +190,61 @@ int test(const char *file_name_input, const char *file_name_output, const char *
 			printf("Error while copying : %s\n", driver_getlasterror());
 		else
 			printf("copy %s to local is done\n", file_name_input);
+	}
+
+	// Test copying files
+	if (copy_status == kSuccess)
+	{
+		printf("Copy %s to %s\n", file_name_input, file_name_output);
+		copy_status = copyFile(file_name_input, file_name_output, nBufferSize);
+	}
+	if (copy_status == kSuccess)
+	{
+		copy_status = compareSize(file_name_output, filesize);
+		if (copy_status != kSuccess)
+			printf("File sizes are different!\n");
+		else
+			copy_status = compareFiles(file_name_local, file_name_output);
+		if (copy_status != kSuccess)
+			printf("File contents are different!\n");
+		removeFile(file_name_output);
+	}
+
+	// Test copying files with fseek
+	if (copy_status == kSuccess)
+	{
+		printf("Copy with fseek %s to %s ...\n", file_name_input, file_name_output);
+		copy_status = copyFileWithFseek(file_name_input, file_name_output, nBufferSize);
+	}
+	if (copy_status == kSuccess)
+	{
+		copy_status = compareSize(file_name_output, filesize);
+		if (copy_status != kSuccess)
+			printf("File sizes are different!\n");
+		else
+			copy_status = compareFiles(file_name_local, file_name_output);
+		if (copy_status != kSuccess)
+			printf("File contents are different!\n");
+		removeFile(file_name_output);
+	}
+
+	// Test copying files with append
+	if (copy_status == kSuccess)
+	{
+		printf("Copy with append %s to %s ...\n", file_name_input, file_name_output);
+		copy_status = copyFileWithAppend(file_name_input, file_name_output, nBufferSize);
+	}
+	if (copy_status == kSuccess)
+	{
+		copy_status = compareSize(file_name_output, filesize);
+		copy_status = compareSize(file_name_output, filesize);
+		if (copy_status != kSuccess)
+			printf("File sizes are different!\n");
+		else
+			copy_status = compareFiles(file_name_local, file_name_output);
+		if (copy_status != kSuccess)
+			printf("File contents are different!\n");
+		removeFile(file_name_output);
 	}
 
 	// Copy from local
@@ -431,4 +465,37 @@ int compareSize(const char *file_name_output, long long int filesize)
 		compare_status = kFailure;
 	}
 	return compare_status;
+}
+
+int compareFiles(std::string local_file_path, std::string gcs_uri)
+{
+    // Lire le fichier local
+    std::ifstream local_file(local_file_path);
+    if (!local_file) {
+        std::cerr << "Erreur lors de l'ouverture du fichier local." << std::endl;
+        return false;
+    }
+    std::string local_content((std::istreambuf_iterator<char>(local_file)), std::istreambuf_iterator<char>());
+    
+    // Créer un client GCS
+    auto client = gcs::Client::CreateDefaultClient().value();
+
+    // Télécharger l'objet GCS
+    char const *prefix = "gs://";
+    const size_t prefix_size{std::strlen(prefix)};
+    const size_t pos = gcs_uri.find('/', prefix_size);
+    std::string bucket_name = gcs_uri.substr(prefix_size, pos - prefix_size);
+	std::string object_name = gcs_uri.substr(pos + 1);
+    std::string gcs_content;
+    auto object_metadata = client.GetObjectMetadata(bucket_name, object_name);
+    if (!object_metadata) {
+        std::cerr << "Erreur lors de la récupération de l'objet GCS." << std::endl;
+        return false;
+    }
+
+    auto reader = client.ReadObject(bucket_name, object_name);
+    std::string gcs_data((std::istreambuf_iterator<char>(reader)), std::istreambuf_iterator<char>());
+
+    // Comparer les contenus
+    return local_content == gcs_data ? kSuccess : kFailure;
 }
