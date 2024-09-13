@@ -1145,7 +1145,7 @@ int driver_copyToLocal(const char *sSourceFilePathName,
   }
 
   // Allocate a relay buffer
-  constexpr size_t buf_size{1024};
+  constexpr size_t buf_size{1024 * 1024};
   std::array<char, buf_size> buffer{};
   char *buf_data = buffer.data();
 
