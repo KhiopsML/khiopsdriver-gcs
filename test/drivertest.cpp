@@ -452,7 +452,7 @@ int compareFiles(std::string local_file_path, std::string gcs_uri) {
   // Lire le fichier local
   std::ifstream local_file(local_file_path, std::ios::binary);
   if (!local_file) {
-    std::cerr << "Erreur lors de l'ouverture du fichier local." << std::endl;
+    std::cerr << "Failure reading local file" << std::endl;
     return false;
   }
   std::string local_content((std::istreambuf_iterator<char>(local_file)),
@@ -470,7 +470,7 @@ int compareFiles(std::string local_file_path, std::string gcs_uri) {
   std::string gcs_content;
   auto object_metadata = client.GetObjectMetadata(bucket_name, object_name);
   if (!object_metadata) {
-    std::cerr << "Erreur lors de la récupération de l'objet GCS." << std::endl;
+    std::cerr << "Failure retrieving object from GCS" << std::endl;
     return false;
   }
 
