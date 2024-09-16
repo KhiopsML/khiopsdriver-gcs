@@ -450,7 +450,7 @@ int compareSize(const char *file_name_output, long long int filesize) {
 
 int compareFiles(std::string local_file_path, std::string gcs_uri) {
   // Lire le fichier local
-  std::ifstream local_file(local_file_path);
+  std::ifstream local_file(local_file_path, std::ios::binary);
   if (!local_file) {
     std::cerr << "Erreur lors de l'ouverture du fichier local." << std::endl;
     return false;
