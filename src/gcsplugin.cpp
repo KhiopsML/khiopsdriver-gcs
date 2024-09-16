@@ -561,6 +561,7 @@ gc::StatusOr<std::string> ReadHeader(const std::string &bucket_name,
     return gc::Status{gc::StatusCode::kInternal, "Got an empty header"};
   }
   printf("Read header '%s' (length = %d)\n", line.c_str(), line.length());
+  int toto = line.length();
   return line;
 }
 
