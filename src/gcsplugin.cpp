@@ -1151,7 +1151,7 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 
   // create a waste buffer now, so the lambdas can reference it
   // memory allocation will occur later, before actual use
-  std::vector<char> waste;
+  std::vector<char> waste(buf_size);
 
   auto read_and_write = [&](gcs::ObjectReadStream &from,
                             bool skip_header = false,
