@@ -12,19 +12,9 @@ requirements:
     - cmake
     - ninja
     - {{ compiler('cxx') }}
-  host:
-    - google-cloud-cpp
-    - spdlog
-  run:
-    - google-cloud-cpp
-    - spdlog
 
-outputs:
-  - name: khiops-driver-gcs
-    # test:
-    #   commands:
-    #     - MODL -v
-    #     - MODL_Coclustering -v
+files:
+  - lib/libkhiopsdriver_file_gcs.so*
 
 about:
   home: https://khiops.org
