@@ -113,7 +113,7 @@ set(CPACK_OUTPUT_FILE_PREFIX "${CMAKE_BINARY_DIR}/packages")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 
 # user friendly archive names
-set(CPACK_ARCHIVE_FILE_NAME kkhiops-driver-gcs-${PROJECT_VERSION})
+set(CPACK_ARCHIVE_FILE_NAME khiops-driver-gcs-${PROJECT_VERSION})
 
 # ########### DEB Generator #############################
 
