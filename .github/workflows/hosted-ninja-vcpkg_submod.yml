@@ -15,11 +15,12 @@
 # - Finally builds the sources with Ninja, and tests as well.
 name: hosted-ninja-vcpkg_submod-autocache
 on:
-  push: 
-  pull_request:
-    branches: 
-    - v11
-    - main
+  workflow_dispatch:
+  # push: 
+  # pull_request:
+  #   branches: 
+  #   - v11
+  #   - main
 
 jobs:
   job:
