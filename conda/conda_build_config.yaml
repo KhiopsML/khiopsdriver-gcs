@@ -1,0 +1,20 @@
+---
+c_compiler:
+  - gcc # [linux]
+  - clang # [osx]
+  - vs2022 # [win]
+c_compiler_version:
+  - 12 # [linux]
+  - 16 # [osx]
+cxx_compiler:
+  - gxx # [linux]
+  - clangxx # [osx]
+  - vs2022 # [win]
+cxx_compiler_version:
+  - 12 # [linux]
+  - 16 # [osx]
+# We need MacOS SDK 10.10 to be able to build on macOS Intel
+# Download: https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
+# Decompress then to /opt: tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
+CONDA_BUILD_SYSROOT:
+  - /opt/MacOSX10.10.sdk # [osx and not arm64]
