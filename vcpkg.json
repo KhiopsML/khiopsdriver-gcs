@@ -4,10 +4,12 @@
   "description": "Setting up C++ for Google Cloud with CMake and vcpkg",
   "dependencies": [
     {
-      "name": "boost-uuid"
+      "name": "boost-uuid",
+      "default-features": false
     },
     {
-      "name": "boost-process"
+      "name": "boost-process",
+      "default-features": false
     },
     {
       "name": "fmt"
