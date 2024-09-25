@@ -16,8 +16,8 @@
           matrix:
             setup:
               - {os: ubuntu-22.04, os-family: linux-x64}
-              - {os: windows-2019, os-family: win-x64}
-              - {os: macos-12, os-family: osx-x64}
+              - {os: windows-latest, os-family: win-x64}
+              - {os: macos-13, os-family: osx-x64}
               - {os: macos-14, os-family: osx-arm64}
         runs-on: ${{ matrix.setup.os }}
         steps:
