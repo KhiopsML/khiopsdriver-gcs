@@ -1,0 +1,62 @@
+---
+name: RPM Packages
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['rockylinux:8', 'rockylinux:9']
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install packages
+        run: |
+          dnf upgrade -y
+          dnf install -y gcc-c++ make rpm-build # we do not use ninja because it is not in the dnf repo
+          dnf install -y git perl # for vcpkg
+          # Note: We install cmake from kitware's site to have a more recent version 
+          curl -LO "https://github.com/Kitware/CMake/releases/download/v3.26.5/cmake-3.26.5-linux-x86_64.sh"
+          sh cmake-3.26.5-linux-x86_64.sh --prefix=/usr/local/ --exclude-subdir
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+     
+      - name: Configure CMake
+        run: |
+            cmake -B builds -S . -G 'Unix Makefiles'  -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+      - name: Build 
+        run: |
+            cmake --build builds --target khiopsdriver_file_gcs
+      - name: Build package with CPack
+        run: cd builds/ && cpack -G RPM
+      - name: Set environment variables
+        run: |
+          source /etc/os-release
+          echo "ID=$ID" >> "$GITHUB_ENV"
+          VERSION_CODENAME=$(echo $PLATFORM_ID | cut -d":" -f2)
+          echo "VERSION_CODENAME=$VERSION_CODENAME" >> "$GITHUB_ENV"
+      - name: Rename packages with codename
+        run: |
+          source /etc/os-release
+          ARCH=$(arch)
+          cd builds/packages
+          for filename in *.rpm
+          do
+            mv -v $filename ${filename%.${ARCH}*}.${{ env.VERSION_CODENAME }}.${ARCH}.rpm
+          done
+      - name: Upload the packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # We add a `rpm-` prefix so we can later recover all artifacts with the pattern `rpm-*`
+          # Note: The more natural pattern `*-rpm` or `*` does not work
+          name: rpm-${{ env.ID }}-${{ env.VERSION_CODENAME }}
+          path: builds/packages/*.rpm
+          if-no-files-found: error
