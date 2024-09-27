@@ -269,7 +269,13 @@ std::string ToLower(const std::string &str) {
 
 std::string GetEnvironmentVariableOrDefault(const std::string &variable_name,
                                             const std::string &default_value) {
+#ifdef _WIN32
+  size_t len;
+  char value[2048];
+  getenv_s(&len, value, 2048, "TEMP");
+#else
   char *value = getenv(variable_name.c_str());
+#endif
 
   if (value && std::strlen(value) > 0) {
     return value;

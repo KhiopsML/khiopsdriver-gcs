@@ -87,7 +87,7 @@ std::string getExecutableDir() {
 
 std::string dirname(std::string path) {
   char *pathBuffer = new char[path.length() + 1];
-  strcpy(pathBuffer, path.c_str());
+  strncpy(pathBuffer, path.c_str(), path.length() + 1);
   std::string pathDir = std::string(::dirname(pathBuffer));
   delete[] pathBuffer;
   return pathDir;

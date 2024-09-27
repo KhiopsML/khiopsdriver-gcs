@@ -125,8 +125,11 @@ int launch_test(const char *inputFilename, int nBufferSize) {
                  << boost::uuids::random_generator()() << "/output.txt";
   std::stringstream localOutput;
 #ifdef _WIN32
-  localOutput << std::getenv("TEMP") << "\\out-"
-              << boost::uuids::random_generator()() << ".txt";
+  size_t len;
+  char tempValue[2048];
+  getenv_s(&len, tempValue, 2048, "TEMP");
+  localOutput << tempValue << "\\out-" << boost::uuids::random_generator()()
+              << ".txt";
 #else
   localOutput << "/tmp/out-" << boost::uuids::random_generator()() << ".txt";
 #endif
@@ -333,9 +336,9 @@ int copyFileWithFseek(const char *file_name_input, const char *file_name_output,
     // Reads the file by steps of nBufferSize and writes to the output file at
     // each step
     char *buffer = new char[nBufferSize + 1]();
-    long long int sizeRead = nBufferSize;
-    long long int sizeWrite;
-    int cummulativeRead = 0;
+    long long sizeRead = nBufferSize;
+    long long sizeWrite;
+    long long cummulativeRead = 0;
     driver_fseek(fileinput, 0, SEEK_SET);
     while (sizeRead == nBufferSize && copy_status == kSuccess) {
       driver_fseek(fileinput, cummulativeRead, SEEK_SET);
