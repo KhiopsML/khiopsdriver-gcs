@@ -272,7 +272,7 @@ std::string GetEnvironmentVariableOrDefault(const std::string &variable_name,
 #ifdef _WIN32
   size_t len;
   char value[2048];
-  getenv_s(&len, value, 2048, "TEMP");
+  getenv_s(&len, value, 2048, name.c_str());
 #else
   char *value = getenv(variable_name.c_str());
 #endif
