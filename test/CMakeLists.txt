@@ -12,6 +12,10 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
+if((CXX_COMPILER_ID STREQUAL "MSVC"))
+  add_compile_options(/wd4101 /wd4710 /wd4711)
+endif()
+
 # Find dependencies
 find_package(Boost CONFIG REQUIRED)
 add_executable(basic_test basic_test.cpp drivertest.cpp)

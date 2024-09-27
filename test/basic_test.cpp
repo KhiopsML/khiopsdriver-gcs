@@ -723,8 +723,9 @@ TEST_F(GCSDriverTestFixture, SeekFromStart) {
   constexpr int seek_failure{-1};
   constexpr int seek_success{0};
 
-  auto test_func = [](const std::vector<TestParams> vals, Handle &sample,
-                      long long sample_starting_offset) {
+  auto test_func = [seek_failure](const std::vector<TestParams> vals,
+                                  Handle &sample,
+                                  long long sample_starting_offset) {
     for (const auto &v : vals) {
       int res{0};
       ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::beg));
@@ -785,8 +786,9 @@ TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset) {
   constexpr int seek_failure{-1};
   constexpr int seek_success{0};
 
-  auto test_func = [](const std::vector<TestParams> vals, Handle &sample,
-                      long long sample_starting_offset) {
+  auto test_func = [seek_failure](const std::vector<TestParams> vals,
+                                  Handle &sample,
+                                  long long sample_starting_offset) {
     for (const auto &v : vals) {
       int res{0};
       ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::cur));
