@@ -18,7 +18,7 @@ add_executable(basic_test basic_test.cpp drivertest.cpp)
 
 target_compile_options(
   basic_test
-  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/w4;/wd4101;/wd4710;/wd4711>
+  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4101;/wd4710;/wd4711>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 # MSVC requires /bigobj to build in debug config
@@ -36,7 +36,7 @@ gtest_discover_tests(basic_test)
 add_executable(plugin_test plugin_test.cpp path_helper.cpp)
 target_compile_options(
   plugin_test
-  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/w4;/wd4101;/wd4710;/wd4711>
+  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4101;/wd4710;/wd4711>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 if(WIN32)
   # custom build and test execution for Windows
