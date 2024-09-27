@@ -1,7 +1,6 @@
 #include "path_helper.h"
 
 #if defined(_WIN32)
-#pragma warning(disable : 4514 4710 4711)
 #include <Shlwapi.h>
 #include <io.h>
 #include <windows.h>
@@ -37,8 +36,8 @@ std::string getExecutablePath() {
 
 std::string getExecutableDir() {
   std::string executablePath = getExecutablePath();
-  char *exePath = new char[executablePath.length()];
-  strcpy(exePath, executablePath.c_str());
+  char *exePath = new char[executablePath.length() + 1];
+  strncpy(exePath, executablePath.c_str(), executablePath.length() + 1);
   PathRemoveFileSpec(exePath);
   std::string directory = std::string(exePath);
   delete[] exePath;

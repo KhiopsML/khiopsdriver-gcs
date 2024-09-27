@@ -21,7 +21,6 @@
 #include <limits.h>
 #include <unistd.h>
 #else
-#pragma warning(disable : 4514 4710 4711)
 #include <windows.h>
 #include "errhandlingapi.h"
 #endif
