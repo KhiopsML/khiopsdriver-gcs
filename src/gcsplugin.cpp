@@ -34,6 +34,9 @@ namespace gcs = gc::storage;
 constexpr const char *version = "0.1.0";
 constexpr const char *driver_name = "GCS driver";
 constexpr const char *driver_scheme = "gs";
+// Buffer size might need some tuning
+// ref https://github.com/googleapis/google-cloud-cpp/issues/2657
+// Default value below can be overriden by setting GCS_PREFERRED_BUFFER_SIZE
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
 
 bool bIsConnected = false;
@@ -486,7 +489,9 @@ int driver_disconnect() {
 int driver_isConnected() { return bIsConnected ? 1 : 0; }
 
 long long int driver_getSystemPreferredBufferSize() {
-  return preferred_buffer_size; // 4 Mo
+  std::string configured_preferred_size = GetEnvironmentVariableOrDefault(
+      "GCS_PREFERRED_BUFFER_SIZE", std::to_string(preferred_buffer_size));
+  return std::stoi(configured_preferred_size);
 }
 
 int driver_exist(const char *filename) {
@@ -807,7 +812,7 @@ void *driver_fopen(const char *filename, char mode) {
     break;
   }
   default:
-    LogError("Invalid open mode: " + mode);
+    LogError(std::string("Invalid open mode: ") + mode);
     return nullptr;
   }
 

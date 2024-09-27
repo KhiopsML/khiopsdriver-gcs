@@ -1,6 +1,7 @@
 #include "path_helper.h"
 
 #if defined(_WIN32)
+#pragma warning(disable : 4514 4710 4711)
 #include <Shlwapi.h>
 #include <io.h>
 #include <windows.h>

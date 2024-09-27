@@ -155,9 +155,6 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
   ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }
 
-constexpr const char *test_dir_name =
-    "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/";
-
 constexpr const char *test_single_file =
     "gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt";
 constexpr const char *test_range_file_one_header =
@@ -168,10 +165,6 @@ constexpr const char *test_glob_file_header_each =
 constexpr const char *test_double_glob_header_each =
     "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult_subsplit/**/"
     "Adult-split-*.txt";
-
-constexpr std::array<const char *, 4> test_files = {
-    test_single_file, test_range_file_one_header, test_glob_file_header_each,
-    test_double_glob_header_each};
 
 #define READ_MOCK_LAMBDA(read_sim)                                             \
   [&](gcs::internal::ReadObjectRangeRequest const &request) {                  \
@@ -606,7 +599,6 @@ TEST_F(GCSDriverTestFixture,
        OpenReadModeAndClose_TwoFilesNoCommonHeaderSuccess) {
   constexpr const char *mock_file_0_content = "mock_header\ncontent";
   constexpr size_t mock_file_0_size{19};
-  constexpr size_t mock_header_size{12};
   size_t mock_file_0_offset{0};
   ReadSimulatorParams mock_file_0{mock_file_0_content, mock_file_0_size,
                                   &mock_file_0_offset};
@@ -731,9 +723,8 @@ TEST_F(GCSDriverTestFixture, SeekFromStart) {
   constexpr int seek_failure{-1};
   constexpr int seek_success{0};
 
-  auto test_func = [seek_failure](const std::vector<TestParams> vals,
-                                  Handle &sample,
-                                  long long sample_starting_offset) {
+  auto test_func = [](const std::vector<TestParams> vals, Handle &sample,
+                      long long sample_starting_offset) {
     for (const auto &v : vals) {
       int res{0};
       ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::beg));
@@ -794,9 +785,8 @@ TEST_F(GCSDriverTestFixture, SeekFromCurrentOffset) {
   constexpr int seek_failure{-1};
   constexpr int seek_success{0};
 
-  auto test_func = [seek_failure](const std::vector<TestParams> vals,
-                                  Handle &sample,
-                                  long long sample_starting_offset) {
+  auto test_func = [](const std::vector<TestParams> vals, Handle &sample,
+                      long long sample_starting_offset) {
     for (const auto &v : vals) {
       int res{0};
       ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::cur));

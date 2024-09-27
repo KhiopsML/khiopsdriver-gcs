@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <unistd.h>
 #else
+#pragma warning(disable : 4514 4710 4711)
 #include <windows.h>
 #include "errhandlingapi.h"
 #endif
@@ -100,7 +101,7 @@ void *init_plugin() {
     fprintf(stderr,
             "Check LD_LIBRARY_PATH or set the library with its full path\n");
 #else
-    fwprintf(stderr, L" (0x%x). ", GetLastError());
+    fwprintf(stderr, L" (0x%lx). ", GetLastError());
     fprintf(stderr, "Check that the library is present in the same folder as "
                     "the executable\n");
 #endif
@@ -200,7 +201,7 @@ void *get_shared_library_function(void *library_handle,
     fprintf(stderr, "Unable to load %s (%s)\n", function_name, dlerror());
 #else
     fprintf(stderr, "Unable to load %s", function_name);
-    fwprintf(stderr, L"(0x%x)\n", GetLastError());
+    fwprintf(stderr, L"(0x%lx)\n", GetLastError());
 #endif
   }
   return ptr;
