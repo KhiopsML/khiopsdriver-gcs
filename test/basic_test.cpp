@@ -155,16 +155,16 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
   ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }
 
-constexpr const char *test_single_file =
-    "gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt";
-constexpr const char *test_range_file_one_header =
-    "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult/"
-    "Adult-split-0[0-5].txt";
-constexpr const char *test_glob_file_header_each =
-    "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/*.txt";
-constexpr const char *test_double_glob_header_each =
-    "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult_subsplit/**/"
-    "Adult-split-*.txt";
+// constexpr const char *test_single_file =
+//     "gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt";
+// constexpr const char *test_range_file_one_header =
+//     "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult/"
+//     "Adult-split-0[0-5].txt";
+// constexpr const char *test_glob_file_header_each =
+//     "gs://data-test-khiops-driver-gcs/khiops_data/bq_export/Adult/*.txt";
+// constexpr const char *test_double_glob_header_each =
+//     "gs://data-test-khiops-driver-gcs/khiops_data/split/Adult_subsplit/**/"
+//     "Adult-split-*.txt";
 
 #define READ_MOCK_LAMBDA(read_sim)                                             \
   [&](gcs::internal::ReadObjectRangeRequest const &request) {                  \
@@ -681,7 +681,7 @@ TEST_F(GCSDriverTestFixture,
        OpenReadModeAndClose_TwoFilesNoCommonHeaderFailureOnSecondRead) {
   constexpr const char *mock_file_0_content = "mock_header\ncontent";
   constexpr size_t mock_file_0_size{19};
-  constexpr size_t mock_header_size{12};
+  // constexpr size_t mock_header_size{12};
   size_t mock_file_0_offset{0};
   ReadSimulatorParams mock_file_0{mock_file_0_content, mock_file_0_size,
                                   &mock_file_0_offset};
@@ -720,7 +720,7 @@ TEST_F(GCSDriverTestFixture, SeekFromStart) {
     int expected_result;
   };
 
-  constexpr int seek_failure{-1};
+  const int seek_failure{-1};
   constexpr int seek_success{0};
 
   auto test_func = [seek_failure](const std::vector<TestParams> vals,
@@ -1288,16 +1288,17 @@ TEST_F(GCSDriverTestFixture, Read_NFiles_ReadFailures) {
       filesize));
 
   size_t mock_offset_0{0};
-  size_t mock_offset_1{0};
-  size_t mock_offset_2{0};
+  // size_t mock_offset_1{0};
+  // size_t mock_offset_2{0};
 
   ReadSimulatorParams mock_read_params_0{mock_content_0, mock_size_0,
                                          &mock_offset_0};
+  /*
   ReadSimulatorParams mock_read_params_1{mock_content_1, mock_size_1,
                                          &mock_offset_1};
   ReadSimulatorParams mock_read_params_2{mock_content_2, mock_size_2,
                                          &mock_offset_2};
-
+  */
   std::vector<char> buff(2 * static_cast<size_t>(filesize));
   char *buff_data = buff.data();
 
