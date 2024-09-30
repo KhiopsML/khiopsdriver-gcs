@@ -70,7 +70,8 @@ set_target_properties(khiopsdriver_file_gcs PROPERTIES SOVERSION ${PROJECT_VERSI
 
 target_compile_options(
   khiopsdriver_file_gcs
-  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall>
+  PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 option(BUILD_TESTS "Build test programs" OFF)
