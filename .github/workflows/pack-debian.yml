@@ -1,0 +1,59 @@
+---
+name: DEB Packages
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:10', 'debian:11', 'debian:12',  'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install packages
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          apt-get -y update
+          apt-get -y --no-install-recommends install build-essential coreutils debhelper git ca-certificates curl 
+          apt-get -y install ninja-build 
+          apt-get -y install zip pkg-config # for vcpkkg
+          curl -LO "https://github.com/Kitware/CMake/releases/download/v3.30.3/cmake-3.30.3-linux-x86_64.sh"
+          bash cmake-3.30.3-linux-x86_64.sh --prefix=/usr/local/ --exclude-subdir
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Configure CMake
+        run: |
+          cmake -B builds -S . -G Ninja -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+      - name: Build 
+        run: |
+          cmake --build builds --target khiopsdriver_file_gcs
+      - name: Build package with CPack
+        run: cd builds/ && cpack -G DEB
+      - name: Set environment variables
+        run: |
+          source /etc/os-release
+          echo "ID=$ID" >> "$GITHUB_ENV"
+          echo "VERSION_CODENAME=$VERSION_CODENAME" >> "$GITHUB_ENV"
+      - name: Rename the packages to include the ubuntu codename
+        run: |
+          cd builds/packages/
+          for filename in *.deb
+          do
+            mv -v $filename ${filename%_*}-${VERSION_CODENAME}.${filename##*_}
+          done
+      - name: Upload the packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # We add a `deb-` prefix so we can later recover all artifacts with the pattern `deb-*`
+          # Note: The more natural pattern `*-deb` or `*` does not work
+          name: deb-${{ env.ID }}-${{ env.VERSION_CODENAME }}
+          path: builds/packages/*.deb
+          if-no-files-found: error
+ 

@@ -4,14 +4,14 @@
 set -euo pipefail
 
 # Configure project
-cmake --fresh --preset ninja-multi
+cmake --fresh -G Ninja -D CMAKE_BUILD_TYPE=Release -D VCPKG_BUILD_TYPE=release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake -B builds/conda -S .
 
-# Build 
-cmake --build --preset ninja-release --target khiopsdriver_file_gcs
+# Build
+cmake --build builds/conda --target khiopsdriver_file_gcs
 
 # Copy binary to conda package
-mkdir -p $PREFIX/bin
-cp ./builds/ninja-multi/Release/libkhiopsdriver_file_gcs.so "$PREFIX/bin/"
+cmake --install builds/conda --prefix $PREFIX
+
 
 
 

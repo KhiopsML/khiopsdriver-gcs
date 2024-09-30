@@ -38,4 +38,4 @@
 /build
 **/CMakeFiles
 **/Makefile
-*.cmake
+.vscode
