@@ -13,7 +13,7 @@
             setup:
               - {os: ubuntu-22.04, os-family: linux-x64}
               - {os: windows-2022, os-family: win-x64}
-              - {os: macos-13, os-family: osx-x64}
+              #- {os: macos-13, os-family: osx-x64}
               - {os: macos-14, os-family: osx-arm64}
         runs-on: ${{ matrix.setup.os }}
         steps:
@@ -89,76 +89,75 @@
     #       - name: Test that khiops on Iris dataset
     #         uses: ./.github/actions/test-khiops-on-iris
     
-    #   # Release is only executed on tags
-    #   # Note: For this job to work the secrets variables KHIOPS_ANACONDA_CHANNEL_TOKEN and
-    #   #       KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN must be set with valid anaconda.org access tokens
-    #   release:
-    #     if: github.ref_type == 'tag'
-    #     needs: test
-    #     runs-on: ubuntu-22.04
-    #     permissions:
-    #       contents: write
-    #     steps:
-    #       - name: Download package artifacts
-    #         uses: actions/download-artifact@v4
-    #         with:
-    #           # See the upload-artifact step in the build job for the explanation of this pattern
-    #           path: ./build/conda
-    #           pattern: khiops-conda-*
-    #           merge-multiple: true
-    #       - name: Install Miniconda
-    #         uses: conda-incubator/setup-miniconda@v3
-    #         with:
-    #           miniconda-version: latest
-    #           python-version: '3.12'
-    #       - name: Install requirement packages
-    #         run: conda install -y anaconda-client conda-index
-    #       - name: Reindex the package directory
-    #         run: python -m conda_index ./build/conda
-    #       - name: Upload the packages to anaconda.org
-    #         run: |
-    #           # Set the anaconda.org channel
-    #           ANACONDA_CHANNEL="${{ inputs.release-channel || 'khiops-dev' }}"
+      # Release is only executed on tags
+      # Note: For this job to work the secrets variables KHIOPS_ANACONDA_CHANNEL_TOKEN and
+      #       KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN must be set with valid anaconda.org access tokens
+      release:
+        if: github.ref_type == 'tag'
+        # needs: test
+        runs-on: ubuntu-22.04
+        permissions:
+          contents: write
+        steps:
+          - name: Download package artifacts
+            uses: actions/download-artifact@v4
+            with:
+              # See the upload-artifact step in the build job for the explanation of this pattern
+              path: ./build/conda
+              pattern: khiops-conda-*
+              merge-multiple: true
+          - name: Install Miniconda
+            uses: conda-incubator/setup-miniconda@v3
+            with:
+              miniconda-version: latest
+              python-version: '3.12'
+          - name: Install requirement packages
+            run: conda install -y anaconda-client conda-index
+          - name: Reindex the package directory
+            run: python -m conda_index ./build/conda
+          - name: Upload the packages to anaconda.org
+            run: |
+              # Set the anaconda.org channel
+              ANACONDA_CHANNEL="${{ inputs.release-channel || 'khiops-dev' }}"
     
-    #           # For the release channel: upload without forcing; do not upload kni-transfer
-    #           if [[ "$ANACONDA_CHANNEL" == "khiops" ]]
-    #           then
-    #             rm -f -v ./build/conda/*/kni-transfer*.tar.bz2
-    #             anaconda --token "${{ secrets.KHIOPS_ANACONDA_CHANNEL_TOKEN }}" upload \
-    #               --user "$ANACONDA_CHANNEL" ./build/conda/*/*.tar.bz2
-    #           # For the dev channel: upload with forcing
-    #           else
-    #             anaconda --token "${{ secrets.KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN }}" upload \
-    #               --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.tar.bz2
-    #           fi
-    #       - name: Extract package version
-    #         run: |
-    #           PKG_VERSION=$(\
-    #               conda search --override-channels --channel ./build/conda/ khiops-core \
-    #                 | awk '!/#|channels/ {print $2}' \
-    #                 | sort -u \
-    #           )
-    #           echo "PKG_VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
-    #       - name: Create the release zip archive
-    #         uses: thedoctor0/zip-release@0.7.6
-    #         with:
-    #           type: zip
-    #           path: ./build/conda
-    #           filename: khiops-${{ env.PKG_VERSION }}-conda.zip
-    #       - name: Upload conda package artifacts for all platforms
-    #         uses: actions/upload-artifact@v4
-    #         with:
-    #           name: khiops-conda-all
-    #           path: ./khiops-${{ env.PKG_VERSION }}-conda.zip
-    #       - name: Release the zip archive
-    #         uses: ncipollo/release-action@v1
-    #         with:
-    #           allowUpdates: true
-    #           body: |
-    #             **This release is for testing purposes only and there is no support for it.**
-    #             **Go to https://khiops.org to install the latest supported version.**
-    #           draft: false
-    #           makeLatest: false
-    #           prerelease: true
-    #           updateOnlyUnreleased: true
+              # For the release channel: upload without forcing
+              if [[ "$ANACONDA_CHANNEL" == "khiops" ]]
+              then
+                anaconda --token "${{ secrets.KHIOPS_ANACONDA_CHANNEL_TOKEN }}" upload \
+                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.tar.bz2
+              # For the dev channel: upload with forcing
+              else
+                anaconda --token "${{ secrets.KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN }}" upload \
+                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.tar.bz2
+              fi
+          - name: Extract package version
+            run: |
+              PKG_VERSION=$(\
+                  conda search --override-channels --channel ./build/conda/ khiops-driver-gcs \
+                    | awk '!/#|channels/ {print $2}' \
+                    | sort -u \
+              )
+              echo "PKG_VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
+          - name: Create the release zip archive
+            uses: thedoctor0/zip-release@0.7.6
+            with:
+              type: zip
+              path: ./build/conda
+              filename: khiops-driver-gcs-${{ env.PKG_VERSION }}-conda.zip
+          - name: Upload conda package artifacts for all platforms
+            uses: actions/upload-artifact@v4
+            with:
+              name: khiops-conda-all
+              path: ./khiops-driver-gcs-${{ env.PKG_VERSION }}-conda.zip
+          - name: Release the zip archive
+            uses: ncipollo/release-action@v1
+            with:
+              allowUpdates: true
+              body: |
+                **This release is for testing purposes only and there is no support for it.**
+                **Go to https://khiops.org to install the latest supported version.**
+              draft: false
+              makeLatest: false
+              prerelease: true
+              updateOnlyUnreleased: true
     
