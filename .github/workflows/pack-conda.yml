@@ -2,6 +2,12 @@
     name: Conda Packages
     on:
       workflow_dispatch:
+        inputs:
+          release-channel:
+            type: choice
+            default: khiops-dev
+            options: [khiops-dev, khiops]
+            description: Anaconda channel to release
     defaults:
       run:
         shell: bash -el {0}
@@ -35,6 +41,19 @@
             run: |
               wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
               sudo tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
+
+          - name: Set the environment variables
+            shell: bash
+            run: |
+              # Put the driver package version
+              if [[ "${{ github.ref_type }}" == "tag" ]]
+              then
+                GCS_DRIVER_VERSION="${{ github.ref_name }}"
+              else
+                GCS_DRIVER_VERSION="0.0.1"
+              fi
+              echo "GCS_DRIVER_VERSION=$GCS_DRIVER_VERSION" >> "$GITHUB_ENV"
+
           - name: Build conda packages 
             run: |
               conda build conda --output-folder ./builds/packages

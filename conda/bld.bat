@@ -21,4 +21,4 @@ REM Copy binary to conda package
 cmake --install builds/conda --prefix $PREFIX
 
 REM Copy the libs for the driver package
-copy bin\khiopsdriver_file_gcs.dll %PREFIX%\lib
+copy W:\%PREFIX%\bin\khiopsdriver_file_gcs.dll W:\%PREFIX%\lib

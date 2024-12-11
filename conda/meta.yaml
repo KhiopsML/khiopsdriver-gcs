@@ -1,6 +1,8 @@
+{% set version = os.environ.get('GCS_DRIVER_VERSION').replace("-", "") %}
+
 package:
   name: khiops-driver-gcs
-  version: 0.0.1
+  version: {{ version }}
 
 source:
   path: ../
