@@ -50,6 +50,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
+# Avoid generating shared libs with version number in the filename
+set(CMAKE_PLATFORM_NO_VERSIONED_SONAME 1)
+
 if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
   message("Build system == Linux, build with sanitizer tools")
   add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
