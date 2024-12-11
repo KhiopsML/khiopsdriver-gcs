@@ -16,9 +16,6 @@
               #- {os: macos-13, os-family: osx-x64}
               - {os: macos-14, os-family: osx-arm64}
         runs-on: ${{ matrix.setup.os }}
-        permissions:
-          contents: 'read'
-          id-token: 'write'
         steps:
           - name: Checkout Sources
             uses: actions/checkout@v4
@@ -64,12 +61,16 @@
               #- {os: macos-13, os-family: osx-64}
               - {os: macos-14, os-family: osx-arm64}
         runs-on: ${{ matrix.env.os }}
+        permissions:
+          contents: 'read'
+          id-token: 'write'        
         steps:
           - name: Install Miniconda
             uses: conda-incubator/setup-miniconda@v3
             with:
-              miniconda-version: latest  # needed for macOS 13
+              miniforge-version: latest  # needed for macOS 13
               python-version: ${{ matrix.python-version }}
+              conda-remove-defaults: true
           - name: Install the khiops-core Conda package (Windows)
             run: conda install -c conda-forge -c khiops khiops-core
           - name: Download Conda Package Artifact
