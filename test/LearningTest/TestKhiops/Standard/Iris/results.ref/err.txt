@@ -12,6 +12,6 @@ Write report ./results/AnalysisResults.khj
 
 Deploy model SNB_Iris
 Input database gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt: Read records: 150
-Output database ./results/D_Iris.txt: Written records: 105
+Output database ./results/T_Iris.txt: Written records: 105
 Model deployment time: 0:00:00.01
 

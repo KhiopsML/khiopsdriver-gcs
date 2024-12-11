@@ -14,5 +14,11 @@ cmake --fresh -G Ninja -D CMAKE_BUILD_TYPE=Release -D VCPKG_BUILD_TYPE=release -
 REM Build
 cmake --build builds/conda --target khiopsdriver_file_gcs
 
+REM Create drivers installation directory
+mkdir %PREFIX%\lib
+
 REM Copy binary to conda package
 cmake --install builds/conda --prefix $PREFIX
+
+REM Copy the libs for the driver package
+copy build\conda\bin\khiopsdriver_file_gcs.dll %PREFIX%\lib

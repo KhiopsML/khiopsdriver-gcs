@@ -21,41 +21,39 @@ ClassFileName gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.kdi
 OK                             // Open
 // <- Open
 
-TrainDatabase.ClassName Iris          // Dictionary
+ClassManagement.ClassName Iris          // Dictionary
 
-TrainDatabase.DatabaseSpec.Data.DatabaseFiles.List.Key                // List item selection
-TrainDatabase.DatabaseSpec.Data.DatabaseFiles.DataTableName gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt     // Database file
-TrainDatabase.DatabaseSpec.Sampling.SampleNumberPercentage 70  // Sample percentage
+TrainDatabase.DatabaseFiles.List.Key Iris               // List item selection
+TrainDatabase.DatabaseFiles.DataTableName gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt     // Database file
+TrainDatabase.SampleNumberPercentage 70  // Sample percentage
 
 AnalysisSpec.TargetAttributeName Class   // Target variable
 AnalysisSpec.MainTargetModality Iris-versicolor        // Main target modality
 
-AnalysisSpec.PredictorsSpec.ExpertSpec.UnivariatePredictorNumber 1      // Nombre de predicteurs univaries
+AnalysisSpec.PredictorsSpec.SelectiveNaiveBayesPredictor true // Predicteur Bayesien Naif Selectif
+AnalysisSpec.PredictorsSpec.AdvancedSpec.UnivariatePredictorNumber 1      // Nombre de predicteurs univaries
 
-AnalysisResults.ReportFileName ./results/AnalysisResults.khj // Analysis report
+AnalysisResults.ResultFilesDirectory ./results   // Result files directory
 
 
 
-AnalysisSpec.PredictorsSpec.ConstructionSpec.MaxTextFeatureNumber 0    // Max number of text features
 AnalysisSpec.PredictorsSpec.ConstructionSpec.MaxTreeNumber 0  // Max Tree number
 AnalysisSpec.PredictorsSpec.ConstructionSpec.MaxConstructedAttributeNumber 0 // Max number of constructed variables
-AnalysisSpec.PredictorsSpec.ConstructionSpec.KeepSelectedAttributesOnly false    // Keep selected variables only
-AnalysisResults.ExportAsXls true         // Export as xls
 ComputeStats                   // Analyse database
 
 
 ClassManagement.OpenFile       // Open...
-ClassFileName ./results/AnalysisResults.model.kdic       // Dictionary file
+ClassFileName ./results/Modeling.kdic       // Dictionary file
 OK                             // Open
 
-TransferDatabase               // Deploy model
+TransferDatabase               // Transfer database
 
 // -> Database transfer
-ClassName SNB_Iris             // Deployment dictionary
-SourceDatabase.DatabaseSpec.Sampling.SampleNumberPercentage 70  // Sample percentage
-TargetDatabase.DatabaseSpec.Data.DatabaseFiles.List.Key                // List item selection
-TargetDatabase.DatabaseSpec.Data.DatabaseFiles.DataTableName ./results/D_Iris.txt     // Database file
-TransferDatabase               // Deploy model
+ClassName SNB_Iris             // Transfer dictionary
+SourceDatabase.SampleNumberPercentage 70  // Sample percentage
+TargetDatabase.DatabaseFiles.List.Key SNB_Iris               // List item selection
+TargetDatabase.DatabaseFiles.DataTableName ./results/T_Iris.txt     // Database file
+TransferDatabase               // Transfer database
 Exit                           // Close
 // <- Database transfer
 
