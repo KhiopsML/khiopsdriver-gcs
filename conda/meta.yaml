@@ -15,7 +15,7 @@ requirements:
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
-  - lib/libkhiopsdriver_file_gcs.dylib [osx]
+  - lib/libkhiopsdriver_file_gcs*.dylib [osx]
   - lib/libkhiopsdriver_file_gcs.dll [win]
 
 about:
