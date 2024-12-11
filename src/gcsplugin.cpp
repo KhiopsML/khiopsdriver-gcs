@@ -31,7 +31,7 @@ using namespace gcsplugin;
 namespace gc = ::google::cloud;
 namespace gcs = gc::storage;
 
-constexpr const char *version = "0.1.0";
+constexpr const char *version = DRIVER_VERSION;
 constexpr const char *driver_name = "GCS driver";
 constexpr const char *driver_scheme = "gs";
 // Buffer size might need some tuning

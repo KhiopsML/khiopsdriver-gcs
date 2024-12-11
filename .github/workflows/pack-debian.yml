@@ -57,3 +57,54 @@ jobs:
           path: builds/packages/*.deb
           if-no-files-found: error
  
+  # Test packages on a brand new runner to check:
+  # - the installation process (including dependencies installation)
+  # - that executable works (run with -s)
+  # - that it executes a small test
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['debian:10', 'debian:11', 'debian:12',  'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
+    container:
+      image: ${{ matrix.os }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Set environment variables
+        run: |
+          source /etc/os-release
+          echo "ID=$ID" >> "$GITHUB_ENV"
+          echo "VERSION_CODENAME=$VERSION_CODENAME" >> "$GITHUB_ENV"
+          echo "MPI_IMPLEMENTATION=${{ inputs.mpi_implementation || 'openmpi' }}" >> "$GITHUB_ENV"
+
+      - name: Download artifacts (driver package)
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-${{ env.ID }}-${{ env.VERSION_CODENAME }}
+          path: artifacts
+      - name: Download Khiops core
+        run: |
+          curl https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-openmpi_10.2.3-1-${CODENAME}.amd64.deb --output artifacts/khiops-core.deb
+      - name: Install Khiops core
+        run: |
+          apt-get update
+          dpkg -i ./artifacts/khiops-core* || true
+          apt-get -f install -y
+      - name: Install driver
+        run: dpkg -i ./artifacts/deb-*
+      - name: Check Khiops core installation
+        uses: ./.github/actions/test-khiops-install
+      - name: Check Khiops installation
+        uses: ./.github/actions/test-khiops-install
+      - name: Test Khiops on Iris dataset
+        uses: ./.github/actions/test-khiops-on-iris
+        with:
+          os-decription: ${{ env.ID }}-${{ env.VERSION_CODENAME }}

@@ -14,6 +14,13 @@ cmake_minimum_required(VERSION 3.20)
 # Enforce c++14 standard.
 set(CMAKE_CXX_STANDARD 14)
 
+# Get project version from the header file
+file(READ "src/gcsplugin.h" H_FILE)
+string(REGEX MATCH "#define DRIVER_VERSION KHIOPS_STR\\(([^)]*)\\)" _ ${H_FILE})
+set(DRIVER_VERSION ${CMAKE_MATCH_1})
+string(REGEX REPLACE "-.*" "" VERSION ${DRIVER_VERSION})
+message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${VERSION})")
+
 project(
   khiops-gcs
   LANGUAGES CXX
