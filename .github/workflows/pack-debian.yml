@@ -96,7 +96,7 @@ jobs:
           apt-get install -y curl
       - name: Download Khiops core
         run: |
-          curl https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-openmpi_10.2.3-1-${CODENAME}.amd64.deb --output artifacts/khiops-core.deb
+          curl https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}_10.2.3-1-${{ env.VERSION_CODENAME }}.amd64.deb --output artifacts/khiops-core.deb
       - name: Install Khiops core
         run: |
           dpkg -i ./artifacts/khiops-core* || true
