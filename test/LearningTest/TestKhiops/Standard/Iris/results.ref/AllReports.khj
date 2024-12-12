@@ -6,7 +6,7 @@
 		"reportType": "Modeling",
 		"summary": {
 			"dictionary": "Iris",
-			"database": "..\/..\/..\/datasets\/Iris\/Iris.txt",
+			"database": "gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt",
 			"samplePercentage": 70,
 			"samplingMode": "Include sample",
 			"selectionVariable": "",
@@ -57,7 +57,7 @@
 		"evaluationType": "Train",
 		"summary": {
 			"dictionary": "Iris",
-			"database": "..\/..\/..\/datasets\/Iris\/Iris.txt",
+			"database": "gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt",
 			"samplePercentage": 70,
 			"samplingMode": "Include sample",
 			"selectionVariable": "",

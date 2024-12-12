@@ -4,7 +4,7 @@ Test evaluation report
 Dictionary	Iris
 Target variable	Categorical	Class
 Main target value	Iris-versicolor
-Database	../../../datasets/Iris/Iris.txt
+Database	gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt
 Sample percentage	70
 Sampling mode	Exclude sample
 Selection variable	

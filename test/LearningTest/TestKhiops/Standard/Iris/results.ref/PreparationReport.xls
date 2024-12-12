@@ -11,7 +11,7 @@ Variables
 	Numerical	4
 	Total	5
 
-Database	../../../datasets/Iris/Iris.txt
+Database	gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt
 Sample percentage	70
 Sampling mode	Include sample
 Selection variable	
