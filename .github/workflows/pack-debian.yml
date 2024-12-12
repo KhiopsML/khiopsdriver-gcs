@@ -90,12 +90,15 @@ jobs:
         with:
           name: deb-${{ env.ID }}-${{ env.VERSION_CODENAME }}
           path: artifacts
+      - name: Install Khiops core
+        run: |
+          apt-get update
+          apt-get install curl
       - name: Download Khiops core
         run: |
           curl https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-openmpi_10.2.3-1-${CODENAME}.amd64.deb --output artifacts/khiops-core.deb
       - name: Install Khiops core
         run: |
-          apt-get update
           dpkg -i ./artifacts/khiops-core* || true
           apt-get -f install -y
       - name: Install driver
