@@ -93,7 +93,7 @@ jobs:
       - name: Install Khiops core
         run: |
           apt-get update
-          apt-get install curl
+          apt-get install -y curl
       - name: Download Khiops core
         run: |
           curl https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-openmpi_10.2.3-1-${CODENAME}.amd64.deb --output artifacts/khiops-core.deb

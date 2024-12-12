@@ -115,6 +115,8 @@
               workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
           - name: Test that khiops works on Iris dataset
             uses: ./.github/actions/test-khiops-on-iris
+            with:
+              os-decription: ${{ matrix.env.os }}-${{ matrix.env.os-family }}    
     
       # Release is only executed on tags
       # Note: For this job to work the secrets variables KHIOPS_ANACONDA_CHANNEL_TOKEN and
