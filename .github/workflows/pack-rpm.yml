@@ -75,6 +75,9 @@ jobs:
       fail-fast: false
       matrix:
         rocky_version: [8, 9]
+    permissions:
+      contents: 'read'
+      id-token: 'write'            
     container:
       image: rockylinux:${{ matrix.rocky_version }}
     steps:
@@ -93,7 +96,7 @@ jobs:
           yum -y install curl
       - name: Download and install Khiops core
         run: |
-          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}_10.2.3-1.el${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
+          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}_10.2.3-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
           yum install -y ./khiops-core*
       - name: Download artifacts (driver package)
         uses: actions/download-artifact@v4
@@ -105,6 +108,12 @@ jobs:
           yum install -y ./artifacts/khiops-driver-*.rpm
       - name: Check Khiops core installation
         uses: ./.github/actions/test-khiops-install
+      # Retrieve google credentials through WIF
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'        
       - name: Test Khiops on Iris dataset
         uses: ./.github/actions/test-khiops-on-iris
         with:

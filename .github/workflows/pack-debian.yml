@@ -73,6 +73,9 @@ jobs:
       fail-fast: false
       matrix:
         os: ['debian:10', 'debian:11', 'debian:12',  'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
+    permissions:
+      contents: 'read'
+      id-token: 'write'            
     container:
       image: ${{ matrix.os }}
     steps:
@@ -102,6 +105,12 @@ jobs:
         run: dpkg -i ./artifacts/khiops-driver-*.deb
       - name: Check Khiops core installation
         uses: ./.github/actions/test-khiops-install
+      # Retrieve google credentials through WIF
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'        
       - name: Test Khiops on Iris dataset
         uses: ./.github/actions/test-khiops-on-iris
         with:
