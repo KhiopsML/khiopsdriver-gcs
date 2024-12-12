@@ -99,7 +99,7 @@ jobs:
           name: deb-${{ env.ID }}-${{ env.VERSION_CODENAME }}
           path: artifacts
       - name: Install driver
-        run: dpkg -i ./artifacts/deb-*
+        run: dpkg -i ./artifacts/khiops-driver-*.deb
       - name: Check Khiops core installation
         uses: ./.github/actions/test-khiops-install
       - name: Check Khiops installation
