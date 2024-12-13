@@ -15,6 +15,7 @@ REM Build
 cmake --build builds/conda --parallel --target khiopsdriver_file_gcs
 
 REM Create drivers installation directory
+mkdir %PREFIX%\bin
 mkdir %PREFIX%\lib
 
 REM Copy the libs for the driver package

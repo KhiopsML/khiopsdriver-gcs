@@ -90,10 +90,6 @@ jobs:
           VERSION=$(echo $PLATFORM_ID | cut -d":" -f2)
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "MPI_IMPLEMENTATION=${{ inputs.mpi_implementation || 'openmpi' }}" >> "$GITHUB_ENV"
-      - name: Install curl
-        run: |
-          yum update -y
-          yum -y install curl
       - name: Download and install Khiops core
         run: |
           curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}-10.2.3-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
