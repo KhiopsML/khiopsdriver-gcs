@@ -19,6 +19,7 @@ jobs:
       - name: Install packages
         run: |
           dnf upgrade -y
+          yum install -y gcc-toolset-11.x86_64
           dnf install -y gcc-c++ make rpm-build # we do not use ninja because it is not in the dnf repo
           dnf install -y git perl # for vcpkg
           # Note: We install cmake from kitware's site to have a more recent version 
