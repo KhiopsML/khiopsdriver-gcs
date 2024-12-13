@@ -96,7 +96,7 @@ jobs:
           yum -y install curl
       - name: Download and install Khiops core
         run: |
-          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}_10.2.3-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
+          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}-10.2.3-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
           yum install -y ./khiops-core*
       - name: Download artifacts (driver package)
         uses: actions/download-artifact@v4
