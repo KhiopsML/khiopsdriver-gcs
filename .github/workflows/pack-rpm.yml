@@ -19,8 +19,7 @@ jobs:
       - name: Install packages
         run: |
           dnf upgrade -y
-          yum install -y gcc-toolset-11.x86_64
-          dnf install -y gcc-c++ make rpm-build # we do not use ninja because it is not in the dnf repo
+          dnf install -y gcc-c++ gcc-toolset-14 make rpm-build # we do not use ninja because it is not in the dnf repo
           dnf install -y git perl # for vcpkg
           # Note: We install cmake from kitware's site to have a more recent version 
           curl -LO "https://github.com/Kitware/CMake/releases/download/v3.26.5/cmake-3.26.5-linux-x86_64.sh"
@@ -32,12 +31,16 @@ jobs:
      
       - name: Configure CMake
         run: |
+            scl enable gcc-toolset-14 bash
             cmake -B builds -S . -G 'Unix Makefiles'  -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
       - name: Build 
         run: |
+            scl enable gcc-toolset-14 bash
             cmake --build builds --target khiopsdriver_file_gcs
       - name: Build package with CPack
-        run: cd builds/ && cpack -G RPM
+        run: |
+            scl enable gcc-toolset-14 bash
+            cd builds/ && cpack -G RPM
       - name: Set environment variables
         run: |
           source /etc/os-release
