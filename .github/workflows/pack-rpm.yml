@@ -31,15 +31,15 @@ jobs:
      
       - name: Configure CMake
         run: |
-            scl enable gcc-toolset-14 bash
+            source scl_source enable gcc-toolset-14
             cmake -B builds -S . -G 'Unix Makefiles'  -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
       - name: Build 
         run: |
-            scl enable gcc-toolset-14 bash
+            source scl_source enable gcc-toolset-14
             cmake --build builds --target khiopsdriver_file_gcs
       - name: Build package with CPack
         run: |
-            scl enable gcc-toolset-14 bash
+            source scl_source enable gcc-toolset-14
             cd builds/ && cpack -G RPM
       - name: Set environment variables
         run: |
