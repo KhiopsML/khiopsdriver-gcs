@@ -8,7 +8,7 @@ Train evaluation of Selective Naive Bayes on database gs://data-test-khiops-driv
 Train evaluation of Univariate PetalWidth on database gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt
 Test evaluation of Selective Naive Bayes on database gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt
 Test evaluation of Univariate PetalWidth on database gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt
-Write report ./results/AnalysisResults.khj
+Write report ./results/AllReports.khj
 
 Deploy model SNB_Iris
 Input database gs://data-test-khiops-driver-gcs/khiops_data/samples/Iris/Iris.txt: Read records: 150

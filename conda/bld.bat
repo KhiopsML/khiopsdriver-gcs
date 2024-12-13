@@ -18,5 +18,5 @@ REM Create drivers installation directory
 mkdir %PREFIX%\lib
 
 REM Copy the libs for the driver package
-copy builds\conda\bin\*.dll %PREFIX%\lib\
-move %PREFIX%\lib\khiopsdriver_file_gcs.dll %PREFIX%\lib\libkhiopsdriver_file_gcs.dll
+copy builds\conda\bin\*.dll %PREFIX%\bin\
+move %PREFIX%\bin\khiopsdriver_file_gcs.dll %PREFIX%\lib\libkhiopsdriver_file_gcs.dll
