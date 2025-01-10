@@ -1,0 +1,60 @@
+# Khiops driver for Google Cloud Storage aka GCS
+
+This repository hosts the source code for the Khiops filesystem driver enabling transparent manipulation for data stored in GCS buckets.
+
+## Quickstart
+
+If you just want to start using Khiops with your data located on GCS, simply install the driver package next to Khiops.
+If you installed Khiops the standard way, the driver package can be installed via conda like so:
+
+    conda install -c khiops khiops-driver-gcs
+
+Or, if you have used your system package manager, you will have to install the driver by the same method. For debian/ubuntu, you will do this:
+
+    CODENAME=$(lsb_release -cs) && \
+    TEMP_DEB="$(mktemp)" && \
+    wget -O "$TEMP_DEB" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.11/khiops-driver-gcs_0.0.11-1-${CODENAME}.amd64.deb" && \
+    sudo dpkg -i "$TEMP_DEB && \
+    rm -f $TEMP_DEB
+
+or if using Rocky linux, do this:
+
+    sudo yum update -y && sudo yum install wget -y && \
+    CENTOS_VERSION=$(rpm -E %{rhel}) && \
+    TEMP_RPM="$(mktemp).rpm" && \
+    wget -O "$TEMP_RPM" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.11/khiops-driver-gcs_0.0.11-1.el${CENTOS_VERSION}.x86_64.rpm" && \
+    sudo yum install "$TEMP_RPM" -y && \
+    rm -f $TEMP_RPM
+
+You can check that the driver is installed propery by running
+
+    khiops -s
+
+You should see an output similar to this:
+
+    Khiops 10.2.4
+
+    Drivers:
+        'GCS driver' for URI scheme 'gs'
+    Environment variables:
+        None
+    Internal environment variables:
+        None
+
+which indicates that the driver was loaded properly and will be used for datafiles following the gs:// pattern.
+
+## Authentication
+
+In order to access the data stored on a GCS bucket, in most cases a valid authentication in required. The Khiops GCS driver by default uses the standard [Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc) authentication. This means that once you have valid credentials setup in your environment, Khiops will be using these exactly like your python script or google provided tools like gcloud or gsutil.
+
+In order to setup your local environment with these credentials (assuming you have installed the [gcloud CLI](https://cloud.google.com/sdk/docs/install)), you will have to do the following:
+
+    gcloud init
+    gcloud auth application-default login
+
+Voilà! You now have access to your data in GCS buckets!
+The exact same authentication mechanism will allow a containerized Khiops script to run on the Google infrastructure.
+
+## Example usage
+
+TODO insert python script with data on GCS
