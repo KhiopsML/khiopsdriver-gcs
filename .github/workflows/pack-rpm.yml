@@ -12,14 +12,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['rockylinux:8', 'rockylinux:9']
+        image: ['rockylinux:9']
     container:
       image: ${{ matrix.image }}
     steps:
       - name: Install packages
         run: |
           dnf upgrade -y
-          dnf install -y gcc-c++ gcc-toolset-14 make rpm-build # we do not use ninja because it is not in the dnf repo
+          dnf install -y gcc-c++ make rpm-build # we do not use ninja because it is not in the dnf repo
           dnf install -y git perl # for vcpkg
           # Note: We install cmake from kitware's site to have a more recent version 
           curl -LO "https://github.com/Kitware/CMake/releases/download/v3.26.5/cmake-3.26.5-linux-x86_64.sh"
@@ -31,15 +31,12 @@ jobs:
      
       - name: Configure CMake
         run: |
-            source scl_source enable gcc-toolset-14
             cmake -B builds -S . -G 'Unix Makefiles'  -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
       - name: Build 
         run: |
-            source scl_source enable gcc-toolset-14
             cmake --build builds --target khiopsdriver_file_gcs
       - name: Build package with CPack
         run: |
-            source scl_source enable gcc-toolset-14
             cd builds/ && cpack -G RPM
       - name: Set environment variables
         run: |
@@ -78,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rocky_version: [8, 9]
+        rocky_version: [9]
     permissions:
       contents: 'read'
       id-token: 'write'            
@@ -96,7 +93,7 @@ jobs:
           echo "MPI_IMPLEMENTATION=${{ inputs.mpi_implementation || 'openmpi' }}" >> "$GITHUB_ENV"
       - name: Download and install Khiops core
         run: |
-          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.3/khiops-core-${{ env.MPI_IMPLEMENTATION }}-10.2.3-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
+          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.4/khiops-core-${{ env.MPI_IMPLEMENTATION }}-10.2.4-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
           yum install -y ./khiops-core*
       - name: Download artifacts (driver package)
         uses: actions/download-artifact@v4
