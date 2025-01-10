@@ -1,6 +1,8 @@
+{% set version = os.environ.get('GCS_DRIVER_VERSION').replace("-", "") %}
+
 package:
   name: khiops-driver-gcs
-  version: 0.0.1
+  version: {{ version }}
 
 source:
   path: ../
@@ -14,11 +16,14 @@ requirements:
     - {{ compiler('cxx') }}
 
 files:
-  - lib/libkhiopsdriver_file_gcs.so*
+  - lib/libkhiopsdriver_file_gcs.so* [linux]
+  - lib/libkhiopsdriver_file_gcs*.dylib [osx]
+  - lib/*.dll [win]
+  - bin/*.dll [win]
 
 about:
   home: https://khiops.org
   license: BSD+3-clause
   summary: Khiops driver to access files on Google Cloud Storage
   doc_url: https://khiops.org
-  dev_url: https://github.com/khiopsml/khiops
+  dev_url: https://github.com/khiopsml/khiopsdriver_gcs

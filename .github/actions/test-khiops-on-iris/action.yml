@@ -1,0 +1,80 @@
+---
+name: Test Khiops on Iris
+description: Tests a Khiops installation on the Iris dataset
+inputs:
+  os-decription:
+    description: OS description (os +arch) used to name artifacts (error reports)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Python setup for Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Install Python 3 if not present (already present in conda environment)
+        if ! command -v python3 &> /dev/null
+        then
+          # Python install: we don't use the setup-python action because of the following error:
+          # python3: /lib64/libc.so.6: version `GLIBC_2.34' not found (required by python3)
+          # Detect Debian based OS
+          if [ -d "/etc/apt" ]
+          then
+            apt-get install -y python3 > /dev/null
+          else
+            yum install -y python3.11
+          fi
+        fi
+        echo "PYTHON=python3" >> "$GITHUB_ENV"
+    - name: Python setup for Windows or macOS
+      if: runner.os == 'Windows' || runner.os == 'macOS'
+      shell: bash
+      run: echo "PYTHON=python" >> "$GITHUB_ENV"
+    - name: Set the name for the khiops laucher script
+      shell: bash
+      run: |
+        if [[ $RUNNER_OS == "Windows" ]]
+        then
+          # Put the full path in windows since bash doesn't find ".cmd" files
+          # in the path even if they are there
+          modl_path=$(which MODL)
+          khiops_bin_dir=$(dirname "$modl_path")
+          KHIOPS_SCRIPT="$khiops_bin_dir/khiops.cmd"
+          KHIOPS_CC_SCRIPT="$khiops_bin_dir/khiops_coclustering.cmd"
+          echo "KHIOPS_SCRIPT=$KHIOPS_SCRIPT" >> "$GITHUB_ENV"
+          echo "KHIOPS_CC_SCRIPT=$KHIOPS_CC_SCRIPT" >> "$GITHUB_ENV"
+        else
+          echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
+          echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
+        fi
+    - name: Run Khiops tests
+      shell: bash
+      env:
+        KHIOPS_PROC_NUMBER: 4
+        OMPI_MCA_rmaps_base_oversubscribe: true
+        KHIOPS_MPI_VERBOSE: true
+      run: |
+        cd test/LearningTest/TestKhiops/Standard/Iris/
+        "$KHIOPS_SCRIPT" -b -i test.prm -e results/err.txt
+        cd -
+    - name: Check the test results
+      shell: bash
+      run: |-
+        touch test/LearningTest/TestKhiops/Standard/Iris/results/time.log
+        echo "Check test results"
+        cd test/LearningTestTool/py/
+        $PYTHON kht_test.py ../../LearningTest/TestKhiops/Standard/Iris check
+        $PYTHON kht_apply.py ../../LearningTest/TestKhiops/Standard/Iris errors | tee /tmp/khiops-log.txt
+        $PYTHON kht_collect_results.py ../../LearningTest/TestKhiops/Standard/Iris $GITHUB_WORKSPACE/results/khiops --collect-type warnings
+        if (grep -q error /tmp/khiops-log.txt); then
+          echo "::error::Errors in Khiops run"
+          false
+        fi
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-${{ inputs.os-decription}}
+        retention-days: 7
+        path: |-
+          results/

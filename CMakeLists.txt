@@ -14,10 +14,17 @@ cmake_minimum_required(VERSION 3.20)
 # Enforce c++14 standard.
 set(CMAKE_CXX_STANDARD 14)
 
+# Get project version from the header file
+file(READ "src/gcsplugin.h" H_FILE)
+string(REGEX MATCH "#define DRIVER_VERSION KHIOPS_STR\\(([^)]*)\\)" _ ${H_FILE})
+set(DRIVER_VERSION ${CMAKE_MATCH_1})
+string(REGEX REPLACE "-.*" "" VERSION ${DRIVER_VERSION})
+message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${VERSION})")
+
 project(
   khiops-gcs
   LANGUAGES CXX
-  VERSION 0.1.0)
+  VERSION 0.0.11)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 
@@ -49,6 +56,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
+
+# Avoid generating shared libs with version number in the filename
+set(CMAKE_PLATFORM_NO_VERSIONED_SONAME 1)
 
 if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
   message("Build system == Linux, build with sanitizer tools")

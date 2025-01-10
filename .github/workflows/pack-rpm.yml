@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['rockylinux:8', 'rockylinux:9']
+        image: ['rockylinux:9']
     container:
       image: ${{ matrix.image }}
     steps:
@@ -36,7 +36,8 @@ jobs:
         run: |
             cmake --build builds --target khiopsdriver_file_gcs
       - name: Build package with CPack
-        run: cd builds/ && cpack -G RPM
+        run: |
+            cd builds/ && cpack -G RPM
       - name: Set environment variables
         run: |
           source /etc/os-release
@@ -60,3 +61,100 @@ jobs:
           name: rpm-${{ env.ID }}-${{ env.VERSION_CODENAME }}
           path: builds/packages/*.rpm
           if-no-files-found: error
+
+  # Test packages on a brand new runner to check:
+  # - the installation process (including dependencies installation)
+  # - that executable works (run with -s)
+  # - that it executes a small test
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        rocky_version: [9]
+    permissions:
+      contents: 'read'
+      id-token: 'write'            
+    container:
+      image: rockylinux:${{ matrix.rocky_version }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Set environment variables
+        run: |
+          source /etc/os-release
+          echo "ID=$ID" >> "$GITHUB_ENV"
+          VERSION=$(echo $PLATFORM_ID | cut -d":" -f2)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "MPI_IMPLEMENTATION=${{ inputs.mpi_implementation || 'openmpi' }}" >> "$GITHUB_ENV"
+      - name: Download and install Khiops core
+        run: |
+          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.4/khiops-core-${{ env.MPI_IMPLEMENTATION }}-10.2.4-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
+          yum install -y ./khiops-core*
+      - name: Download artifacts (driver package)
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-${{ env.ID }}-${{ env.VERSION }}
+          path: artifacts
+      - name: Install driver
+        run: |
+          yum install -y ./artifacts/khiops-driver-*.rpm
+      - name: Check Khiops core installation
+        uses: ./.github/actions/test-khiops-install
+      # Retrieve google credentials through WIF
+      # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'        
+      - name: Test Khiops on Iris dataset
+        uses: ./.github/actions/test-khiops-on-iris
+        with:
+          os-decription: ${{ env.ID }}-${{ matrix.rocky_version }}
+
+
+  # Release is only executed on tags
+  release:
+    if: github.ref_type == 'tag'
+    # We release even if the tests fail (we delete from the release whatever fails manually)
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # See the upload-artifact step in the build job for the explanation of this pattern
+          pattern: rpm-*
+          merge-multiple: true
+      - name: Rename packages with tag version
+        run: |
+         # Renames the packge only if the source version differs from the tag
+         SOURCE_VERSION=$(./scripts/driver-version | sed 's/-/_/')
+         TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/-/_/')
+         for PKG_FILE in *.rpm
+         do
+           NEW_PKG_FILE=$(echo $PKG_FILE | sed "s/-${SOURCE_VERSION}-/-${TAG_VERSION}-/")
+           if [[ "$PKG_FILE" != "$NEW_PKG_FILE" ]]
+           then
+             echo "Renaming '$PKG_FILE' to '$NEW_PKG_FILE'"
+             mv $PKG_FILE $NEW_PKG_FILE
+           fi
+         done
+      - name: Upload packages to the release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          allowUpdates: true
+          artifacts: '*.rpm'
+          body: |
+            **This release is for testing purposes only and there is no support for it.**
+            **Go to https://khiops.org to install the latest supported version.**
+          draft: false
+          makeLatest: false
+          prerelease: true
+          updateOnlyUnreleased: true

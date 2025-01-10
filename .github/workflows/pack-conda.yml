@@ -2,6 +2,12 @@
     name: Conda Packages
     on:
       workflow_dispatch:
+        inputs:
+          release-channel:
+            type: choice
+            default: khiops-dev
+            options: [khiops-dev, khiops]
+            description: Anaconda channel to release
     defaults:
       run:
         shell: bash -el {0}
@@ -35,6 +41,19 @@
             run: |
               wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
               sudo tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
+
+          - name: Set the environment variables
+            shell: bash
+            run: |
+              # Put the driver package version
+              if [[ "${{ github.ref_type }}" == "tag" ]]
+              then
+                GCS_DRIVER_VERSION="${{ github.ref_name }}"
+              else
+                GCS_DRIVER_VERSION="0.0.1"
+              fi
+              echo "GCS_DRIVER_VERSION=$GCS_DRIVER_VERSION" >> "$GITHUB_ENV"
+
           - name: Build conda packages 
             run: |
               conda build conda --output-folder ./builds/packages
@@ -44,50 +63,60 @@
               name: khiops-conda-${{ matrix.setup.os-family }}
               path: ./builds/packages
               retention-days: 7
-    #   # Test Conda package on brand new environments
-    #   test:
-    #     needs: build
-    #     strategy:
-    #       fail-fast: false
-    #       matrix:
-    #         env:
-    #           - {os: ubuntu-20.04, os-family: linux-64}
-    #           - {os: ubuntu-22.04, os-family: linux-64}
-    #           - {os: ubuntu-24.04, os-family: linux-64}
-    #           - {os: windows-2019, os-family: win-64}
-    #           - {os: windows-2022, os-family: win-64}
-    #           - {os: macos-12, os-family: osx-64}
-    #           - {os: macos-13, os-family: osx-64}
-    #           - {os: macos-14, os-family: osx-arm64}
-    #     runs-on: ${{ matrix.env.os }}
-    #     steps:
-    #       - name: Install Miniconda
-    #         uses: conda-incubator/setup-miniconda@v3
-    #         with:
-    #           miniconda-version: latest  # needed for macOS 13
-    #           python-version: ${{ matrix.python-version }}
-    #       - name: Download Conda Package Artifact
-    #         uses: actions/download-artifact@v4
-    #         with:
-    #           name: khiops-conda-${{ matrix.env.os-family }}
-    #           path: ./build/conda
-    #       - name: Install the Conda package (Windows)
-    #         if: runner.os == 'Windows'
-    #         run: conda install --channel ./build/conda khiops-core
-    #       # In Linux/macOS we need the conda-forge channel to install their pinned versions
-    #       - name: Install the Conda package (Linux/macOS)
-    #         if: runner.os != 'Windows'
-    #         run: |
-    #           conda install --channel conda-forge --channel ./build/conda khiops-core
-    #       - name: Add  CONDA_PREFIX to shared PATH
-    #         run: |
-    #           echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH
-    #       - name: Checkout sources
-    #         uses: actions/checkout@v4
-    #       - name: Test that the executables are installed
-    #         uses: ./.github/actions/test-khiops-install
-    #       - name: Test that khiops on Iris dataset
-    #         uses: ./.github/actions/test-khiops-on-iris
+
+      # Test Conda package on brand new environments
+      test:
+        needs: build
+        strategy:
+          fail-fast: false
+          matrix:
+            env:
+              - {os: ubuntu-20.04, os-family: linux-x64}
+              - {os: ubuntu-22.04, os-family: linux-x64}
+              - {os: ubuntu-24.04, os-family: linux-x64}
+              - {os: windows-2019, os-family: win-x64}
+              - {os: windows-2022, os-family: win-x64}
+              #- {os: macos-12, os-family: osx-64}
+              #- {os: macos-13, os-family: osx-64}
+              - {os: macos-14, os-family: osx-arm64}
+        runs-on: ${{ matrix.env.os }}
+        permissions:
+          contents: 'read'
+          id-token: 'write'        
+        steps:
+          - name: Install Miniconda
+            uses: conda-incubator/setup-miniconda@v3
+            with:
+              miniforge-version: latest  # needed for macOS 13
+              python-version: ${{ matrix.python-version }}
+              conda-remove-defaults: true
+          - name: Install the khiops-core Conda package (Windows)
+            run: conda install -c conda-forge -c khiops khiops-core
+          - name: Download Conda Package Artifact
+            uses: actions/download-artifact@v4
+            with:
+              name: khiops-conda-${{ matrix.env.os-family }}
+              path: ./build/conda
+          - name: Install the driver Conda package
+            run: |
+              conda install --channel ./build/conda khiops-driver-gcs
+          - name: Add  CONDA_PREFIX to shared PATH
+            run: |
+              echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH         
+          - name: Checkout sources
+            uses: actions/checkout@v4
+          - name: Test that the executables are installed
+            uses: ./.github/actions/test-khiops-install
+          # Retrieve google credentials through WIF
+          # see https://github.com/google-github-actions/auth?tab=readme-ov-file#workload-identity-federation-through-a-service-account
+          - uses: google-github-actions/auth@v2
+            with:
+              service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+              workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'
+          - name: Test that khiops works on Iris dataset
+            uses: ./.github/actions/test-khiops-on-iris
+            with:
+              os-decription: ${{ matrix.env.os }}-${{ matrix.env.os-family }}    
     
       # Release is only executed on tags
       # Note: For this job to work the secrets variables KHIOPS_ANACONDA_CHANNEL_TOKEN and
