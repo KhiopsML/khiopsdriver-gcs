@@ -57,4 +57,29 @@ The exact same authentication mechanism will allow a containerized Khiops script
 
 ## Example usage
 
-TODO insert python script with data on GCS
+## Khiops usage (low level)
+```
+khiops -b -i gs://mydatabucket/khiops_samples/scenario.kh
+```
+
+## Python sample
+```python
+# Imports
+import os
+from khiops import core as kh
+
+# Set the file paths
+dictionary_file_path = "gs://mydatabucket/khiops_samples/Adult/Adult.kdic"
+data_table_path = "gs://mydatabucket/khiops_samples/Adult/Adult.kdic"
+results_dir = "khiops_output"
+
+# Train the predictor
+kh.train_predictor(
+    dictionary_file_path,
+    "Adult",
+    data_table_path,
+    "class",
+    results_dir,
+    max_trees=0,
+)
+```
