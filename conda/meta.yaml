@@ -14,12 +14,18 @@ requirements:
     - cmake
     - ninja
     - {{ compiler('cxx') }}
-    - curl-devel
-    - libgoogle-cloud-all-devel
+    - conda-forge::curl-devel
+    - conda-forge::libgoogle-cloud-all-devel
+    - conda-forge::libboost
+    - conda-forge::libboost-devel
+    - conda-forge::libboost-headers
+    - conda-forge::libboost-python
+    - conda-forge::libboost-python-devel
   run:
-    - fmt
-    - google-cloud-cpp
-    - libgoogle-cloud-all
+    - conda-forge::fmt
+    - conda-forge::spdlog
+    - conda-forge::google-cloud-cpp
+    - conda-forge::libgoogle-cloud-all
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
