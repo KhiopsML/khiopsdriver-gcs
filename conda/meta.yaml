@@ -14,6 +14,12 @@ requirements:
     - cmake
     - ninja
     - {{ compiler('cxx') }}
+    - curl-devel
+    - libgoogle-cloud-all-devel
+  run:
+    - fmt
+    - google-cloud-cpp
+    - libgoogle-cloud-all
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
