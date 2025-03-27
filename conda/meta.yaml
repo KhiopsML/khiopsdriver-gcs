@@ -14,7 +14,7 @@ requirements:
     - cmake
     - ninja
     - {{ compiler('cxx') }}
-    - conda-forge::curl-devel
+    - conda-forge::libcurl
     - conda-forge::libgoogle-cloud-all-devel
     - conda-forge::libboost
     - conda-forge::libboost-devel
