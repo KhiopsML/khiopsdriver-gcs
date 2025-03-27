@@ -92,7 +92,7 @@
               python-version: ${{ matrix.python-version }}
               conda-remove-defaults: true
           - name: Install the khiops-core Conda package (Windows)
-            run: conda install -c conda-forge -c khiops khiops-core
+            run: conda install -c conda-forge -c khiops-dev khiops-core
           - name: Download Conda Package Artifact
             uses: actions/download-artifact@v4
             with:
