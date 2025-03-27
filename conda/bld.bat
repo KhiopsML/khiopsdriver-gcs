@@ -6,7 +6,6 @@ REM "aws-sdk-cpp's buildsystem uses very long paths and may fail on your system.
 REM We recommend moving vcpkg to a short path such as 'C:\src\vcpkg' or using the subst command."
 subst W: %CD% 
 W:
-vcpkg\vcpkg.exe install
 
 REM Configure project
 cmake --fresh -G Ninja -D CMAKE_BUILD_TYPE=Release -B builds/conda -S .

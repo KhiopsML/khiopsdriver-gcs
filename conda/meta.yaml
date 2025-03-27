@@ -17,11 +17,11 @@ requirements:
     - libcurl
     #- libgoogle-cloud-all-devel
     - libgoogle-cloud-storage-devel
-    - libboost
+    #- libboost
     - libboost-devel
     - libboost-headers
-    - libboost-python
-    - libboost-python-devel
+    #- libboost-python
+    #- libboost-python-devel
   run:
     - fmt
     - spdlog
