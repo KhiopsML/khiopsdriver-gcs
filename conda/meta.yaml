@@ -15,13 +15,12 @@ requirements:
     - ninja
     - {{ compiler('cxx') }}
     - libgoogle-cloud-storage-devel
-    - libboost-devel
     - libboost-headers
   host:
-    - libcurl
     - fmt
     - spdlog
     - libgoogle-cloud-storage
+    - libgoogle-cloud
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
