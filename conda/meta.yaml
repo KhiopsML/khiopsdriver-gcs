@@ -14,14 +14,11 @@ requirements:
     - cmake
     - ninja
     - {{ compiler('cxx') }}
-    - libcurl
     - libgoogle-cloud-storage-devel
     - libboost-devel
     - libboost-headers
-    - fmt
-    - spdlog
-    - libgoogle-cloud-storage
-  run:
+  host:
+    - libcurl
     - fmt
     - spdlog
     - libgoogle-cloud-storage
