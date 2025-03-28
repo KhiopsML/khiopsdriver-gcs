@@ -15,17 +15,15 @@ requirements:
     - ninja
     - {{ compiler('cxx') }}
     - libcurl
-    #- libgoogle-cloud-all-devel
     - libgoogle-cloud-storage-devel
-    #- libboost
     - libboost-devel
     - libboost-headers
-    #- libboost-python
-    #- libboost-python-devel
+    - fmt
+    - spdlog
+    - libgoogle-cloud-storage
   run:
     - fmt
     - spdlog
-    #- libgoogle-cloud-cpp
     - libgoogle-cloud-storage
 
 files:
