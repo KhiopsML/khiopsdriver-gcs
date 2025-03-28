@@ -15,6 +15,7 @@ requirements:
     - ninja
     - {{ compiler('cxx') }}
     - libgoogle-cloud-storage-devel
+    - libboost-devel
     - libboost-headers
   host:
     - fmt
