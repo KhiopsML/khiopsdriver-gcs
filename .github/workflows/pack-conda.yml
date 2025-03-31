@@ -31,18 +31,19 @@
             uses: conda-incubator/setup-miniconda@v3
             with:
               miniforge-version: latest
-              python-version: '3.12'
-              channels: conda-forge
+              #auto-update-conda: true
+              #python-version: '3.12'
+              #channels: conda-forge
           - name: Install Dependency Requirements for Building Conda Packages
             run: conda install -y conda-build
 
           # We need MacOS SDK 10.10 to build for macOS Intel
           # See: https://docs.conda.io/projects/conda-build/en/3.21.x/resources/compiler-tools.html#macos-sdk
-          - name: Install Mac OS SDK 10.10
-            if: runner.os == 'macOS'
-            run: |
-              wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
-              sudo tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
+          #- name: Install Mac OS SDK 10.10
+          #  if: runner.os == 'macOS'
+          #  run: |
+          #    wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
+          #    sudo tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
 
           - name: Set the environment variables
             shell: bash
