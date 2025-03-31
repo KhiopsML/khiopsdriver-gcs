@@ -35,6 +35,7 @@
               channels: conda-forge
           - name: Install Dependency Requirements for Building Conda Packages
             run: conda install -y conda-build
+            
           # We need MacOS SDK 10.10 to build for macOS Intel
           # See: https://docs.conda.io/projects/conda-build/en/3.21.x/resources/compiler-tools.html#macos-sdk
           - name: Install Mac OS SDK 10.10
@@ -42,6 +43,12 @@
             run: |
               wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
               sudo tar -zxvf MacOSX10.10.sdk.tar.xz -C /opt
+
+          # On Windows runners, let's ensure to have the Developer Command Prompt environment setup correctly.
+          # As used here the Developer Command Prompt created is targeting x64 and using the default the Windows SDK.
+          - uses: ilammy/msvc-dev-cmd@v1
+            with:
+              toolset: 14.0
 
           - name: Set the environment variables
             shell: bash
