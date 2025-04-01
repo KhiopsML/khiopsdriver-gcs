@@ -92,6 +92,7 @@
             with:
               miniforge-version: latest  # needed for macOS 13
               python-version: '3.12'
+              channels: ./build/conda
               conda-remove-defaults: true
           - name: Install the khiops-core Conda package (Windows)
             run: conda install -c conda-forge khiops-core==10.3.0
@@ -103,10 +104,15 @@
           - name: Install the driver Conda package
             run: |
               conda install --channel ./build/conda khiops-driver-gcs
-              conda install --channel conda-forge --channel ./build/conda khiops-driver-gcs
-          - name: Add  CONDA_PREFIX to shared PATH
+              conda install khiops-driver-gcs
+          - name: Add  CONDA_PREFIX to shared PATH (Windows)
+            if: runner.os == 'Windows'
             run: |
-              echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH         
+              echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH
+          - name: Add Conda environment binary directory to the environment (Linux and
+              MacOS)
+            if: runner.os != 'Windows'
+            run: echo "CONDA_ENV_BIN_DIR=$CONDA_PREFIX/bin" >> $GITHUB_ENV 
           - name: Checkout sources
             uses: actions/checkout@v4
           - name: Test that the executables are installed
