@@ -92,9 +92,8 @@
             with:
               miniforge-version: latest  # needed for macOS 13
               python-version: '3.12'
-              channels: ./build/conda
               conda-remove-defaults: true
-          - name: Install the khiops-core Conda package (Windows)
+          - name: Install the khiops-core Conda package
             run: conda install -c conda-forge khiops-core==10.3.0
           - name: Download Conda Package Artifact
             uses: actions/download-artifact@v4
