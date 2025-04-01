@@ -91,10 +91,10 @@
             uses: conda-incubator/setup-miniconda@v3
             with:
               miniforge-version: latest  # needed for macOS 13
-              python-version: ${{ matrix.python-version }}
+              python-version: '3.12'
               conda-remove-defaults: true
           - name: Install the khiops-core Conda package (Windows)
-            run: conda install -c conda-forge -c khiops-dev khiops-core
+            run: conda install -c conda-forge -c khiops-dev khiops-core==10.3.0
           - name: Download Conda Package Artifact
             uses: actions/download-artifact@v4
             with:
