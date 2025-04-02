@@ -26,7 +26,7 @@ jobs:
       - name: Checkout Sources
         uses: actions/checkout@v4
         with:
-          set-safe-directory: khiopsdriver-gcs
+          set-safe-directory: '/__w/khiopsdriver-gcs/khiopsdriver-gcs'
       - name: Create source archive
         run: |
           scripts/git-archive-all.sh --format tar.gz khiops-driver-gcs.tar.gz 
