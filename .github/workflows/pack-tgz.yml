@@ -22,7 +22,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           apt-get -y update
-          apt-get -y --no-install-recommends install tar gzip git
+          apt-get -y --no-install-recommends install git ca-certificates
       - name: Checkout Sources
         uses: actions/checkout@v4
       - name: Create source archive
