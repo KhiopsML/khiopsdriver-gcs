@@ -25,10 +25,9 @@ jobs:
           apt-get -y --no-install-recommends install git ca-certificates
       - name: Checkout Sources
         uses: actions/checkout@v4
-        with:
-          set-safe-directory: '/__w/khiopsdriver-gcs/khiopsdriver-gcs'
       - name: Create source archive
         run: |
+          git config --global --add safe.directory /__w/khiopsdriver-gcs/khiopsdriver-gcs
           scripts/git-archive-all.sh --format tar.gz khiops-driver-gcs.tar.gz 
       - name: Upload packages to the release
         uses: ncipollo/release-action@v1.14.0
