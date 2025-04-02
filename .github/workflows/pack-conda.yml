@@ -156,11 +156,11 @@
               if [[ "$ANACONDA_CHANNEL" == "khiops" ]]
               then
                 anaconda --token "${{ secrets.KHIOPS_ANACONDA_CHANNEL_TOKEN }}" upload \
-                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.tar.bz2
+                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.zip
               # For the dev channel: upload with forcing
               else
                 anaconda --token "${{ secrets.KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN }}" upload \
-                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.tar.bz2
+                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.zip
               fi
           - name: Extract package version
             run: |
