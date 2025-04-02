@@ -102,7 +102,7 @@
           - name: Install the driver Conda package
             run: |
               conda install --channel ./build/conda khiops-driver-gcs
-              conda install khiops-driver-gcs
+              conda install libgoogle-cloud-storage spdlog
           - name: Add  CONDA_PREFIX to shared PATH
             run: |
               echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH
