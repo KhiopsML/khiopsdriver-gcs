@@ -2,7 +2,9 @@
 name: Source package
 on:
   workflow_dispatch:
-
+  push:
+    branches:
+      - '**'
 jobs:
   build:
     runs-on: ubuntu-latest
