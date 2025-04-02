@@ -4,18 +4,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Release is only executed on tags
-  release:
-    #if: github.ref_type == 'tag'
+  build:
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        setup:
-          - {os: ubuntu-22.04, os-family: linux-x64}
-    runs-on: ${{ matrix.setup.os }}
+
+    container: ubuntu-latest
     steps:
       - name: Checkout Sources
         uses: actions/checkout@v4
