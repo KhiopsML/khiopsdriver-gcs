@@ -74,7 +74,7 @@ runs:
       if: failure()
       uses: actions/upload-artifact@v3
       with:
-        name: test-results-${{ inputs.os-decription}}
+        name: test-results-${{ inputs.os-decription }}
         retention-days: 7
         path: |-
           results/
