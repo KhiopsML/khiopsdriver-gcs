@@ -11,15 +11,22 @@ build:
   number: 0
 requirements:
   build:
+    - {{ compiler('cxx') }}
     - cmake
     - ninja
-    - {{ compiler('cxx') }}
+    - libgoogle-cloud-storage-devel
+    - libboost-devel
+    - libboost-headers
+  host:
+    - fmt
+    - spdlog
+    - libgoogle-cloud-storage
+    - libgoogle-cloud
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
-  - lib/libkhiopsdriver_file_gcs*.dylib [osx]
+  - lib/libkhiopsdriver_file_gcs.dylib [osx]
   - lib/*.dll [win]
-  - bin/*.dll [win]
 
 about:
   home: https://khiops.org

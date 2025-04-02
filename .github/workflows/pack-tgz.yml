@@ -1,0 +1,44 @@
+---
+name: Source package
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04']
+    container: ${{ matrix.image }}
+
+    steps:
+      - name: Install packages
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          apt-get -y update
+          apt-get -y --no-install-recommends install git ca-certificates
+      - name: Checkout Sources
+        uses: actions/checkout@v4
+      - name: Create source archive
+        run: |
+          git config --global --add safe.directory /__w/khiopsdriver-gcs/khiopsdriver-gcs
+          scripts/git-archive-all.sh --format tar.gz khiops-driver-gcs.tar.gz 
+      - name: Upload packages to the release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          allowUpdates: true
+          artifacts: '*.tar.gz'
+          body: |
+            **This release is for testing purposes only and there is no support for it.**
+            **Go to https://khiops.org to install the latest supported version.**
+          draft: false
+          makeLatest: false
+          prerelease: true
+          updateOnlyUnreleased: true
