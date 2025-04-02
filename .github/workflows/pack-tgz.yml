@@ -11,8 +11,12 @@ jobs:
     defaults:
       run:
         shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04']
+    container: ${{ matrix.image }}
 
-    container: ubuntu-latest
     steps:
       - name: Checkout Sources
         uses: actions/checkout@v4
