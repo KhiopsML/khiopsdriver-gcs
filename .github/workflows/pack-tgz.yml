@@ -18,6 +18,11 @@ jobs:
     container: ${{ matrix.image }}
 
     steps:
+      - name: Install packages
+        run: |
+          export DEBIAN_FRONTEND="noninteractive"
+          apt-get -y update
+          apt-get -y --no-install-recommends tar gzip
       - name: Checkout Sources
         uses: actions/checkout@v4
       - name: Create source archive
