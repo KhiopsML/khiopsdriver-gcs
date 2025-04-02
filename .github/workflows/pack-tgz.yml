@@ -2,11 +2,10 @@
 name: Source package
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - '**'
+
 jobs:
-  build:
+  release:
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write
