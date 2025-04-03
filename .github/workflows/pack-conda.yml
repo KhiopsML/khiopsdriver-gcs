@@ -186,6 +186,7 @@
             uses: ncipollo/release-action@v1
             with:
               allowUpdates: true
+              artifacts: 'khiops-driver-gcs-*.zip'
               body: |
                 **This release is for testing purposes only and there is no support for it.**
                 **Go to https://khiops.org to install the latest supported version.**
@@ -193,4 +194,3 @@
               makeLatest: false
               prerelease: true
               updateOnlyUnreleased: true
-    

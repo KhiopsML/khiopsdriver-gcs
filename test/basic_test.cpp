@@ -31,7 +31,9 @@ TEST(GCSDriverTest, GetDriverName) {
   ASSERT_STREQ(driver_getDriverName(), "GCS driver");
 }
 
-TEST(GCSDriverTest, GetVersion) { ASSERT_STREQ(driver_getVersion(), "0.1.0"); }
+TEST(GCSDriverTest, GetVersion) {
+  ASSERT_STREQ(driver_getVersion(), DRIVER_VERSION);
+}
 
 TEST(GCSDriverTest, GetScheme) { ASSERT_STREQ(driver_getScheme(), "gs"); }
 
