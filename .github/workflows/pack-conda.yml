@@ -148,11 +148,7 @@
             run: conda install -y anaconda-client conda-index
           - name: Reindex the package directory
             run: |
-              # debug
-              ls -l ./build/conda
-              ls -l ./build/conda/*
-              # end debug
-              python -m conda_index ./build/conda
+              python -m conda_index --verbose ./build/conda
           - name: Upload the packages to anaconda.org
             run: |
               # Set the anaconda.org channel
@@ -162,11 +158,11 @@
               if [[ "$ANACONDA_CHANNEL" == "khiops" ]]
               then
                 anaconda --token "${{ secrets.KHIOPS_ANACONDA_CHANNEL_TOKEN }}" upload \
-                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.zip
+                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.conda
               # For the dev channel: upload with forcing
               else
                 anaconda --token "${{ secrets.KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN }}" upload \
-                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.zip
+                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.conda
               fi
           - name: Extract package version
             run: |
