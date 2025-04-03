@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "gcsplugin.h"
 #include "path_helper.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -209,7 +210,7 @@ void *get_shared_library_function(void *library_handle,
 TEST(GCSPluginTest, GetVersion) {
   auto library_handle = init_plugin();
 
-  ASSERT_STREQ(ptr_driver_getVersion(), "0.1.0");
+  ASSERT_STREQ(ptr_driver_getVersion(), DRIVER_VERSION);
 
   deinit_plugin(library_handle);
 }

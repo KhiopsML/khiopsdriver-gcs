@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include <google/cloud/storage/client.h>
 #include <google/cloud/storage/object_write_stream.h>
 
 #if defined(__unix__) || defined(__unix) ||                                    \
