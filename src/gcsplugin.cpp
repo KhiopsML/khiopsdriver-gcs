@@ -424,7 +424,8 @@ int driver_connect() {
   else
     spdlog::set_level(spdlog::level::info);
 
-  spdlog::debug("Connect {}", loglevel);
+  spdlog::debug("Connect driver {} version {} loglevel", driver_name, version,
+                loglevel);
 
   // Initialize variables from environment
   globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
@@ -557,9 +558,14 @@ int driver_dirExists(const char *sFilePathName) {
   return kTrue;
 }
 
-gc::StatusOr<std::string> ReadHeader(const std::string &bucket_name,
-                                     const std::string &filename) {
-  gcs::ObjectReadStream stream = client.ReadObject(bucket_name, filename);
+#define KHIOPS_MAX_HEADERLENGTH 8 * 1024 * 1024
+// Khiops allows header length to be max 8MB
+gc::StatusOr<std::string>
+ReadHeader(const std::string &bucket_name, const std::string &filename,
+           int64_t max_length = KHIOPS_MAX_HEADERLENGTH) {
+  spdlog::debug("ReadHeader {} max_length {}", filename, max_length);
+  gcs::ObjectReadStream stream =
+      client.ReadObject(bucket_name, filename, gcs::ReadRange(0, max_length));
   std::string line;
   std::getline(stream, line, '\n');
   if (stream.bad()) {
@@ -574,6 +580,71 @@ gc::StatusOr<std::string> ReadHeader(const std::string &bucket_name,
   return line;
 }
 
+// Speed up common header detection by comparing the header only in the first
+// and last few files plus some files randomly chosen from the middle of the
+// complete list.
+std::set<std::string>
+SelectObjectsSubset(std::vector<std::string> const &all_objects) {
+  size_t total = all_objects.size();
+  if (total == 0)
+    return {};
+
+  size_t first_count = std::min<size_t>(5, total);
+  size_t last_count = total < 10 ? std::max<size_t>(0, total - first_count) : 5;
+
+  size_t used = first_count + last_count;
+  size_t random_count = 10;
+  if (total < 20) {
+    if (total > used) {
+      random_count = total - used;
+    } else {
+      random_count = 0;
+    }
+  }
+
+  std::set<std::string> result;
+
+  // Add first elements
+  for (size_t i = 0; i < first_count; ++i) {
+    result.insert(all_objects[i]);
+  }
+
+  // Add last elements
+  if (last_count > 0) {
+    for (size_t i = total - last_count; i < total; ++i) {
+      result.insert(all_objects[i]);
+    }
+  }
+
+  // Prepare remaining list for random selection
+  std::vector<std::string> remaining;
+  size_t start_random = first_count;
+  size_t end_random = total - last_count;
+  if (start_random < end_random) {
+    remaining.insert(remaining.end(), all_objects.begin() + start_random,
+                     all_objects.begin() + end_random);
+  }
+
+  // Random selection without duplicate
+  if (random_count > 0 && !remaining.empty()) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::shuffle(remaining.begin(), remaining.end(), gen);
+
+    size_t to_take = std::min(random_count, remaining.size());
+    for (size_t i = 0; i < to_take; ++i) {
+      result.insert(remaining[i]);
+    }
+  }
+
+  spdlog::debug("Selected objects for header detection");
+  for (auto const &name : result) {
+    spdlog::debug(" {}", name);
+  }
+
+  return result;
+}
+
 gc::StatusOr<long long> GetFileSize(const std::string &bucket_name,
                                     const std::string &object_name) {
   auto maybe_list = ListObjects(bucket_name, object_name);
@@ -582,18 +653,25 @@ gc::StatusOr<long long> GetFileSize(const std::string &bucket_name,
   auto list_it = maybe_list->begin();
   const auto list_end = maybe_list->end();
 
-  const auto first_object_metadata = std::move(*list_it);
-  long long total_size = static_cast<long long>(first_object_metadata->size());
+  std::vector<std::string> filenames;
+  std::vector<long long> filesizes;
+  for (; list_it != list_end; list_it++) {
+    RETURN_STATUS_ON_ERROR(*list_it);
+    filenames.push_back((*list_it)->name());
+    filesizes.push_back(static_cast<long long>((*list_it)->size()));
+  }
+  // Create set of filenames considered for common header detection
+  std::set<std::string> selected = SelectObjectsSubset(filenames);
 
-  list_it++;
-  if (list_end == list_it) {
+  long long total_size = filesizes[0];
+  if (filenames.size() == 1) {
     // unique file
     return total_size;
   }
 
   // multifile
   // check headers
-  auto maybe_header = ReadHeader(bucket_name, first_object_metadata->name());
+  auto maybe_header = ReadHeader(bucket_name, filenames[0]);
   RETURN_STATUS_ON_ERROR(maybe_header);
 
   const std::string &header = *maybe_header;
@@ -601,11 +679,11 @@ gc::StatusOr<long long> GetFileSize(const std::string &bucket_name,
   int header_to_subtract{0};
   bool same_header{true};
 
-  for (; list_it != list_end; list_it++) {
-    RETURN_STATUS_ON_ERROR(*list_it);
+  for (unsigned long int i = 1; i < filenames.size(); i++) {
 
-    if (same_header) {
-      auto maybe_curr_header = ReadHeader(bucket_name, (*list_it)->name());
+    if (same_header && selected.find(filenames[i]) != selected.end()) {
+      auto maybe_curr_header =
+          ReadHeader(bucket_name, filenames[i], header_size);
       RETURN_STATUS_ON_ERROR(maybe_curr_header);
 
       same_header = (header == *maybe_curr_header);
@@ -613,7 +691,7 @@ gc::StatusOr<long long> GetFileSize(const std::string &bucket_name,
         header_to_subtract++;
       }
     }
-    total_size += static_cast<long long>((*list_it)->size());
+    total_size += filesizes[i];
   }
 
   if (!same_header) {
@@ -644,33 +722,40 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
   auto maybe_list = ListObjects(bucketname, objectname);
   RETURN_STATUS_ON_ERROR(maybe_list);
 
-  auto list_it = maybe_list->begin();
   const auto list_end = maybe_list->end();
 
-  filenames.push_back((*list_it)->name());
-  cumulative_sizes.push_back(static_cast<long long>((*list_it)->size()));
+  std::vector<long long> filesizes;
+  auto list_it = maybe_list->begin();
+  for (; list_it != list_end; list_it++) {
+    RETURN_STATUS_ON_ERROR(*list_it);
+    filenames.push_back((*list_it)->name());
+    filesizes.push_back(static_cast<long long>((*list_it)->size()));
+  }
+  // Create set of filenames considered for common header detection
+  std::set<std::string> selected = SelectObjectsSubset(filenames);
+
+  cumulative_sizes.push_back(filesizes[0]);
   long long common_header_size{0};
 
-  list_it++;
-  if (list_end != list_it) {
+  if (filenames.size() > 1) {
     // multifile
     // check headers
-    auto maybe_header = ReadHeader(bucketname, filenames.front());
+    auto maybe_header = ReadHeader(bucketname, filenames[0]);
     RETURN_STATUS_ON_ERROR(maybe_header);
 
     const std::string &header = *maybe_header;
     const long long header_size = static_cast<long long>(header.size());
     bool same_header{true};
 
-    for (; list_it != list_end; list_it++) {
+    for (long unsigned int i = 1; i < filenames.size(); i++) {
       RETURN_STATUS_ON_ERROR(*list_it);
 
-      filenames.push_back((*list_it)->name());
       cumulative_sizes.push_back(cumulative_sizes.back() +
-                                 static_cast<long long>((*list_it)->size()));
+                                 static_cast<long long>(filesizes[i]));
 
-      if (same_header) {
-        auto maybe_curr_header = ReadHeader(bucketname, filenames.back());
+      if (same_header && selected.find(filenames[i]) != selected.end()) {
+        auto maybe_curr_header =
+            ReadHeader(bucketname, filenames[i], header_size);
         RETURN_STATUS_ON_ERROR(maybe_curr_header);
         same_header = (header == *maybe_curr_header);
       }
