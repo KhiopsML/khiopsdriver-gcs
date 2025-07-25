@@ -282,8 +282,10 @@ std::string GetEnvironmentVariableOrDefault(const std::string &variable_name,
   }
 
   const std::string low_key = ToLower(variable_name);
-  if (low_key.find("token") || low_key.find("password") ||
-      low_key.find("key") || low_key.find("secret")) {
+  if (low_key.find("token") != std::string::npos ||
+      low_key.find("password") != std::string::npos ||
+      low_key.find("key") != std::string::npos ||
+      low_key.find("secret") != std::string::npos) {
     spdlog::debug("No {} specified, using **REDACTED** as default.",
                   variable_name);
   } else {
