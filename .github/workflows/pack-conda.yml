@@ -151,11 +151,11 @@
               # Set the anaconda.org channel
               ANACONDA_CHANNEL="${{ inputs.release-channel || 'khiops-dev' }}"
     
-              # For the release channel: upload without forcing
+              # For the release channel: upload with forcing
               if [[ "$ANACONDA_CHANNEL" == "khiops" ]]
               then
                 anaconda --token "${{ secrets.KHIOPS_ANACONDA_CHANNEL_TOKEN }}" upload \
-                  --user "$ANACONDA_CHANNEL" ./build/conda/*/*.conda
+                  --user "$ANACONDA_CHANNEL" --force ./build/conda/*/*.conda
               # For the dev channel: upload with forcing
               else
                 anaconda --token "${{ secrets.KHIOPS_DEV_ANACONDA_CHANNEL_TOKEN }}" upload \
