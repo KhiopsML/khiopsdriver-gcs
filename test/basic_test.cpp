@@ -10,7 +10,7 @@
 #include <memory>
 #include <sstream>
 
-#include <boost/process/environment.hpp>
+#include <boost/process/v1/environment.hpp>
 
 #include <boost/uuid/uuid.hpp>            // uuid class
 #include <boost/uuid/uuid_generators.hpp> // generators
@@ -379,15 +379,17 @@ MakeLOR(const std::string &bucket_name, const std::vector<std::string> &names,
 TEST_F(GCSDriverTestFixture, FileExists) {
   CheckInvalidURIs(driver_fileExists, kFalse);
 
-  EXPECT_CALL(*mock_client, ListObjects)
-      .WillOnce(Return<LOReturnType>(
-          MakeLOR("mock_bucket", {"mock_name"}, {10}))) // file exists
-      .WillOnce(Return<LOReturnType>(
-          gcs::internal::ListObjectsResponse{})) // no file found
-      .WillOnce(Return<LOReturnType>({}));       // return error
-
+  ON_CALL(*mock_client, ListObjects)
+      .WillByDefault(Return<LOReturnType>(
+          MakeLOR("mock_bucket", {"mock_name"}, {10}))); // file exists
   ASSERT_EQ(driver_fileExists("gs://mock_bucket/mock_name"), kTrue);
+  ON_CALL(*mock_client, ListObjects)
+      .WillByDefault(Return<LOReturnType>(
+          gcs::internal::ListObjectsResponse{})); // no file found
   ASSERT_EQ(driver_fileExists("gs://mock_bucket/no_match"), kFalse);
+  ON_CALL(*mock_client, ListObjects)
+      .WillByDefault(Return<LOReturnType>({})); // return error
+
   ASSERT_EQ(driver_fileExists("gs://mock_bucket/error"), kFalse);
 }
 
@@ -400,8 +402,8 @@ TEST_F(GCSDriverTestFixture, GetFileSize) {
   CheckInvalidURIs(driver_getFileSize, -1);
 
   auto prepare_list_objects = [&](LOReturnType &&result) {
-    EXPECT_CALL(*mock_client, ListObjects)
-        .WillOnce(Return<LOReturnType>(std::move(result)));
+    ON_CALL(*mock_client, ListObjects)
+        .WillByDefault(Return<LOReturnType>(std::move(result)));
   };
 
   // dir passed as argument, not a file. same behaviour as "no file found"
@@ -1343,8 +1345,8 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_OK) {
 
   constexpr const char *upload_id = "mock_upload_id";
 
-  EXPECT_CALL(*mock_client, CreateResumableUpload)
-      .WillOnce(Return(CreateResumableUploadResponse{upload_id}));
+  ON_CALL(*mock_client, CreateResumableUpload)
+      .WillByDefault(Return(CreateResumableUploadResponse{upload_id}));
 
   gcsplugin::WriteFile expected;
   expected.bucketname_ = mock_bucket;
