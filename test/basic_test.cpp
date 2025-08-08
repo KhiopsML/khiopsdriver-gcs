@@ -398,12 +398,24 @@ TEST_F(GCSDriverTestFixture, DirExists) {
   ASSERT_EQ(driver_dirExists("any_name"), kTrue);
 }
 
+// lambda to simulate the answer to a reading request
+auto simulate_read = [](void *buf, size_t n, const char *content,
+                        size_t content_size, size_t &offset) {
+  const size_t l = std::min(n, content_size - offset);
+  std::memcpy(buf, content + offset, l);
+  offset += l;
+  return gcs::internal::ReadSourceResult{
+      l, gcs::internal::HttpResponse{200, {}, {}}};
+};
+
 TEST_F(GCSDriverTestFixture, GetFileSize) {
+  EXPECT_CALL(*mock_client, ListObjects).Times(2);
+
   CheckInvalidURIs(driver_getFileSize, -1);
 
   auto prepare_list_objects = [&](LOReturnType &&result) {
-    ON_CALL(*mock_client, ListObjects)
-        .WillByDefault(Return<LOReturnType>(std::move(result)));
+    EXPECT_CALL(*mock_client, ListObjects)
+        .WillOnce(Return<LOReturnType>(std::move(result)));
   };
 
   // dir passed as argument, not a file. same behaviour as "no file found"
@@ -420,18 +432,10 @@ TEST_F(GCSDriverTestFixture, GetFileSize) {
       MakeLOR("mock_bucket", {"mock_object"}, {expected_size}));
   ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"),
             static_cast<long long>(expected_size));
+}
 
-  // tests for multifile cases
-
-  // lambda to simulate the answer to a reading request
-  auto simulate_read = [](void *buf, size_t n, const char *content,
-                          size_t content_size, size_t &offset) {
-    const size_t l = std::min(n, content_size - offset);
-    std::memcpy(buf, content + offset, l);
-    offset += l;
-    return gcs::internal::ReadSourceResult{
-        l, gcs::internal::HttpResponse{200, {}, {}}};
-  };
+// tests for multifile cases
+TEST_F(GCSDriverTestFixture, GetFileSizeMultifile) {
 
   // lambda to generate the read simulator lambda, parameterised by content,
   // size and offset
@@ -440,6 +444,11 @@ TEST_F(GCSDriverTestFixture, GetFileSize) {
     return [&, content, size](void *buf, size_t n) {
       return simulate_read(buf, n, content, size, offset);
     };
+  };
+
+  auto prepare_list_objects = [&](LOReturnType &&result) {
+    EXPECT_CALL(*mock_client, ListObjects)
+        .WillOnce(Return<LOReturnType>(std::move(result)));
   };
 
   // multifile, 2 files, single header
@@ -491,133 +500,6 @@ TEST_F(GCSDriverTestFixture, GetFileSize) {
   ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"),
             expected_size_common_header);
 
-  // multifile, 30 files, same header
-
-  constexpr size_t expected_size_common_header_30{mock_content_1_size * 15 +
-                                                  mock_content_3_size * 15 -
-                                                  mock_header_size * 29};
-
-  size_t offset_30_1{0};
-  size_t offset_30_2{0};
-  size_t offset_30_3{0};
-  size_t offset_30_4{0};
-  size_t offset_30_5{0};
-  size_t offset_30_6{0};
-  size_t offset_30_7{0};
-  size_t offset_30_8{0};
-  size_t offset_30_9{0};
-  size_t offset_30_10{0};
-  size_t offset_30_11{0};
-  size_t offset_30_12{0};
-  size_t offset_30_13{0};
-  size_t offset_30_14{0};
-  size_t offset_30_15{0};
-  size_t offset_30_16{0};
-  size_t offset_30_17{0};
-  size_t offset_30_18{0};
-  size_t offset_30_19{0};
-  size_t offset_30_20{0};
-  size_t offset_30_21{0};
-  size_t offset_30_22{0};
-  size_t offset_30_23{0};
-  size_t offset_30_24{0};
-  size_t offset_30_25{0};
-  size_t offset_30_26{0};
-  size_t offset_30_27{0};
-  size_t offset_30_28{0};
-  size_t offset_30_29{0};
-  size_t offset_30_30{0};
-
-  prepare_list_objects(
-      MakeLOR("mock_bucket",
-              {"mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3", "mock_file_1", "mock_file_3",
-               "mock_file_1", "mock_file_3"
-
-              },
-              {
-                  mock_content_1_size, mock_content_3_size, mock_content_1_size,
-                  mock_content_3_size, mock_content_1_size, mock_content_3_size,
-                  mock_content_1_size, mock_content_3_size, mock_content_1_size,
-                  mock_content_3_size, mock_content_1_size, mock_content_3_size,
-                  mock_content_1_size, mock_content_3_size, mock_content_1_size,
-                  mock_content_3_size, mock_content_1_size, mock_content_3_size,
-                  mock_content_1_size, mock_content_3_size, mock_content_1_size,
-                  mock_content_3_size, mock_content_1_size, mock_content_3_size,
-                  mock_content_1_size, mock_content_3_size, mock_content_1_size,
-                  mock_content_3_size, mock_content_1_size, mock_content_3_size,
-              }));
-
-  EXPECT_CALL(*mock_client, ReadObject)
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_1, mock_content_1_size, offset_30_1)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_3, mock_content_3_size, offset_30_2)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_1, mock_content_1_size, offset_30_3)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_3, mock_content_3_size, offset_30_4)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_1, mock_content_1_size, offset_30_5)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_3, mock_content_3_size, offset_30_6)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_1, mock_content_1_size, offset_30_7)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_3, mock_content_3_size, offset_30_8)))
-      .WillOnce(READ_MOCK_LAMBDA(
-          generate_simulator(mock_content_1, mock_content_1_size, offset_30_9)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_10)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_11)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_12)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_13)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_14)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_15)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_16)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_17)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_18)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_19)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_20)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_21)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_22)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_23)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_24)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_25)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_26)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_27)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_28)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_1, mock_content_1_size, offset_30_29)))
-      .WillOnce(READ_MOCK_LAMBDA(generate_simulator(
-          mock_content_3, mock_content_3_size, offset_30_30)));
-
-  ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"),
-            expected_size_common_header_30);
-
   // multifile, with a read failure on first file
 
   offset_1 = 0;
@@ -640,6 +522,123 @@ TEST_F(GCSDriverTestFixture, GetFileSize) {
       .WillOnce(READ_MOCK_LAMBDA_FAILURE);
 
   ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"), -1);
+}
+
+TEST_F(GCSDriverTestFixture, GetFileSizeMultifileSampling) {
+
+  auto generate_read_from_start_simulator = [&](const char *content,
+                                                size_t size) {
+    return [&, content, size](void *buf, size_t n) {
+      size_t offset{0};
+      return simulate_read(buf, n, content, size, offset);
+    };
+  };
+
+  auto prepare_list_objects = [&](LOReturnType &&result) {
+    EXPECT_CALL(*mock_client, ListObjects)
+        .WillOnce(Return<LOReturnType>(std::move(result)));
+  };
+
+  // multifile, 30 files, same header
+
+  constexpr auto mock_content_1 = "mock_header\nmock_content_1";
+  constexpr size_t mock_header_size{
+      12}; // std::strlen("mock_header\n")    includes end of line char
+  constexpr size_t mock_content_1_size{26}; // std::strlen(mock_content_1)
+
+  constexpr size_t expected_size_common_header_30{mock_content_1_size * 30 -
+                                                  mock_header_size * 29};
+
+  prepare_list_objects(
+      MakeLOR("mock_bucket",
+              {"mock_file_1",  "mock_file_2",  "mock_file_3",  "mock_file_4",
+               "mock_file_5",  "mock_file_6",  "mock_file_7",  "mock_file_8",
+               "mock_file_9",  "mock_file_10", "mock_file_11", "mock_file_12",
+               "mock_file_13", "mock_file_14", "mock_file_15", "mock_file_16",
+               "mock_file_17", "mock_file_18", "mock_file_19", "mock_file_20",
+               "mock_file_21", "mock_file_22", "mock_file_23", "mock_file_24",
+               "mock_file_25", "mock_file_26", "mock_file_27", "mock_file_28",
+               "mock_file_29", "mock_file_30"},
+              {
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+                  mock_content_1_size, mock_content_1_size, mock_content_1_size,
+              }));
+
+  // We expect the header detection routine to actually read data from 20 files
+  // out of the full list
+  EXPECT_CALL(*mock_client, ReadObject)
+      .Times(20)
+      .WillRepeatedly(READ_MOCK_LAMBDA(generate_read_from_start_simulator(
+          mock_content_1, mock_content_1_size)));
+
+  ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"),
+            expected_size_common_header_30);
+
+  // multifile, 30 files, with zero length files causing header detection
+  // algorithm to classify file as "no common header"
+
+  constexpr size_t expected_size_different_lenghts_30{mock_content_1_size * 18};
+
+  prepare_list_objects(
+      MakeLOR("mock_bucket",
+              {"mock_file_1",  "mock_file_2",  "mock_file_3",  "mock_file_4",
+               "mock_file_5",  "mock_file_6",  "mock_file_7",  "mock_file_8",
+               "mock_file_9",  "mock_file_10", "mock_file_11", "mock_file_12",
+               "mock_file_13", "mock_file_14", "mock_file_15", "mock_file_16",
+               "mock_file_17", "mock_file_18", "mock_file_19", "mock_file_20",
+               "mock_file_21", "mock_file_22", "mock_file_23", "mock_file_24",
+               "mock_file_25", "mock_file_26", "mock_file_27", "mock_file_28",
+               "mock_file_29", "mock_file_30"},
+              {
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+                  mock_content_1_size,
+              }));
+
+  // We expect the header detection routine to actually read data from at least
+  // the 5 first files out of the full list
+  EXPECT_CALL(*mock_client, ReadObject)
+      .Times(testing::AtLeast(5))
+      .WillRepeatedly(READ_MOCK_LAMBDA(generate_read_from_start_simulator(
+          mock_content_1, mock_content_1_size)));
+
+  ASSERT_EQ(driver_getFileSize("gs://mock_bucket/mock_object"),
+            expected_size_different_lenghts_30);
 }
 
 TEST_F(GCSDriverTestFixture, Open_InvalidURIs_AllModes) {
