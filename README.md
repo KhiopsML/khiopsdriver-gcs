@@ -13,7 +13,7 @@ Or, if you have used your system package manager, you will have to install the d
 
     CODENAME=$(lsb_release -cs) && \
     TEMP_DEB="$(mktemp)" && \
-    wget -O "$TEMP_DEB" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.11/khiops-driver-gcs_0.0.11-1-${CODENAME}.amd64.deb" && \
+    wget -O "$TEMP_DEB" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.14/khiops-driver-gcs_0.0.14-1-${CODENAME}.amd64.deb" && \
     sudo dpkg -i "$TEMP_DEB && \
     rm -f $TEMP_DEB
 
@@ -22,7 +22,7 @@ or if using Rocky linux, do this:
     sudo yum update -y && sudo yum install wget -y && \
     CENTOS_VERSION=$(rpm -E %{rhel}) && \
     TEMP_RPM="$(mktemp).rpm" && \
-    wget -O "$TEMP_RPM" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.11/khiops-driver-gcs_0.0.11-1.el${CENTOS_VERSION}.x86_64.rpm" && \
+    wget -O "$TEMP_RPM" "https://github.com/KhiopsML/khiopsdriver-gcs/releases/download/0.0.14/khiops-driver-gcs_0.0.14-1.el${CENTOS_VERSION}.x86_64.rpm" && \
     sudo yum install "$TEMP_RPM" -y && \
     rm -f $TEMP_RPM
 
@@ -32,10 +32,10 @@ You can check that the driver is installed propery by running
 
 You should see an output similar to this:
 
-    Khiops 10.2.4
+    Khiops 10.3.0
 
     Drivers:
-        'GCS driver' for URI scheme 'gs'
+	    GCS driver (0.0.14) for URI scheme 'gs'
     Environment variables:
         None
     Internal environment variables:

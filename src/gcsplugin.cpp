@@ -38,6 +38,7 @@ constexpr const char *driver_scheme = "gs";
 // ref https://github.com/googleapis/google-cloud-cpp/issues/2657
 // Default value below can be overriden by setting GCS_PREFERRED_BUFFER_SIZE
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
+constexpr int failure_timeout = 30; // 30s
 
 bool bIsConnected = false;
 
@@ -432,7 +433,13 @@ int driver_connect() {
   // Initialize variables from environment
   globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
 
-  gc::Options options{};
+  // Set options with timeout (e.g., 30 seconds)
+  auto options =
+      gc::Options{}
+          .set<gcs::RetryPolicyOption>(
+              gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
+          .set<gcs::TransferStallTimeoutOption>(
+              std::chrono::seconds(failure_timeout));
 
   // Add project ID if defined
   std::string project =
@@ -683,14 +690,25 @@ gc::StatusOr<long long> GetFileSize(const std::string &bucket_name,
 
   for (unsigned long int i = 1; i < filenames.size(); i++) {
 
-    if (same_header && selected.find(filenames[i]) != selected.end()) {
-      auto maybe_curr_header =
-          ReadHeader(bucket_name, filenames[i], header_size);
-      RETURN_STATUS_ON_ERROR(maybe_curr_header);
+    if (same_header) {
+      if (selected.find(filenames[i]) != selected.end()) {
+        // Actually verify file contents
+        auto maybe_curr_header =
+            ReadHeader(bucket_name, filenames[i], header_size);
+        RETURN_STATUS_ON_ERROR(maybe_curr_header);
 
-      same_header = (header == *maybe_curr_header);
-      if (same_header) {
-        header_to_subtract++;
+        same_header = (header == *maybe_curr_header);
+        if (same_header) {
+          header_to_subtract++;
+        }
+      } else {
+        // Only check filesize
+        spdlog::debug("Skip header detect {} {} expect min {}", filenames[i],
+                      filesizes[i], header_size);
+        same_header = (header_size <= filesizes[i]);
+        if (same_header) {
+          header_to_subtract++;
+        }
       }
     }
     total_size += filesizes[i];
@@ -755,11 +773,19 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
       cumulative_sizes.push_back(cumulative_sizes.back() +
                                  static_cast<long long>(filesizes[i]));
 
-      if (same_header && selected.find(filenames[i]) != selected.end()) {
-        auto maybe_curr_header =
-            ReadHeader(bucketname, filenames[i], header_size);
-        RETURN_STATUS_ON_ERROR(maybe_curr_header);
-        same_header = (header == *maybe_curr_header);
+      if (same_header) {
+        if (selected.find(filenames[i]) != selected.end()) {
+          // Actually verify file contents
+          auto maybe_curr_header =
+              ReadHeader(bucketname, filenames[i], header_size);
+          RETURN_STATUS_ON_ERROR(maybe_curr_header);
+          same_header = (header == *maybe_curr_header);
+        } else {
+          // Only check filesize
+          spdlog::debug("Skip header detect {} {} expect min {}", filenames[i],
+                        filesizes[i], header_size);
+          same_header = (header_size <= filesizes[i]);
+        }
       }
     }
 
