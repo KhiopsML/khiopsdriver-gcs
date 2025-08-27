@@ -80,7 +80,8 @@ set_target_properties(
   khiopsdriver_file_gcs
   PROPERTIES PREFIX "lib"
              SOVERSION ${PROJECT_VERSION_MAJOR}
-             VERSION ${PROJECT_VERSION})
+             VERSION ${PROJECT_VERSION}
+             WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 target_compile_options(
   khiopsdriver_file_gcs
