@@ -102,8 +102,8 @@ add_subdirectory(test)
 install(
   TARGETS khiopsdriver_file_gcs
   LIBRARY DESTINATION lib
-  ARCHIVE # lib on windows
-  RUNTIME # dll on windows
+  ARCHIVE DESTINATION lib # lib on windows
+  RUNTIME DESTINATION lib # dll on windows
 )
 
 set(CPACK_PACKAGE_VENDOR Orange)
