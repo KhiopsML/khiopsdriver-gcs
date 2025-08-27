@@ -164,9 +164,10 @@
           - name: Extract package version
             run: |
               PKG_VERSION=$(\
-                  conda search --override-channels --channel ./build/conda/ khiops-driver-gcs \
+                  conda search --override-channels --channel "$ANACONDA_CHANNEL" khiops-driver-gcs \
                     | awk '!/#|channels/ {print $2}' \
                     | sort -u \
+                    | tail -1 \
               )
               echo "PKG_VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
           - name: Create the release zip archive

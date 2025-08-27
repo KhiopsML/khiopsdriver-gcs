@@ -125,4 +125,5 @@ jobs:
             builds/ninja-multi-vcpkg/lib/*.dylib
             builds/ninja-multi-vcpkg/lib/*.so
             builds/ninja-multi-vcpkg/bin/*.dll
+            builds/ninja-multi-vcpkg/bin/*.lib
           if-no-files-found: ignore
