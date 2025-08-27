@@ -18,4 +18,4 @@ mkdir %PREFIX%\bin
 mkdir %PREFIX%\lib
 
 REM Copy the libs for the driver package
-cmake --install builds\conda --prefix $PREFIX
+cmake --install builds\conda --prefix %PREFIX%
