@@ -99,9 +99,8 @@ if(WIN32)
   set_target_properties(
     khiopsdriver_file_gcs
     PROPERTIES # Override or add Windows-specific properties
-               RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs"
-               ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs"
-               WINDOWS_EXPORT_ALL_SYMBOLS ON)
+               RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs" ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs")
+  # WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 target_compile_options(
