@@ -101,7 +101,6 @@ if(WIN32)
     PROPERTIES # Override or add Windows-specific properties
                RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs"
                ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs"
-               MSVC_RUNTIME_LIBRARY MultiThreaded
                WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
