@@ -76,7 +76,11 @@ add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
-set_target_properties(khiopsdriver_file_gcs PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR} VERSION ${PROJECT_VERSION})
+set_target_properties(
+  khiopsdriver_file_gcs
+  PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/gcsplugin.h
+             SOVERSION ${PROJECT_VERSION_MAJOR}
+             VERSION ${PROJECT_VERSION})
 
 # For consistent naming across platforms
 if(WIN32)

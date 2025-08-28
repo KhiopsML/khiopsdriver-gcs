@@ -2,6 +2,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+#define GCS_PLUGIN_EXPORT
 #include "gcsplugin.h"
 #include "gcsplugin_internal.h"
 
