@@ -32,6 +32,18 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 set(INSTALL_GTEST OFF)
 set(INSTALL_GMOCK OFF)
 
+# MSVC: Eliminate some options the old CMake way because VS sets them with undesired default values
+#
+# - the C++ exception flags
+# - the runtime information flags
+# - the debug information generation flags
+#
+if(MSVC)
+  string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "/Zi" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+endif()
+
 include(GoogleTest)
 enable_testing()
 
@@ -89,12 +101,13 @@ if(WIN32)
     PROPERTIES # Override or add Windows-specific properties
                RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs"
                ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs"
+               MSVC_RUNTIME_LIBRARY MultiThreaded
                WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 target_compile_options(
   khiopsdriver_file_gcs
-  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868>
+  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/GR-;/Oi;/Zi>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 option(BUILD_TESTS "Build test programs" OFF)
