@@ -76,12 +76,17 @@ add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
-set_target_properties(
-  khiopsdriver_file_gcs
-  PROPERTIES PREFIX "lib"
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             VERSION ${PROJECT_VERSION}
-             WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set_target_properties(khiopsdriver_file_gcs PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR} VERSION ${PROJECT_VERSION})
+
+# For consistent naming across platforms
+if(WIN32)
+  set_target_properties(
+    khiopsdriver_file_gcs
+    PROPERTIES # Override or add Windows-specific properties
+               RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs"
+               ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs"
+               WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 target_compile_options(
   khiopsdriver_file_gcs
