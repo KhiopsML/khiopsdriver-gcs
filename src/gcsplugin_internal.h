@@ -18,7 +18,11 @@
 #define VISIBLE __attribute__((visibility("default")))
 #else
 /* Windows Visual C++ only */
+#ifdef GCS_PLUGIN_EXPORT
 #define VISIBLE __declspec(dllexport)
+#else
+#define VISIBLE __declspec(dllimport)
+#endif
 #endif
 
 /* Use of C linkage from C++ */

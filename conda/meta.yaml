@@ -27,6 +27,7 @@ files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
   - lib/libkhiopsdriver_file_gcs.dylib [osx]
   - lib/*.dll [win]
+  - lib/*.lib [win]
 
 about:
   home: https://khiops.org

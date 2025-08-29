@@ -32,6 +32,18 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 set(INSTALL_GTEST OFF)
 set(INSTALL_GMOCK OFF)
 
+# MSVC: Eliminate some options the old CMake way because VS sets them with undesired default values
+#
+# - the C++ exception flags
+# - the runtime information flags
+# - the debug information generation flags
+#
+if(MSVC)
+  string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "/Zi" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+endif()
+
 include(GoogleTest)
 enable_testing()
 
@@ -53,7 +65,7 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 #
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/bin/>)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
@@ -76,11 +88,24 @@ add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
-set_target_properties(khiopsdriver_file_gcs PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR} VERSION ${PROJECT_VERSION})
+set_target_properties(
+  khiopsdriver_file_gcs
+  PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/gcsplugin.h
+             SOVERSION ${PROJECT_VERSION_MAJOR}
+             VERSION ${PROJECT_VERSION})
+
+# For consistent naming across platforms
+if(WIN32)
+  set_target_properties(
+    khiopsdriver_file_gcs
+    PROPERTIES # Override or add Windows-specific properties
+               RUNTIME_OUTPUT_NAME "libkhiopsdriver_file_gcs" ARCHIVE_OUTPUT_NAME "libkhiopsdriver_file_gcs")
+  # WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 target_compile_options(
   khiopsdriver_file_gcs
-  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868>
+  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/GR-;/Oi;/Zi>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 option(BUILD_TESTS "Build test programs" OFF)
@@ -97,8 +122,8 @@ add_subdirectory(test)
 install(
   TARGETS khiopsdriver_file_gcs
   LIBRARY DESTINATION lib
-  ARCHIVE # lib on windows
-  RUNTIME # dll on windows
+  ARCHIVE DESTINATION lib # lib on windows
+  RUNTIME DESTINATION lib # dll on windows
 )
 
 set(CPACK_PACKAGE_VENDOR Orange)
