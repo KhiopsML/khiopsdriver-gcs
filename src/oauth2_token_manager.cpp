@@ -32,10 +32,8 @@ std::string OAuth2TokenManager::GetAccessToken() {
 
 std::shared_ptr<google::cloud::Credentials>
 OAuth2TokenManager::MakeCredentials() {
-  using namespace std::literals; // enables literal suffixes, e.g. 24h, 1ms, 1s.
-
   std::chrono::system_clock::time_point expiration =
-      std::chrono::system_clock::now() + 1h;
+      std::chrono::system_clock::now() + std::chrono::hours(1);
 
   return google::cloud::MakeAccessTokenCredentials(GetAccessToken(),
                                                    expiration);
