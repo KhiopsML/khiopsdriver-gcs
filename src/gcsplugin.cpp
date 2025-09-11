@@ -25,6 +25,9 @@
 #include <boost/uuid/uuid_generators.hpp> // generators
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
+#include <curl/curl.h>
+
+#include "oauth2_token_manager.h"
 #include "spdlog/spdlog.h"
 
 using namespace gcsplugin;
@@ -430,6 +433,8 @@ int driver_connect() {
 
   spdlog::debug("Connect driver {} version {} loglevel", driver_name, version,
                 loglevel);
+  // Initialize CURL globally
+  curl_global_init(CURL_GLOBAL_ALL);
 
   // Initialize variables from environment
   globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
@@ -449,6 +454,7 @@ int driver_connect() {
     options.set<gc::UserProjectOption>(std::move(project));
   }
 
+  // Allow authentication via service account JSON key
   std::string gcp_token_filename =
       GetEnvironmentVariableOrDefault("GCP_TOKEN", "");
   if (!gcp_token_filename.empty()) {
@@ -462,6 +468,17 @@ int driver_connect() {
     }
     std::shared_ptr<gc::Credentials> creds =
         gc::MakeServiceAccountCredentials(buffer.str());
+    options.set<gc::UnifiedCredentialsOption>(std::move(creds));
+  }
+
+  // Allow authentication via OAuth token
+  std::string gcp_oauth_token_filename =
+      GetEnvironmentVariableOrDefault("GCP_OAUTH_TOKEN", "");
+  if (!gcp_oauth_token_filename.empty()) {
+    // Create our token manager
+    OAuth2TokenManager token_manager(gcp_oauth_token_filename);
+    // Create credentials using the token manager
+    std::shared_ptr<gc::Credentials> creds = token_manager.MakeCredentials();
     options.set<gc::UnifiedCredentialsOption>(std::move(creds));
   }
 
@@ -487,6 +504,9 @@ int driver_disconnect() {
     }
   }
   active_handles.clear();
+
+  // Clean up CURL
+  curl_global_cleanup();
 
   bIsConnected = false;
 
@@ -638,7 +658,7 @@ SelectObjectsSubset(std::vector<std::string> const &all_objects) {
   // Random selection without duplicate
   if (random_count > 0 && !remaining.empty()) {
     std::random_device rd;
-    std::mt19937 gen(rd());
+    std::ranlux24 gen(rd());
     std::shuffle(remaining.begin(), remaining.end(), gen);
 
     size_t to_take = std::min(random_count, remaining.size());

@@ -51,6 +51,8 @@ enable_testing()
 find_package(fmt CONFIG REQUIRED)
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(CURL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # Hide symbols in the shared libraries
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -83,10 +85,12 @@ if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Rele
                                       --gtest_output=xml:coverage.junit.xml)
 endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp
+                                         src/oauth2_token_manager.h src/oauth2_token_manager.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
-target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
+target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog CURL::libcurl
+                                                    nlohmann_json::nlohmann_json)
 
 set_target_properties(
   khiopsdriver_file_gcs
