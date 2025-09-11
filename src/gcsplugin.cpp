@@ -25,6 +25,9 @@
 #include <boost/uuid/uuid_generators.hpp> // generators
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <curl/curl.h>
 
 #include "oauth2_token_manager.h"

@@ -1,7 +1,10 @@
 #include "oauth2_token_manager.h"
 #include <curl/curl.h>
 #include <fstream>
+#include <iomanip>
 #include <nlohmann/json.hpp>
+#include <sstream>
+#include <stdexcept>
 
 using json = nlohmann::json;
 
