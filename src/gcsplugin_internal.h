@@ -62,7 +62,7 @@ constexpr int kTrue{1};
 
 using tOffset = long long;
 
-struct MultiPartFile {
+struct Reader {
   std::string bucketname_;
   std::string filename_;
   tOffset offset_{0};
@@ -73,15 +73,13 @@ struct MultiPartFile {
   tOffset total_size_{0};
 };
 
-struct WriteFile {
+struct Writer {
   std::string bucketname_;
   std::string filename_;
   std::string append_target_;
   google::cloud::storage::ObjectWriteStream writer_;
 };
 
-using Reader = MultiPartFile;
-using Writer = WriteFile;
 using ReaderPtr = std::unique_ptr<Reader>;
 using WriterPtr = std::unique_ptr<Writer>;
 
@@ -137,7 +135,7 @@ using HandlePtr = std::unique_ptr<Handle>;
 using HandleContainer = std::vector<HandlePtr>;
 using HandleIt = HandleContainer::iterator;
 
-bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
+bool operator==(const Reader &op1, const Reader &op2) {
   return (op1.bucketname_ == op2.bucketname_ &&
           op1.filename_ == op2.filename_ && op1.offset_ == op2.offset_ &&
           op1.commonHeaderLength_ == op2.commonHeaderLength_ &&
@@ -146,7 +144,7 @@ bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
           op1.total_size_ == op2.total_size_);
 }
 
-bool operator==(const WriteFile &op1, const WriteFile &op2) {
+bool operator==(const Writer &op1, const Writer &op2) {
   return (op1.bucketname_ == op2.bucketname_ && op1.filename_ == op2.filename_);
 }
 } // namespace gcsplugin

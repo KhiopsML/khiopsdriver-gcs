@@ -143,7 +143,7 @@ DownloadFileRangeToBuffer(const std::string &bucket_name,
   return num_read;
 }
 
-gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
+gc::StatusOr<long long> ReadBytesInFile(Reader &multifile, char *buffer,
                                         tOffset to_read) {
   // Start at first usable file chunk
   // Advance through file chunks, advancing buffer pointer
@@ -382,9 +382,8 @@ void *test_addReaderHandle(const std::string &bucket, const std::string &object,
                            const std::vector<std::string> &filenames,
                            const std::vector<long long int> &cumulativeSize,
                            long long total_size) {
-  ReaderPtr reader_ptr{new MultiPartFile{bucket, object, offset,
-                                         commonHeaderLength, filenames,
-                                         cumulativeSize, total_size}};
+  ReaderPtr reader_ptr{new Reader{bucket, object, offset, commonHeaderLength,
+                                  filenames, cumulativeSize, total_size}};
   return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_ptr));
 }
 
@@ -393,10 +392,9 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
   if (!create_with_mock_client) {
     if (appendMode) {
       return InsertHandle<WriterPtr, HandleType::kAppend>(
-          WriterPtr(new WriteFile));
+          WriterPtr(new Writer));
     }
-    return InsertHandle<WriterPtr, HandleType::kWrite>(
-        WriterPtr(new WriteFile));
+    return InsertHandle<WriterPtr, HandleType::kWrite>(WriterPtr(new Writer));
   }
 
   auto writer = client.WriteObject(bucketname, objectname);
@@ -404,7 +402,7 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
     return nullptr;
   }
 
-  WriterPtr writer_struct{new WriteFile};
+  WriterPtr writer_struct{new Writer};
   writer_struct->bucketname_ = std::move(bucketname);
   writer_struct->filename_ = std::move(objectname);
   writer_struct->writer_ = std::move(writer);
@@ -823,9 +821,9 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
   }
 
   tOffset total_size = cumulative_sizes.back();
-  return ReaderPtr(new MultiPartFile{
-      std::move(bucketname), std::move(objectname), 0, common_header_size,
-      std::move(filenames), std::move(cumulative_sizes), total_size});
+  return ReaderPtr(new Reader{std::move(bucketname), std::move(objectname), 0,
+                              common_header_size, std::move(filenames),
+                              std::move(cumulative_sizes), total_size});
 }
 
 gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname,
@@ -834,7 +832,7 @@ gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname,
   if (!writer) {
     return writer.last_status();
   }
-  WriterPtr writer_struct{new WriteFile};
+  WriterPtr writer_struct{new Writer};
   writer_struct->bucketname_ = std::move(bucketname);
   writer_struct->filename_ = std::move(objectname);
   writer_struct->writer_ = std::move(writer);
@@ -1015,7 +1013,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
 
   spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
-  MultiPartFile &h = stream_h->GetReader();
+  Reader &h = stream_h->GetReader();
 
   tOffset computed_offset{0};
 
@@ -1094,7 +1092,7 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
 
   spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
-  MultiPartFile &h = stream_h->GetReader();
+  Reader &h = stream_h->GetReader();
 
   const tOffset offset = h.offset_;
 

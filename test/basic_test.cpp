@@ -323,7 +323,7 @@ public:
   void TestMultifileOpenSuccess(LOReturnType arg,
                                 ReadSimulatorParams &mock_file_1,
                                 ReadSimulatorParams &mock_file_2,
-                                const MultiPartFile &expected) {
+                                const Reader &expected) {
     PrepareListObjects(std::move(arg));
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_1)))
@@ -713,8 +713,8 @@ TEST_F(GCSDriverTestFixture, Close) {
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess) {
-  MultiPartFile expected_struct{"mock_bucket", "mock_file", 0, 0,
-                                {"mock_file"}, {10},        10};
+  Reader expected_struct{"mock_bucket", "mock_file", 0, 0,
+                         {"mock_file"}, {10},        10};
 
   PrepareListObjects(MakeLOR("mock_bucket", {"mock_file"}, {10}));
   OpenSuccess(expected_struct);
@@ -745,14 +745,14 @@ TEST_F(GCSDriverTestFixture,
 
   constexpr size_t total_size{mock_file_0_size + mock_file_1_size};
 
-  MultiPartFile expected_struct{"mock_bucket",
-                                "mock_file",
-                                0,
-                                0,
-                                {"mock_file_0", "mock_file_1"},
-                                {static_cast<long long>(mock_file_0_size),
-                                 static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size)};
+  Reader expected_struct{"mock_bucket",
+                         "mock_file",
+                         0,
+                         0,
+                         {"mock_file_0", "mock_file_1"},
+                         {static_cast<long long>(mock_file_0_size),
+                          static_cast<long long>(total_size)},
+                         static_cast<long long>(total_size)};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
@@ -779,14 +779,14 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess) {
   constexpr size_t total_size{mock_file_0_size + mock_file_1_size -
                               mock_header_size};
 
-  MultiPartFile expected_struct{"mock_bucket",
-                                "mock_file",
-                                0,
-                                static_cast<long long>(mock_header_size),
-                                {"mock_file_0", "mock_file_1"},
-                                {static_cast<long long>(mock_file_0_size),
-                                 static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size)};
+  Reader expected_struct{"mock_bucket",
+                         "mock_file",
+                         0,
+                         static_cast<long long>(mock_header_size),
+                         {"mock_file_0", "mock_file_1"},
+                         {static_cast<long long>(mock_file_0_size),
+                          static_cast<long long>(total_size)},
+                         static_cast<long long>(total_size)};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
@@ -1474,7 +1474,7 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_OK) {
   ON_CALL(*mock_client, CreateResumableUpload)
       .WillByDefault(Return(CreateResumableUploadResponse{upload_id}));
 
-  gcsplugin::WriteFile expected;
+  gcsplugin::Writer expected;
   expected.bucketname_ = mock_bucket;
   expected.filename_ = mock_object;
 
