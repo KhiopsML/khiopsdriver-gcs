@@ -18,13 +18,15 @@ set(CMAKE_CXX_STANDARD 14)
 file(READ "src/gcsplugin.h" H_FILE)
 string(REGEX MATCH "#define DRIVER_VERSION KHIOPS_STR\\(([^)]*)\\)" _ ${H_FILE})
 set(DRIVER_VERSION ${CMAKE_MATCH_1})
-string(REGEX REPLACE "-.*" "" VERSION ${DRIVER_VERSION})
-message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${VERSION})")
+# Extract the main version (up to the first hyphen)
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" PROJECT_VERSION "${DRIVER_VERSION}")
+
+message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${PROJECT_VERSION})")
 
 project(
   khiops-gcs
   LANGUAGES CXX
-  VERSION 0.0.14)
+  VERSION ${PROJECT_VERSION})
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 
