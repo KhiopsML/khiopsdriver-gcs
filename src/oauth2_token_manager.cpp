@@ -48,22 +48,31 @@ void OAuth2TokenManager::LoadTokenData() {
   json token_data = json::parse(file);
 
   // Extract all the fields from the token file
-  access_token_ = token_data["token"];
-  refresh_token_ = token_data["refresh_token"];
-  token_uri_ = token_data["token_uri"];
-  client_id_ = token_data["client_id"];
-  client_secret_ = token_data["client_secret"];
+  access_token_ = token_data.value("token", "");
+  // Only assign refresh_token if it exists
+  if (token_data.contains("refresh_token")) {
+    refresh_token_ = token_data["refresh_token"];
+  } else {
+    refresh_token_.clear(); // No refresh token available
+  }
+  token_uri_ = token_data.value("token_uri", "");
+  client_id_ = token_data.value("client_id", "");
+  client_secret_ = token_data.value("client_secret", "");
 
   // Parse the expiry time
-  std::string expiry_str = token_data["expiry"];
-  std::tm tm = {};
-  std::istringstream ss(expiry_str);
-  ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-  if (ss.fail()) {
-    throw std::runtime_error("Failed to parse expiry time: " + expiry_str);
+  std::string expiry_str = token_data.value("expiry", "");
+  if (!expiry_str.empty()) {
+    std::tm tm = {};
+    std::istringstream ss(expiry_str);
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    if (ss.fail()) {
+      throw std::runtime_error("Failed to parse expiry time: " + expiry_str);
+    }
+    token_expiry_ = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+  } else {
+    // Handle missing expiry if necessary
+    token_expiry_ = std::chrono::system_clock::now();
   }
-
-  token_expiry_ = std::chrono::system_clock::from_time_t(std::mktime(&tm));
 }
 
 bool OAuth2TokenManager::IsTokenExpired() {
@@ -73,6 +82,12 @@ bool OAuth2TokenManager::IsTokenExpired() {
 }
 
 void OAuth2TokenManager::RefreshAccessToken() {
+  // Skip refresh if no refresh token is available
+  if (refresh_token_.empty()) {
+    // Optionally, log or handle this case
+    return;
+  }
+
   CURL *curl = curl_easy_init();
   if (!curl) {
     throw std::runtime_error("Failed to initialize CURL");
@@ -100,8 +115,8 @@ void OAuth2TokenManager::RefreshAccessToken() {
   // Parse the response
   json response_data = json::parse(response);
 
-  access_token_ = response_data["access_token"];
-  int expires_in = response_data["expires_in"];
+  access_token_ = response_data.value("access_token", "");
+  int expires_in = response_data.value("expires_in", 0);
 
   // Update expiry time
   token_expiry_ =
