@@ -1,5 +1,5 @@
 ---
-    name: Conda Packages
+    name: Test conda-forge Packages
     on:
       workflow_dispatch:
 
