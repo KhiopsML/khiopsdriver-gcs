@@ -39,7 +39,6 @@ runs:
       env:
         KHIOPS_PROC_NUMBER: 4
       run: |
-        khiops_env --env
         khiops -s
         for /f %%i in (' khiops -v ^| find /c /v "" ') do set "LINE_NUMBER=%%i"
         if not "%LINE_NUMBER%" == "1" (
