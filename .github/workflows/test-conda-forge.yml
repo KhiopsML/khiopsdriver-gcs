@@ -32,6 +32,9 @@
               conda-remove-defaults: true
           - name: Install the khiops-core and driver Conda packages
             run: conda install -c conda-forge khiops-core==10.3.2 khiops-driver-gcs
+          - name: Add CONDA_PREFIX to shared PATH
+            run: |
+              echo "$CONDA_PREFIX/bin" >> $GITHUB_PATH
           - run: |
               conda info
               conda list
