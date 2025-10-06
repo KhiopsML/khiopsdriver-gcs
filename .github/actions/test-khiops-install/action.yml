@@ -39,6 +39,9 @@ runs:
       env:
         KHIOPS_PROC_NUMBER: 4
       run: |
+        dir C:\Users\runneradmin\miniconda3\envs\test
+        dir C:\Users\runneradmin\miniconda3\envs\test\lib
+        dir C:\Users\runneradmin\miniconda3\envs\test\Library\bin
         dir C:\Users\runneradmin\miniconda3\envs\test\Library\lib
         khiops -s
         for /f %%i in (' khiops -v ^| find /c /v "" ') do set "LINE_NUMBER=%%i"
