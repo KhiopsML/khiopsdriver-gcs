@@ -33,20 +33,8 @@ runs:
     - name: Set the name for the khiops laucher script
       shell: bash
       run: |
-        if [[ $RUNNER_OS == "Windows" ]]
-        then
-          # Put the full path in windows since bash doesn't find ".cmd" files
-          # in the path even if they are there
-          modl_path=$(which MODL)
-          khiops_bin_dir=$(dirname "$modl_path")
-          KHIOPS_SCRIPT="$khiops_bin_dir/khiops.cmd"
-          KHIOPS_CC_SCRIPT="$khiops_bin_dir/khiops_coclustering.cmd"
-          echo "KHIOPS_SCRIPT=$KHIOPS_SCRIPT" >> "$GITHUB_ENV"
-          echo "KHIOPS_CC_SCRIPT=$KHIOPS_CC_SCRIPT" >> "$GITHUB_ENV"
-        else
-          echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
-          echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
-        fi
+        echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
+        echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
     - name: Run Khiops tests
       shell: bash
       env:
