@@ -30,11 +30,16 @@ runs:
       if: runner.os == 'Windows' || runner.os == 'macOS'
       shell: bash
       run: echo "PYTHON=python" >> "$GITHUB_ENV"
+    - name: Set the name for the khiops laucher script (Windows)
+      if: runner.os == 'Windows' 
+      shell: bash
+      run: |
+        echo "KHIOPS_SCRIPT=khiops.cmd" >> "$GITHUB_ENV"
     - name: Set the name for the khiops laucher script
+      if: runner.os != 'Windows' 
       shell: bash
       run: |
         echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
-        echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
     - name: Run Khiops tests
       shell: bash
       env:
