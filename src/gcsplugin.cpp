@@ -1432,3 +1432,33 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
 
   return kSuccess;
 }
+
+int driver_concat(const char *sDestFilePathName, const char **sSourceFilePathNames,
+    size_t nSourceFileCount) {
+  if (!sDestFilePathName || !sSourceFilePathNames) {
+    LogError("Error passing null pointers as arguments to driver_concat");
+    return kFailure;
+  }
+
+  spdlog::debug("driver_concat {} with {} sources URLs:", sDestFilePathName,
+                nSourceFileCount);
+  std::vector<std::string> sources(sSourceFilePathNames,
+                                   sSourceFilePathNames + nSourceFileCount);
+  std::vector<gcs::ComposeSourceObject> sourceObjects;
+  for (const auto &source : sources) {
+    spdlog::debug("- {}", source);
+    sourceObjects.push_back(gcs::ComposeSourceObject{source});
+  }
+
+  assert(driver_isConnected());
+
+  auto maybe_names = GetBucketAndObjectNames(sDestFilePathName);
+  ERROR_ON_NAMES(maybe_names, kFailure);
+  const auto &names = *maybe_names;
+
+  auto maybe_compose = client.ComposeObject(names.bucket, sourceObjects, sDestFilePathName);
+  RETURN_ON_ERROR(maybe_compose, "Error during file concatenation on remote storage",
+                  kFailure);
+
+  return kSuccess;
+}

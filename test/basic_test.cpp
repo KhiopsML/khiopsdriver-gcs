@@ -157,6 +157,48 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
   ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }
 
+TEST(GCSDriverTest, concat) {
+  constexpr size_t nsources = 9;
+  const char *sources[nsources] = {"gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000001.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000002.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000003.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000004.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000005.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000006.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000007.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000008.txt",
+                     "gs://data-test-khiops-driver-azure/khiops_data/"
+                     "bq_export/Adult/Adult-split-000000000009.txt"};
+  std::string outputAsString =
+      (std::ostringstream()
+       << "gs://data-test-khiops-driver-gcs/tmp_test_output/"
+          "driver_concat_test_output_"
+       << boost::uuids::random_generator()())
+          .str();
+  const char *output = outputAsString.c_str();
+  const char *reference = "gs://data-test-khiops-driver-azure/khiops_data/"
+                    "samples/Adult/Adult.txt";
+  ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
+  ASSERT_EQ(driver_fileExists(output), kFalse) << "The output file exists before concatenation";
+  ASSERT_EQ(driver_concat(output, sources, nsources), kSuccess) << "Concatenation failed";
+  for (size_t i = 0; i != nsources; i++)
+    ASSERT_EQ(driver_fileExists(sources[i]), kTrue) << "An input file has been removed";
+  ASSERT_EQ(driver_fileExists(output), kTrue) << "The concatenation created no output file";
+  ASSERT_EQ(
+      driver_getFileSize(output), driver_getFileSize(reference)) << "Incorrect output file size";
+  ASSERT_EQ(driver_remove(output), kSuccess) << "Failed to removed output file";
+  ASSERT_EQ(driver_fileExists(output), kFalse) << "Output file still exists after removal";
+  ASSERT_EQ(driver_disconnect(), kSuccess) << "Failed to disconnect";
+}
+
 // constexpr const char *test_single_file =
 //     "gs://data-test-khiops-driver-gcs/khiops_data/samples/Adult/Adult.txt";
 // constexpr const char *test_range_file_one_header =
