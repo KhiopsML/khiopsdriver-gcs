@@ -160,23 +160,17 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
 TEST(GCSDriverTest, concat) {
   constexpr size_t nsources = 9;
   const char *sources[nsources] = {"khiops_data/"
-                                   "split/Adult/Adult-split-000000000000.txt",
+                                   "split/Adult/Adult-split-00.txt",
                                    "khiops_data/"
-                                   "split/Adult/Adult-split-000000000001.txt",
+                                   "split/Adult/Adult-split-01.txt",
                                    "khiops_data/"
-                                   "split/Adult/Adult-split-000000000002.txt",
+                                   "split/Adult/Adult-split-02.txt",
                                    "khiops_data/"
-                                   "split/Adult/Adult-split-000000000003.txt",
+                                   "split/Adult/Adult-split-03.txt",
                                    "khiops_data/"
-                                   "split/Adult/Adult-split-000000000004.txt",
+                                   "split/Adult/Adult-split-04.txt",
                                    "khiops_data/"
-                                   "split/Adult/Adult-split-000000000005.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-000000000006.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-000000000007.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-000000000008.txt"};
+                                   "split/Adult/Adult-split-05.txt"};
   std::string outputAsString =
       (std::ostringstream()
        << "gs://data-test-khiops-driver-gcs/tmp_test_output/"
