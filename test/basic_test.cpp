@@ -186,7 +186,10 @@ TEST(GCSDriverTest, concat) {
   ASSERT_EQ(driver_concat(output, sources, nsources), kSuccess)
       << "Concatenation failed";
   for (size_t i = 0; i != nsources; i++)
-    ASSERT_EQ(driver_fileExists(sources[i]), kTrue)
+    ASSERT_EQ(driver_fileExists(std::string("gs://data-test-khiops-driver-gcs/")
+                                    .append(sources[i])
+                                    .c_str()),
+              kTrue)
         << "An input file has been removed";
   ASSERT_EQ(driver_fileExists(output), kTrue)
       << "The concatenation created no output file";
