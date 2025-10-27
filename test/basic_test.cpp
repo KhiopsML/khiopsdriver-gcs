@@ -159,25 +159,24 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
 
 TEST(GCSDriverTest, concat) {
   constexpr size_t nsources = 9;
-  const char *sources[nsources] = {
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000001.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000002.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000003.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000004.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000005.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000006.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000007.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000008.txt",
-      "khiops_data/"
-      "bq_export/Adult/Adult-split-000000000009.txt"};
+  const char *sources[nsources] = {"khiops_data/"
+                                   "split/Adult/Adult-split-000000000000.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000001.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000002.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000003.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000004.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000005.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000006.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000007.txt",
+                                   "khiops_data/"
+                                   "split/Adult/Adult-split-000000000008.txt"};
   std::string outputAsString =
       (std::ostringstream()
        << "gs://data-test-khiops-driver-gcs/tmp_test_output/"
