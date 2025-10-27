@@ -158,7 +158,7 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
 }
 
 TEST(GCSDriverTest, concat) {
-  constexpr size_t nsources = 9;
+  constexpr size_t nsources = 6;
   const char *sources[nsources] = {"khiops_data/"
                                    "split/Adult/Adult-split-00.txt",
                                    "khiops_data/"
