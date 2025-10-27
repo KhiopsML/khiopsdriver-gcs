@@ -178,7 +178,7 @@ TEST(GCSDriverTest, concat) {
        << boost::uuids::random_generator()())
           .str();
   const char *output = outputAsString.c_str();
-  const char *reference = "gs://data-test-khiops-driver-azure/khiops_data/"
+  const char *reference = "gs://data-test-khiops-driver-gcs/khiops_data/"
                           "samples/Adult/Adult.txt";
   ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
   ASSERT_EQ(driver_fileExists(output), kFalse)

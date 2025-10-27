@@ -1433,8 +1433,8 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   return kSuccess;
 }
 
-int driver_concat(const char *sDestFilePathName, const char **sSourceFilePathNames,
-    size_t nSourceFileCount) {
+int driver_concat(const char *sDestFilePathName,
+                  const char **sSourceFilePathNames, size_t nSourceFileCount) {
   if (!sDestFilePathName || !sSourceFilePathNames) {
     LogError("Error passing null pointers as arguments to driver_concat");
     return kFailure;
@@ -1456,8 +1456,10 @@ int driver_concat(const char *sDestFilePathName, const char **sSourceFilePathNam
   ERROR_ON_NAMES(maybe_names, kFailure);
   const auto &names = *maybe_names;
 
-  auto maybe_compose = client.ComposeObject(names.bucket, sourceObjects, sDestFilePathName);
-  RETURN_ON_ERROR(maybe_compose, "Error during file concatenation on remote storage",
+  auto maybe_compose =
+      client.ComposeObject(names.bucket, sourceObjects, names.object);
+  RETURN_ON_ERROR(maybe_compose,
+                  "Error during file concatenation on remote storage",
                   kFailure);
 
   return kSuccess;
