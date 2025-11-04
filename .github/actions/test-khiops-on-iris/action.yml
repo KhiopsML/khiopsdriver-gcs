@@ -34,7 +34,7 @@ runs:
       if: runner.os == 'Windows' 
       shell: bash
       run: |
-        echo "KHIOPS_SCRIPT=khiops.cmd" >> "$GITHUB_ENV"
+        echo "KHIOPS_SCRIPT=$CONDA_PREFIX/Library/bin/khiops.cmd" >> "$GITHUB_ENV"
     - name: Set the name for the khiops laucher script
       if: runner.os != 'Windows' 
       shell: bash
