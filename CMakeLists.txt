@@ -24,7 +24,7 @@ message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version
 project(
   khiops-gcs
   LANGUAGES CXX
-  VERSION 0.0.14)
+  VERSION ${DRIVER_VERSION})
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 
