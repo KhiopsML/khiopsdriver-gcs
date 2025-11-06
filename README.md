@@ -7,7 +7,7 @@ This repository hosts the source code for the Khiops filesystem driver enabling 
 If you just want to start using Khiops with your data located on GCS, simply install the driver package next to Khiops.
 If you installed Khiops the standard way, the driver package can be installed via conda like so:
 
-    conda install -c khiops khiops-driver-gcs
+    conda install -c conda-forge khiops-driver-gcs
 
 Or, if you have used your system package manager, you will have to install the driver by the same method. For debian/ubuntu, you will do this:
 
