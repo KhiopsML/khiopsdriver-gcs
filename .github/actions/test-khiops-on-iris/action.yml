@@ -30,16 +30,23 @@ runs:
       if: runner.os == 'Windows' || runner.os == 'macOS'
       shell: bash
       run: echo "PYTHON=python" >> "$GITHUB_ENV"
-    - name: Set the name for the khiops laucher script (Windows)
-      if: runner.os == 'Windows' 
-      shell: bash
-      run: |
-        echo "KHIOPS_SCRIPT=$CONDA/envs/test/Library/bin/khiops.cmd" >> "$GITHUB_ENV"
     - name: Set the name for the khiops laucher script
-      if: runner.os != 'Windows' 
       shell: bash
       run: |
-        echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
+        if [[ $RUNNER_OS == "Windows" ]]
+        then
+          # Put the full path in windows since bash doesn't find ".cmd" files
+          # in the path even if they are there
+          modl_path=$(which MODL)
+          khiops_bin_dir=$(dirname "$modl_path")
+          KHIOPS_SCRIPT="$khiops_bin_dir/khiops.cmd"
+          KHIOPS_CC_SCRIPT="$khiops_bin_dir/khiops_coclustering.cmd"
+          echo "KHIOPS_SCRIPT=$KHIOPS_SCRIPT" >> "$GITHUB_ENV"
+          echo "KHIOPS_CC_SCRIPT=$KHIOPS_CC_SCRIPT" >> "$GITHUB_ENV"
+        else
+          echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
+          echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
+        fi
     - name: Run Khiops tests
       shell: bash
       env:
