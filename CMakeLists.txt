@@ -123,7 +123,7 @@ install(
   TARGETS khiopsdriver_file_gcs
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib # lib on windows
-  RUNTIME DESTINATION lib # dll on windows
+  RUNTIME DESTINATION bin # dll on windows
 )
 
 set(CPACK_PACKAGE_VENDOR Orange)

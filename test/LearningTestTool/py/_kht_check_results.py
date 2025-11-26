@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Orange. All rights reserved.
+# Copyright (c) 2023-2025 Orange. All rights reserved.
 # This software is distributed under the BSD 3-Clause-clear License, the text of which is available
 # at https://spdx.org/licenses/BSD-3-Clause-Clear.html or see the "LICENSE" file for more details.
 
@@ -194,6 +194,159 @@ def analyse_comparison_log(test_dir):
     return error_number, warning_number, summary_infos, files_infos
 
 
+def clean_version_from_results(results_dir):
+    """
+    Nettoyage de toute reference a la version des fichiers de resultats, quelque soit leur nature
+    (.kdic, .xls, json...) en remplacant la version par 'VERSION', et en memorisant la version dans
+    la deuxieme ligne du fichier time.log
+    L'objectif est de minimiser les difference entre resultats et resultats de references, de facon
+    a minimiser le volume necessaire pour memoriser tout LearningTest sur un repo git.
+
+    :param results_dir: sous-repertoire de resultats d'un repertoire de test
+    """
+
+    def read_bytes(path):
+        """Lecture du contenu d'un fichier sous formes de bytes"""
+        data = []
+        with open(path, "rb") as file:
+            data = file.read()
+        return data
+
+    def write_bytes(path, data):
+        """Ecriture du contenu d'un fichier sous formes de bytes"""
+        with open(path, "wb") as file:
+            file.write(data)
+
+    def extract_data_head_as_text(data):
+        """Retourne le debut d'un bloc de bytes sous forme de texte,
+        en ayant remplace les fine de ligne par des blancs"""
+        data_head = data[0:1000]
+        data_head_text = data_head.decode("latin-1")
+        return data_head_text
+
+    def remove_version_in_data(data, pos_version, version):
+        """Remplace la version a la position donnees par une valeur constante"""
+        assert pos_version > 0
+        # On doit avoir acces a la fois a la version byte et a la version texte
+        data_head = data[0:1000]
+        data_head_text = data_head.decode("latin-1")
+        new_data_head_text = (
+            data_head_text[:pos_version]
+            + "VERSION"
+            + data_head_text[pos_version + len(version) :]
+        )
+        new_data_dead = new_data_head_text.encode("latin-1")
+        new_data = new_data_dead + data[len(data_head) :]
+        return new_data
+
+    def trace(file_name, pos_version, version, data, new_data):
+        """Message de trace"""
+        _, file_extension = os.path.splitext(file_name)
+        print(
+            "\t"
+            + file_extension
+            + " "
+            + file_name
+            + "\t"
+            + str(pos_version)
+            + " "
+            + version
+            + " "
+            + str(len(data))
+            + " "
+            + str(len(new_data) - len(data))
+        )
+
+    # Verification que l'on est sur un jeu de test
+    trace_on = False
+    utils.check_test_dir(os.path.join(results_dir, ".."))
+
+    # Nettoyage du contenu du repertoire uniquement s'il existe un fichier de temps
+    time_file_path = os.path.join(results_dir, kht.TIME_LOG)
+    if not os.path.isfile(time_file_path):
+        return
+
+    # Acces aux fichiers du repertoire
+    if trace_on:
+        print("clean_version_from_results: " + results_dir)
+    version_key = "VERSION"
+    found_version = ""
+    file_names = os.listdir(results_dir)
+    for file_name in file_names:
+        _, file_extension = os.path.splitext(file_name)
+        file_path = os.path.join(results_dir, file_name)
+        # Cas d'un fichier de dictionnaire ou excel
+        if file_extension == ".kdic" or file_extension == ".xls":
+            # Recherche de la version si elle n'a pas ete trouvee
+            data = read_bytes(file_path)
+            if len(data) > 0:
+                data_head_text = extract_data_head_as_text(data)
+                pos = utils.find_pattern_in_line(data_head_text, ["#", " "])
+                if pos >= 0:
+                    fields = (
+                        data_head_text[pos:]
+                        .replace("\r", " ")
+                        .replace("\n", " ")
+                        .split(" ")
+                    )
+                    if len(fields) >= 2:
+                        version = fields[1]
+                        if version != "" and version != version_key:
+                            if found_version == "":
+                                found_version = version
+                            pos_version = pos + data_head_text[pos:].find(version)
+                            new_data = remove_version_in_data(
+                                data, pos_version, version
+                            )
+                            write_bytes(file_path, new_data)
+                            if trace_on:
+                                trace(file_name, pos_version, version, data, new_data)
+        # Cas d'un fichier json
+        elif is_file_with_json_extension(file_name):
+            # Recherche de la version si elle n'a pas ete trouvee
+            data = read_bytes(file_path)
+            if len(data) > 0:
+                data_head_text = extract_data_head_as_text(data)
+                pos = utils.find_pattern_in_line(data_head_text, ['"version": '])
+                if pos >= 0:
+                    fields = (
+                        data_head_text[pos:]
+                        .replace("\r", " ")
+                        .replace("\n", " ")
+                        .split('"')
+                    )
+                    if len(fields) >= 4:
+                        version = fields[3]
+                        if version != "" and version != version_key:
+                            if found_version == "":
+                                found_version = version
+                            pos_version = pos + data_head_text[pos:].find(version)
+                            new_data = remove_version_in_data(
+                                data, pos_version, version
+                            )
+                            write_bytes(file_path, new_data)
+                            if trace_on:
+                                trace(file_name, pos_version, version, data, new_data)
+    # Mise a jour du fichier de temps en ajoutant une deuxième ligne contenant la version
+    if found_version != "":
+        time_file = open(time_file_path, "r", errors="ignore")
+        lines = time_file.readlines()
+        time_file.close()
+        try:
+            with open(
+                os.path.join(results_dir, kht.TIME_LOG),
+                "w",
+                errors="ignore",
+            ) as time_file:
+                time_file.write(lines[0])
+                time_file.write("version: " + found_version + "\n")
+        except Exception as exception:
+            print(
+                "Enable to write file " + kht.TIME_LOG + " in " + kht.RESULTS + " dir ",
+                exception,
+            )
+
+
 def check_results(test_dir, forced_context=None):
     """
     Fonction principale de comparaison des resultats de test et de reference
@@ -201,7 +354,7 @@ def check_results(test_dir, forced_context=None):
      dans un fichier de log, avec un resume en fin de fichier, facile a parser
     On retourne True s'il n'y a aucune erreur
 
-    Le parametrage d'un contexte force en entree permete d'effectuer la comparaison avec
+    Le parametrage d'un contexte force en entree permet d'effectuer la comparaison avec
     un contexte (parallel|sequential, platform) alternatif. Dans ce cas:
     - l'objectif est essentiellement de renvoyer un indicateur global de succes de la comparaison
     - on n'ecrit pas de fichier de comparaison
@@ -654,7 +807,7 @@ def check_results(test_dir, forced_context=None):
                 error_number == error_number_in_err_txt
             )
 
-        # Filtrage d'un certain type de warning pour recommencer la comaraison
+        # Filtrage d'un certain type de warning pour recommencer la comparaison
         if varying_warning_messages_in_err_txt_recovery:
             # Acces aux lignes des fichier
             ref_file_lines = erroneous_ref_file_lines.get(kht.ERR_TXT)
@@ -1262,8 +1415,8 @@ def filter_sequential_messages_lines(lines, log_file=None):
     return result_lines
 
 
-""" Liste de motifs pour lesquels ont admet une variation normale s'il font parti de la comparaison
- dans une paire de lignes. Dans ce cas, on ignore la comparaison
+""" Liste de motifs pour lesquels ont admet une variation normale des messages d'erreurs
+s'ils font parti de la comparaison dans une paire de lignes. Dans ce cas, on ignore la comparaison
 """
 RESILIENCE_USER_MESSAGE_PATTERNS = [
     [
@@ -1284,11 +1437,60 @@ RESILIENCE_USER_MESSAGE_PATTERNS = [
         "warning : Database ",
         ": Record ",
         " : Single instance ",
-        "uses too much memory (more than ",
+        "requires too much memory (more than ",
         " after reading ",
         " secondary records ",
     ],
+    [
+        "warning : Database ",
+        ": Record ",
+        " : Single instance ",
+        "requires too much memory (more than ",
+        " after creating ",
+        " records ",
+    ],
+    [
+        "warning : Database ",
+        ": Record ",
+        " : Record not selected due to selection variable with possible incorrect value. Single instance ",
+        "requires too much memory (more than ",
+        " after reading ",
+        " secondary records ",
+    ],
+    [
+        "warning : Database ",
+        ": Record ",
+        " : Record not selected due to selection variable with possible incorrect value. Single instance ",
+        "requires too much memory (more than ",
+        " after creating ",
+        " records ",
+    ],
+    [
+        "error : Database ",
+        ": Loading external tables requires too much memory; more than ",
+        " of RAM used after reading ",
+        " external instances",
+    ],
     ["error : ", " : Not enough memory "],
+]
+
+""" Liste de motifs pour lesquels ont admet une variation normale des messages d'erreurs de KNI
+"""
+RESILIENCE_KNI_MESSAGE_PATTERNS = [
+    [
+        "error : KNI KNISetSecondaryInputRecord(",
+        ") : Too much memory currently used",
+    ],
+    [
+        "error : KNI KNIRecodeStreamRecord(",
+        ", too many secondary records encountered (",
+        ") that could not be stored in available buffers (",
+        " records) : Too much memory currently used",
+    ],
+    [
+        "error : KNI KNIRecodeStreamRecord(",
+        ") : Too much memory currently used",
+    ],
 ]
 
 
@@ -1418,6 +1620,9 @@ def check_file_lines(
     # test si fichier histogramme
     is_histogram_file = "histogram" in file_name and file_extension == ".log"
 
+    # test si fichier de log de KNI
+    is_kni_log_file = file_name.find("KNILog") == 0 and file_extension == ".txt"
+
     # test si fichier d'erreur
     is_error_file = file_name == kht.ERR_TXT
 
@@ -1511,7 +1716,7 @@ def check_file_lines(
             continue
 
         # Cas special du fichier d'erreur, pour le message "(Operation canceled)" qui n'est pas case sensitive
-        if is_error_file:
+        if is_error_file or is_json_file:
             if line_ref.find("(Operation canceled)") != -1:
                 line_ref = line_ref.replace(
                     "(Operation canceled)", "(operation canceled)"
@@ -1567,10 +1772,36 @@ def check_file_lines(
         ):
             continue
 
-        # Traitement des patterns toleres pour la comparaison
-        if is_error_file or is_json_file:
+        # Traitement des patterns toleres pour la comparaison dans les message d'erreur standards
+        if is_error_file or is_json_file or is_kni_log_file:
             resilience_found = False
             for pattern in RESILIENCE_USER_MESSAGE_PATTERNS:
+                if (
+                    utils.find_pattern_in_line(line_ref, pattern) != -1
+                    and utils.find_pattern_in_line(line_test, pattern) != -1
+                ):
+                    # On renvoie un warning, en indiquant qu'il s'agit d'un warning de resilience
+                    warnings += 1
+                    user_message_warnings += 1
+                    # Ecriture d'un warning
+                    utils.write_message(
+                        "warning : line "
+                        + str(line)
+                        + " "
+                        + line_test.strip()
+                        + " -> "
+                        + line_ref.strip(),
+                        log_file=log_file,
+                    )
+                    resilience_found = True
+                    break
+            if resilience_found:
+                continue
+
+        # Traitement des patterns toleres specifiquement pour la comparaison dans les message d'erreur KNI
+        if is_kni_log_file:
+            resilience_found = False
+            for pattern in RESILIENCE_KNI_MESSAGE_PATTERNS:
                 if (
                     utils.find_pattern_in_line(line_ref, pattern) != -1
                     and utils.find_pattern_in_line(line_test, pattern) != -1
@@ -1689,7 +1920,7 @@ def split_field(field_value):
     en un ensemble de tokens elementaire pour le parsing d'un fichier json ou kdic
     Permet ensuite de comparer chaque valeur de token, pour avoir une tolerance par rapport aux
     mirco-variations des valeurs numeriques"""
-    # Pour gerer les double-quotes a l'interieur des strings, pour les format json et kdic
+    # Pour gerer les double quotes a l'interieur des strings, pour les format json et kdic
     field_value = field_value.replace('\\"', "'")
     field_value = field_value.replace('""', "'")
     sub_fields = TOKEN_PARSER.findall(field_value)
@@ -1828,7 +2059,7 @@ def initialize_parsers():
     ]
     numeric_pattern = "-?[0-9]+\\.?[0-9]*(?:[Ee]-?[0-9]+)?"
     string_pattern = (
-        '"[^"]*"'  # Sans les double-quotes dans les strings (dur a parser...)
+        '"[^"]*"'  # Sans les double quotes dans les strings (dur a parser...)
     )
     time_pattern = "\\d{1,2}:\\d{2}:\\d{2}\\.?\\d*"
     other_tokens = "[\\w]+"
@@ -1845,7 +2076,7 @@ def initialize_parsers():
 # Parsers en variables globales, compiles une seule fois au chargement du module
 # - le parser de tokens permet d'analyser de facon detaillee le contenu d'un
 #   fichier json ou dictionnaire (.kdic) en le decomposant en une suite de tokens
-#   separateur, valeur numerique opu categorielle entre double-quotes.
+#   separateur, valeur numerique opu categorielle entre double quotes.
 # - le parser de numerique est specialise pour les valeurs numeriques au format scientifique
 # - le parser de time est specialise pour le format time hh:mm:ss.ms
 TOKEN_PARSER, NUMERIC_PARSER, TIME_PARSER = initialize_parsers()

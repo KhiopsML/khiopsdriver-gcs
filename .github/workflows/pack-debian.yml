@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['debian:11', 'debian:12',  'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
+        image: ['debian:11', 'debian:12', 'debian:13', 'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
     container: ${{ matrix.image }}
     steps:
       - name: Install packages
@@ -27,7 +27,8 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
+          fetch-depth: 0
       - name: Configure CMake
         run: |
           cmake -B builds -S . -G Ninja -D CMAKE_BUILD_TYPE=Release -D CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -72,7 +73,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['debian:11', 'debian:12',  'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
+        os: ['debian:11', 'debian:12',
+            # 'debian:13', 
+            'ubuntu:20.04', 'ubuntu:22.04', 'ubuntu:24.04']
     permissions:
       contents: 'read'
       id-token: 'write'            
@@ -93,7 +96,7 @@ jobs:
           apt-get install -y curl
       - name: Download and install Khiops core
         run: |
-          curl -L https://github.com/KhiopsML/khiops/releases/download/10.2.4/khiops-core-${{ env.MPI_IMPLEMENTATION }}_10.2.4-1-${{ env.VERSION_CODENAME }}.amd64.deb --output ./khiops-core.deb
+          curl -L https://github.com/KhiopsML/khiops/releases/download/11.0.0-b.0/khiops-core-${{ env.MPI_IMPLEMENTATION }}_11.0.0-b.0-1-${{ env.VERSION_CODENAME }}.amd64.deb --output ./khiops-core.deb
           dpkg -i ./khiops-core* || true
           apt-get -f install -y
       - name: Download artifacts (driver package)

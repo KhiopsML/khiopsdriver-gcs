@@ -5,6 +5,9 @@ inputs:
   os-decription:
     description: OS description (os +arch) used to name artifacts (error reports)
     required: true
+  show-openmpi-errors:
+    description: Set to 'false' to stop displaying full OpenMPI error log
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -20,8 +23,10 @@ runs:
           # Detect Debian based OS
           if [ -d "/etc/apt" ]
           then
+            apt-get update
             apt-get install -y python3 > /dev/null
           else
+            yum check-update || true
             yum install -y python3.11
           fi
         fi
@@ -40,19 +45,32 @@ runs:
           modl_path=$(which MODL)
           khiops_bin_dir=$(dirname "$modl_path")
           KHIOPS_SCRIPT="$khiops_bin_dir/khiops.cmd"
-          KHIOPS_CC_SCRIPT="$khiops_bin_dir/khiops_coclustering.cmd"
           echo "KHIOPS_SCRIPT=$KHIOPS_SCRIPT" >> "$GITHUB_ENV"
           echo "KHIOPS_CC_SCRIPT=$KHIOPS_CC_SCRIPT" >> "$GITHUB_ENV"
         else
-          echo "KHIOPS_SCRIPT=khiops" >> "$GITHUB_ENV"
-          echo "KHIOPS_CC_SCRIPT=khiops_coclustering" >> "$GITHUB_ENV"
+          # Compute or get the khiops_env directory
+          if type -P khiops_env &> /dev/null
+          then
+            KHIOPS_ENV_DIR=$(dirname $(type -P khiops_env))
+          elif [[ -n "$CONDA_ENV_BIN_DIR" ]]
+          then
+            KHIOPS_ENV_DIR=$CONDA_ENV_BIN_DIR
+          else
+            echo "::error::This action expects CONDA_ENV_BIN_DIR to be defined"
+            false
+          fi
+          echo "KHIOPS_SCRIPT=$KHIOPS_ENV_DIR/khiops" >> "$GITHUB_ENV"
         fi
     - name: Run Khiops tests
       shell: bash
       env:
         KHIOPS_PROC_NUMBER: 4
+        # Use more processes than available CPUs: OpenMPI < 5
         OMPI_MCA_rmaps_base_oversubscribe: true
-        KHIOPS_MPI_VERBOSE: true
+        # Use more processes than available CPUs: OpenMPI >= 5
+        PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe
+        KHIOPS_API_MODE: true
+        KHIOPS_MPI_VERBOSE: ${{ inputs.show-openmpi-errors }}
       run: |
         cd test/LearningTest/TestKhiops/Standard/Iris/
         "$KHIOPS_SCRIPT" -b -i test.prm -e results/err.txt
@@ -74,7 +92,7 @@ runs:
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ inputs.os-decription }}
+        name: test-results-${{ inputs.os-decription}}
         retention-days: 7
         path: |-
           results/
