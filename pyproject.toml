@@ -17,16 +17,14 @@ source = "https://github.com/KhiopsML/khiopsdriver-gcs.git"
 
 [tool.scikit-build]
 wheel.py-api = "py3"
-wheel.packages = ["packaging/python/khiopsdriver_gcs"]
+#wheel.packages = ["packaging/python/khiopsdriver_gcs"]
 ninja.make-fallback = false
-cmake.define = {PACKAGING_FOR_PYTHON=true}
+cmake.define = {PYTHON_PACKAGE_NAME="khiopsdriver_gcs", CMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"}
 # Allow Ninja to be used even on Windows. Without this, Ninja fails, complaining that a platform has been specified.
 # Ninja does not support platform specification, which is mostly reserved to Visual Studio generators.
 # Somehow, this variable seems to be set so we have to empty it.
 cmake.args = [
-  "-A", "",
-  "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake",
-  "-DPYTHON_PACKAGE_NAME=khiopsdriver_gcs"
+  "-A", ""
 ]
 
 build.targets = ["khiopsdriver_file_gcs"]
