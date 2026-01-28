@@ -90,7 +90,7 @@ target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage sp
 
 set_target_properties(
   khiopsdriver_file_gcs
-  PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/gcsplugin.h
+  PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/gcsplugin.h"
              SOVERSION ${PROJECT_VERSION_MAJOR}
              VERSION ${PROJECT_VERSION})
 
@@ -121,10 +121,10 @@ add_subdirectory(test)
 
 install(
   TARGETS khiopsdriver_file_gcs
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib # lib on windows
-  RUNTIME DESTINATION bin # dll on windows
-)
+  LIBRARY DESTINATION ${PYTHON_PACKAGE_NAME}/lib
+  ARCHIVE DESTINATION ${PYTHON_PACKAGE_NAME}/lib # lib on windows
+  RUNTIME DESTINATION ${PYTHON_PACKAGE_NAME}/bin # dll on windows
+  PUBLIC_HEADER DESTINATION ${PYTHON_PACKAGE_NAME}/include)
 
 set(CPACK_PACKAGE_VENDOR Orange)
 set(CPACK_PACKAGE_HOMEPAGE_URL https://khiops.org)

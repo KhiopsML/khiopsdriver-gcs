@@ -1,0 +1,36 @@
+[build-system]
+requires = ["scikit-build-core"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "khiopsdriver-gcs"
+version = "0.0.15"
+description = "A GCS extension plugin for the Khiops program"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "BSD-3-Clause-Clear"
+license-files = ["LICENSE"]
+maintainers = [{name="The Khiops Team", email="khiops.team@orange.com"}]
+
+[project.urls]
+source = "https://github.com/KhiopsML/khiopsdriver-gcs.git"
+
+[tool.scikit-build]
+wheel.py-api = "py3"
+wheel.packages = ["packaging/python/khiopsdriver_gcs"]
+ninja.make-fallback = false
+cmake.define = {PACKAGING_FOR_PYTHON=true}
+# Allow Ninja to be used even on Windows. Without this, Ninja fails, complaining that a platform has been specified.
+# Ninja does not support platform specification, which is mostly reserved to Visual Studio generators.
+# Somehow, this variable seems to be set so we have to empty it.
+cmake.args = [
+  "-A", ""
+  "",
+  "-DPYTHON_PACKAGE_NAME=khiopsdriver_gcs"
+]
+
+build.targets = ["khiopsdriver_file_gcs"]
+
+[tool.cibuildwheel]
+build = "cp39-*"  # Create wheels compatible with CPython 3.9 and newer (and scikit-build-core will re-tag the Python API as "py3")
+skip = "*musllinux*"  # umodl does not support musllinux
