@@ -24,7 +24,7 @@ cmake.define = {PACKAGING_FOR_PYTHON=true}
 # Ninja does not support platform specification, which is mostly reserved to Visual Studio generators.
 # Somehow, this variable seems to be set so we have to empty it.
 cmake.args = [
-  "-A", ""
+  "-A", "",
   "",
   "-DPYTHON_PACKAGE_NAME=khiopsdriver_gcs"
 ]
