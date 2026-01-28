@@ -45,7 +45,7 @@ jobs:
 
       - uses: pypa/cibuildwheel@v3.3.1
         env:
-          CIBW_BEFORE_BUILD: |
+          CIBW_BEFORE_ALL_LINUX: |
             set -ex
             dnf install -y perl zip pkg-config 
           CMAKE_ARGS: -DCMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake"
