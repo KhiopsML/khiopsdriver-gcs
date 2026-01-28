@@ -25,7 +25,7 @@ cmake.define = {PACKAGING_FOR_PYTHON=true}
 # Somehow, this variable seems to be set so we have to empty it.
 cmake.args = [
   "-A", "",
-  "",
+  "-DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake",
   "-DPYTHON_PACKAGE_NAME=khiopsdriver_gcs"
 ]
 
