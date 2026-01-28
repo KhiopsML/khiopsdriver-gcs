@@ -47,7 +47,7 @@ jobs:
         env:
           CIBW_BEFORE_BUILD: |
             set -ex
-            dnf install perl zip pkg-config 
+            dnf install -y perl zip pkg-config 
           CMAKE_ARGS: -DCMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake"
           
       - uses: actions/upload-artifact@v4
