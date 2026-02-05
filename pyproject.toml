@@ -1,34 +1,63 @@
+# This file is used to package this project as a pip package.
+
 [build-system]
-requires = ["scikit-build-core"]
-build-backend = "scikit_build_core.build"
+requires = ["py-build-cmake"]
+build-backend = "py_build_cmake.build"
+
 
 [project]
 name = "khiopsdriver-gcs"
-version = "0.0.15"
-description = "A GCS extension plugin for the Khiops program"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "BSD-3-Clause-Clear"
 license-files = ["LICENSE"]
-maintainers = [{name="The Khiops Team", email="khiops.team@orange.com"}]
+maintainers = [{name = "Khiops Team", email = "khiops.team@orange.com"}]
+dynamic = ["version", "description"]
 
-[project.urls]
-source = "https://github.com/KhiopsML/khiopsdriver-gcs.git"
 
-[tool.scikit-build]
-wheel.py-api = "py3"
-#wheel.packages = ["packaging/python/khiopsdriver_gcs"]
-ninja.make-fallback = false
-cmake.define = {PYTHON_PACKAGE_NAME="khiopsdriver_gcs", CMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"}
-# Allow Ninja to be used even on Windows. Without this, Ninja fails, complaining that a platform has been specified.
-# Ninja does not support platform specification, which is mostly reserved to Visual Studio generators.
-# Somehow, this variable seems to be set so we have to empty it.
-cmake.args = [
-  "-A", ""
+[tool.py-build-cmake.module]
+name = "metadata"  # The metadata module will be run by py-build-cmake to set the package version and description
+
+# In the source distribution, only keep the files that are needed to build the program
+[tool.py-build-cmake.sdist]
+include = ["*"]
+exclude = [
+    ".*",
+    "__pycache__",
+    "dist",
+    "wheelhouse",
+    "scripts",
+    "test/LearningTest",
+    "test/LearningTestTool",
+    "vcpkg/buildtrees",
+    "vcpkg/downloads",
+    "vcpkg/packages"
 ]
 
-build.targets = ["khiopsdriver_file_gcs"]
+[tool.py-build-cmake.cmake]
+minimum_version = "3.21"
+find_python = false   # C++-only package
+find_python3 = false   # C++-only package
+preset = "configure-ninja-rel"
+build_presets = ["build-ninja-rel"]
+generator = "Ninja"  # This is already set in the preset but py-build-cmake has to be told what generator we use, so that it does not force the platform specification
+build_path = "build/release"  # Avoid creation of a custom directory by py-build-cmake (which does not use the one specified in the preset)
+
+[tool.py-build-cmake.wheel]
+python_tag = "py3"  # C++-only package
+python_abi = "none"  # C++-only package
+
 
 [tool.cibuildwheel]
-build = "cp39-*"  # Create wheels compatible with CPython 3.9 and newer (and scikit-build-core will re-tag the Python API as "py3")
-skip = "*musllinux*"  # umodl does not support musllinux
+build = "cp39-*"
+skip = "*musllinux*"  # Khiops itself does not compile under musl linuxes, so there is no need for musl linux Khiops drivers
+archs = "auto64"  # Do not build 32-bit wheels
+
+# Install build-time dependencies in containers created by cibuildwheel
+# This is compatible with Debian-like and Fedora-like distributions
+[tool.cibuildwheel.linux]
+before-all = [
+    "DEB_NEEDS='zip perl ninja-build'",
+    "FED_NEEDS='zip perl ninja-build'",
+    "apt-get install -y $DEB_NEEDS || dnf install -y $FED_NEEDS"
+]
