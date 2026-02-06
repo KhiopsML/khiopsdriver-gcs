@@ -25,16 +25,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - os: windows-latest
-            triplet: x64-windows
-          - os: ubuntu-latest
-            triplet: x64-linux
-          - os: macos-13
-            triplet: x64-osx
-          - os: macos-14
-            triplet: arm64-osx
+          - {os: ubuntu-latest, triplet: x64-linux}
+          - {os: macos-latest, triplet: arm64-osx}
+          - {os: macos-15-intel, triplet: x64-osx}
+          - {os: macos-14, triplet: arm64-osx}
+          - {os: windows-latest, triplet: x64-windows}
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -108,9 +107,9 @@ jobs:
       #   run: |
       #     sudo apt-get update
       #     sudo apt-get install lcov gcovr
-      #     cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
-      #     cmake --build --preset ninja-vcpkg-debug
-      #     ctest --preset test-debug --output-on-failure
+      #     cmake --preset configure-ninja-dbg -DBUILD_TESTS=ON
+      #     cmake --build --preset build-ninja-dbg
+      #     ctest --preset test--ninja-dbg --output-on-failure
       #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       # - name: Upload coverage results
@@ -130,7 +129,7 @@ jobs:
       # store the built packages artifacts.
       - name: Restore from cache the dependencies and generate project files
         run: |
-          cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Release
+          cmake --preset configure-ninja-rel -DBUILD_TESTS=ON
 
       # Build (Release configuration only) the whole project with Ninja (which is spawn by CMake).
       #
@@ -139,21 +138,25 @@ jobs:
       # run: cmake --build --preset ninja-vcpkg --config Release
       - name: Build (Release configuration)
         run: |
-          cmake --build --preset ninja-vcpkg-release
+          cmake --build --preset build-ninja-rel
 
       # Test the whole project with CTest, again Release configuration only.
-      - name: Test (Release configuration)
-        run: |
-          ctest --preset test-release --output-on-failure
+      - name: Test release
+        run: ctest --preset test-ninja-rel --output-junit test_results.xml
 
+      - name: Upload results of cloud storage tests
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: ${{ github.workspace }}/build/release/test_results.xml
 
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
           path: |
-            builds/ninja-multi-vcpkg/lib/*.dylib
-            builds/ninja-multi-vcpkg/lib/*.so
-            builds/ninja-multi-vcpkg/lib/*.dll
-            builds/ninja-multi-vcpkg/lib/*.lib
+            build/release/lib/*.dylib
+            build/release/lib/*.so
+            build/release/bin/*.dll
+            build/release/bin/*.lib
           if-no-files-found: ignore
