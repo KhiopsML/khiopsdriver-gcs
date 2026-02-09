@@ -6,7 +6,7 @@ build-backend = "py_build_cmake.build"
 
 
 [project]
-name = "khiopsdriver-gcs"
+name = "khiops-driver-gcs"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "BSD-3-Clause-Clear"
