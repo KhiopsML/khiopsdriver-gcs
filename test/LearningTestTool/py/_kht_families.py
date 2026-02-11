@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Orange. All rights reserved.
+# Copyright (c) 2023-2025 Orange. All rights reserved.
 # This software is distributed under the BSD 3-Clause-clear License, the text of which is available
 # at https://spdx.org/licenses/BSD-3-Clause-Clear.html or see the "LICENSE" file for more details.
 
@@ -86,13 +86,14 @@ FAMILY_TEST_SUITES[FULL, kht.COCLUSTERING] = [
 ]
 FAMILY_TEST_SUITES[FULL, kht.KNI] = ["Standard", "MultiTables", "SmallInstability"]
 
-# Nouvelle suites specifique a la version 11
+# Nouvelles suites specifique a la version 11
 if KHIOPS_V11:
     FAMILY_TEST_SUITES[FULL, kht.KHIOPS] = FAMILY_TEST_SUITES[FULL, kht.KHIOPS] + [
         "KIInterpretation",
         "Histograms",
         "HistogramsLimits",
         "TextVariables",
+        "TableCreationRules",
     ]
 
 # Famille full sans KNI

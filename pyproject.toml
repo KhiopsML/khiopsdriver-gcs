@@ -1,0 +1,63 @@
+# This file is used to package this project as a pip package.
+
+[build-system]
+requires = ["py-build-cmake"]
+build-backend = "py_build_cmake.build"
+
+
+[project]
+name = "khiops-driver-gcs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "BSD-3-Clause-Clear"
+license-files = ["LICENSE"]
+maintainers = [{name = "Khiops Team", email = "khiops.team@orange.com"}]
+dynamic = ["version", "description"]
+
+
+[tool.py-build-cmake.module]
+name = "metadata"  # The metadata module will be run by py-build-cmake to set the package version and description
+
+# In the source distribution, only keep the files that are needed to build the program
+[tool.py-build-cmake.sdist]
+include = ["*"]
+exclude = [
+    ".*",
+    "__pycache__",
+    "dist",
+    "wheelhouse",
+    "scripts",
+    "test/LearningTest",
+    "test/LearningTestTool",
+    "vcpkg/buildtrees",
+    "vcpkg/downloads",
+    "vcpkg/packages"
+]
+
+[tool.py-build-cmake.cmake]
+minimum_version = "3.21"
+find_python = false   # C++-only package
+find_python3 = false   # C++-only package
+preset = "configure-ninja-rel"
+build_presets = ["build-ninja-rel"]
+generator = "Ninja"  # This is already set in the preset but py-build-cmake has to be told what generator we use, so that it does not force the platform specification
+build_path = "build/release"  # Avoid creation of a custom directory by py-build-cmake (which does not use the one specified in the preset)
+
+[tool.py-build-cmake.wheel]
+python_tag = "py3"  # C++-only package
+python_abi = "none"  # C++-only package
+
+
+[tool.cibuildwheel]
+build = "cp39-*"
+skip = "*musllinux*"  # Khiops itself does not compile under musl linuxes, so there is no need for musl linux Khiops drivers
+archs = "auto64"  # Do not build 32-bit wheels
+
+# Install build-time dependencies in containers created by cibuildwheel
+# This is compatible with Debian-like and Fedora-like distributions
+[tool.cibuildwheel.linux]
+before-all = [
+    "DEB_NEEDS='zip perl ninja-build'",
+    "FED_NEEDS='zip perl ninja-build'",
+    "apt-get install -y $DEB_NEEDS || dnf install -y $FED_NEEDS"
+]

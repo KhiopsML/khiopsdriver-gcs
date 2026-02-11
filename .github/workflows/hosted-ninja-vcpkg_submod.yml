@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: windows-latest
             triplet: x64-windows
@@ -86,17 +86,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'ninja-multi-vcpkg'
-          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Debug']"
-          buildPreset: 'ninja-vcpkg-debug'
-          testPreset: 'test-debug'
+          configurePreset: 'configure-ninja-dbg'
+          configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
+          buildPreset: 'build-ninja-dbg'
+          testPreset: 'test-ninja-dbg'
           testPresetAdditionalArgs: "['--output-on-failure']"
 
       # GCOV seems to be broken with newer versions of GCC, so we disable it for now.
       # - name: Generate coverage report
       #   if: matrix.os == 'ubuntu-latest'
       #   run: |
-      #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
+      #     cmake --build --preset test-ninja-dbg --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       # - name: Upload coverage results
       #   uses: actions/upload-artifact@v4
@@ -111,10 +111,10 @@ jobs:
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'ninja-multi-vcpkg'
-          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
-          buildPreset: 'ninja-vcpkg-release'
-          testPreset: 'test-release'
+          configurePreset: 'configure-ninja-rel'
+          configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
+          buildPreset: 'build-ninja-rel'
+          testPreset: 'test-ninja-rel'
           testPresetAdditionalArgs: "['--output-on-failure']"
   
       - name: Upload the packages as artifacts
@@ -122,8 +122,8 @@ jobs:
         with:
           name: binary-${{ matrix.os }}
           path: |
-            builds/ninja-multi-vcpkg/lib/*.dylib
-            builds/ninja-multi-vcpkg/lib/*.so
-            builds/ninja-multi-vcpkg/lib/*.dll
-            builds/ninja-multi-vcpkg/lib/*.lib
+            build/release/lib/*.dylib
+            build/release/lib/*.so
+            build/release/bin/*.dll
+            build/release/bin/*.lib
           if-no-files-found: ignore

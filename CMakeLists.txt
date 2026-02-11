@@ -24,7 +24,7 @@ message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version
 project(
   khiops-gcs
   LANGUAGES CXX
-  VERSION 0.0.14)
+  VERSION ${DRIVER_VERSION})
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 
@@ -32,25 +32,18 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 set(INSTALL_GTEST OFF)
 set(INSTALL_GMOCK OFF)
 
-# MSVC: Eliminate some options the old CMake way because VS sets them with undesired default values
-#
-# - the C++ exception flags
-# - the runtime information flags
-# - the debug information generation flags
-#
-if(MSVC)
-  string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  string(REGEX REPLACE "/GR" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  string(REGEX REPLACE "/Zi" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+if(BUILD_TESTS)
+  include(GoogleTest)
+  enable_testing()
 endif()
 
-include(GoogleTest)
-enable_testing()
-
 # Find dependencies
-find_package(fmt CONFIG REQUIRED)
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+if(BUILD_TESTS)
+  find_package(fmt CONFIG REQUIRED)
+  find_package(Boost REQUIRED)
+endif()
 
 # Hide symbols in the shared libraries
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -72,23 +65,27 @@ message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 # Avoid generating shared libs with version number in the filename
 set(CMAKE_PLATFORM_NO_VERSIONED_SONAME 1)
 
-# if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release")) message("Build system == Linux,
-# build with sanitizer tools") add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
-# add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all) include(CodeCoverage)
-# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
-# setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
-# setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage
-# --gtest_output=xml:coverage.junit.xml) endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  message("Build system == Linux and build type != Release  ==>  build with sanitizer tools")
+  add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+  add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+  if(BUILD_TESTS)
+    include(CodeCoverage)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
+    setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
+    setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage
+                                        --gtest_output=xml:coverage.junit.xml)
+  endif()
+endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp src/utils.h
-                                         src/utils.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
 
 set_target_properties(
   khiopsdriver_file_gcs
-  PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/gcsplugin.h
+  PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/gcsplugin.h"
              SOVERSION ${PROJECT_VERSION_MAJOR}
              VERSION ${PROJECT_VERSION})
 
@@ -113,16 +110,18 @@ if(BUILD_TESTS)
   target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt ${CMAKE_DL_LIBS})
   add_executable(drivertest src/drivertest.cpp)
   target_link_libraries(drivertest ${CMAKE_DL_LIBS} google-cloud-cpp::storage) # Link to dl
+  add_subdirectory(test)
 endif(BUILD_TESTS)
-
-add_subdirectory(test)
 
 install(
   TARGETS khiopsdriver_file_gcs
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib # lib on windows
-  RUNTIME DESTINATION lib # dll on windows
+  RUNTIME DESTINATION bin # dll on windows
 )
+
+# When packaging as a 'Python' wheel, prevent the metadata module from being copied into the wheel
+file(REMOVE "${CMAKE_INSTALL_PREFIX}/metadata.py")
 
 set(CPACK_PACKAGE_VENDOR Orange)
 set(CPACK_PACKAGE_HOMEPAGE_URL https://khiops.org)

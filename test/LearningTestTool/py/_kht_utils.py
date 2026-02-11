@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Orange. All rights reserved.
+# Copyright (c) 2023-2025 Orange. All rights reserved.
 # This software is distributed under the BSD 3-Clause-clear License, the text of which is available
 # at https://spdx.org/licenses/BSD-3-Clause-Clear.html or see the "LICENSE" file for more details.
 
@@ -455,7 +455,7 @@ def read_file_lines(file_path, log_file=None, show=False):
     """
     # lecture des lignes du fichier
     try:
-        with open(file_path, "r", errors="ignore") as file:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as file:
             file_lines = file.readlines()
     except BaseException as exception:
         write_message(
@@ -476,7 +476,7 @@ def write_file_lines(
     """
     # lecture des lignes du fichier
     try:
-        with open(file_path, "w", errors="ignore") as file:
+        with open(file_path, "w", encoding="utf-8", errors="ignore") as file:
             for line in file_lines:
                 file.write(line)
                 if len(line) == 0 or line[-1] != "\n":

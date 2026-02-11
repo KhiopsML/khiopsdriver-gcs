@@ -1,0 +1,111 @@
+# This workflow will:
+# - Build the source distribution (Python sdist)
+# - Build the binary distributions (Python wheels)
+# - Publish the sdist+wheels to test.pypi.org
+# - Install package from test.pypi.org and run it for testing purposes
+# - Publish the package to pypi.org
+
+name: Upload Python Package
+
+on: 
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  build-wheels:
+    name: Build wheel on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+    
+      # Ensure compiler and linker are on PATH (needed for building wheels on windows, does nothing on other OSes)
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: pypa/cibuildwheel@v3.3.1
+        env:
+          CIBW_BEFORE_ALL_LINUX: |
+            set -ex
+            dnf install -y perl zip pkg-config 
+          CMAKE_ARGS: -DCMAKE_TOOLCHAIN_FILE="$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: wheelhouse/*.whl
+
+  testpypi-publish:
+    name: Publish to Test.PyPI.org
+    needs: [build-sdist, build-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/khiopsdriver_gcs
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  test-pkg-from-testpypi:
+    name: Test package from Test.PyPI.org on ${{ matrix.os }}
+    needs: [testpypi-publish]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.9
+      
+      - name: Install package
+        run: python -m pip install -i https://test.pypi.org/simple/ khiopsdriver_gcs
+
+      # Find something useful to test
+  
+  pypi-publish:
+    name: Publish to PyPI.org
+    needs: [test-pkg-from-testpypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/khiopsdriver_gcs
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
