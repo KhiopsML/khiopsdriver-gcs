@@ -157,47 +157,242 @@ TEST(GCSDriverTest, GetSystemPreferredBufferSize) {
   ASSERT_EQ(driver_getSystemPreferredBufferSize(), 4 * 1024 * 1024);
 }
 
-TEST(GCSDriverTest, concat) {
+TEST(GCSDriverTest, Concat) {
   constexpr size_t nsources = 6;
-  const char *sources[nsources] = {"khiops_data/"
-                                   "split/Adult/Adult-split-00.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-01.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-02.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-03.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-04.txt",
-                                   "khiops_data/"
-                                   "split/Adult/Adult-split-05.txt"};
-  std::string outputAsString =
+  const char *sources[nsources] = {
+      "khiops_data/split/Adult/Adult-split-00.txt",
+      "khiops_data/split/Adult/Adult-split-01.txt",
+      "khiops_data/split/Adult/Adult-split-02.txt",
+      "khiops_data/split/Adult/Adult-split-03.txt",
+      "khiops_data/split/Adult/Adult-split-04.txt",
+      "khiops_data/split/Adult/Adult-split-05.txt"};
+
+  const std::string bucket = "data-test-khiops-driver-gcs";
+
+  // Generate unique temporary path prefix using UUID
+  std::string temp_prefix =
       (std::ostringstream()
-       << "gs://data-test-khiops-driver-gcs/tmp_test_output/"
-          "driver_concat_test_output_"
-       << boost::uuids::random_generator()())
+       << "tmp_test_concat_" << boost::uuids::random_generator()() << "/")
           .str();
+
+  std::string outputAsString =
+      (std::ostringstream() << "gs://" << bucket << "/" << temp_prefix
+                            << "driver_concat_test_output")
+          .str();
+
   const char *output = outputAsString.c_str();
   const char *reference = "gs://data-test-khiops-driver-gcs/khiops_data/"
                           "samples/Adult/Adult.txt";
+
   ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
+
+  // Copy source files to temporary location using test_copyObject
+  std::vector<std::string> relative_temp_paths;
+  relative_temp_paths.reserve(nsources); // ✅ IMPORTANT: réserver la capacité
+
+  for (size_t i = 0; i < nsources; ++i) {
+    // Source object path (relative to bucket)
+    std::string source_object = sources[i];
+
+    // Destination object path (relative to bucket, in temp prefix)
+    std::string temp_object =
+        temp_prefix + "source_" + std::to_string(i) + ".txt";
+
+    // Copy using test helper function
+    auto copy_status = test_copyObject(bucket,        // source bucket
+                                       source_object, // source object
+                                       bucket,     // destination bucket (same)
+                                       temp_object // destination object
+    );
+
+    ASSERT_TRUE(copy_status.ok())
+        << "Failed to copy source " << i
+        << " to temporary location: " << copy_status.message();
+
+    // Store the relative path for concat
+    relative_temp_paths.push_back(temp_object);
+  }
+
+  // ✅ Construire le tableau de pointeurs APRÈS avoir fini d'ajouter tous les
+  // strings
+  std::vector<const char *> relative_temp_path_ptrs;
+  relative_temp_path_ptrs.reserve(nsources);
+
+  for (const auto &path : relative_temp_paths) {
+    relative_temp_path_ptrs.push_back(path.c_str());
+  }
+
   ASSERT_EQ(driver_fileExists(output), kFalse)
       << "The output file exists before concatenation";
-  ASSERT_EQ(driver_concat(output, sources, nsources), kSuccess)
+
+  // Concatenate using relative paths
+  ASSERT_EQ(driver_concat(output, relative_temp_path_ptrs.data(), nsources),
+            kSuccess)
       << "Concatenation failed";
-  for (size_t i = 0; i != nsources; i++)
-    ASSERT_EQ(driver_fileExists(std::string("gs://data-test-khiops-driver-gcs/")
-                                    .append(sources[i])
-                                    .c_str()),
-              kTrue)
-        << "An input file has been removed";
+
+  // Verify source files were deleted after concatenation
+  for (const auto &relative_temp_path : relative_temp_paths) {
+    std::string temp_full_path =
+        std::string("gs://") + bucket + "/" + relative_temp_path;
+    ASSERT_EQ(driver_fileExists(temp_full_path.c_str()), kFalse)
+        << "Source file " << temp_full_path
+        << " was not deleted after concatenation";
+  }
+
   ASSERT_EQ(driver_fileExists(output), kTrue)
       << "The concatenation created no output file";
+
   ASSERT_EQ(driver_getFileSize(output), driver_getFileSize(reference))
       << "Incorrect output file size";
-  ASSERT_EQ(driver_remove(output), kSuccess) << "Failed to removed output file";
+
+  // Clean up: remove output file
+  ASSERT_EQ(driver_remove(output), kSuccess) << "Failed to remove output file";
+
   ASSERT_EQ(driver_fileExists(output), kFalse)
       << "Output file still exists after removal";
+
+  ASSERT_EQ(driver_disconnect(), kSuccess) << "Failed to disconnect";
+}
+
+TEST(GCSDriverTest, ComposeMultifile) {
+  constexpr size_t nsources = 6;
+  const char *sources[nsources] = {
+      "khiops_data/split/Adult/Adult-split-00.txt",
+      "khiops_data/split/Adult/Adult-split-01.txt",
+      "khiops_data/split/Adult/Adult-split-02.txt",
+      "khiops_data/split/Adult/Adult-split-03.txt",
+      "khiops_data/split/Adult/Adult-split-04.txt",
+      "khiops_data/split/Adult/Adult-split-05.txt"};
+
+  const std::string bucket = "data-test-khiops-driver-gcs";
+
+  // Generate unique temporary path prefix using UUID
+  std::string temp_prefix =
+      (std::ostringstream() << "tmp_test_compose_multifile_"
+                            << boost::uuids::random_generator()() << "/")
+          .str();
+
+  // Globbing pattern for output files
+  std::string outputPattern =
+      (std::ostringstream()
+       << "gs://" << bucket << "/" << temp_prefix << "Adult-renamed-*.txt")
+          .str();
+
+  const char *output_pattern = outputPattern.c_str();
+
+  ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
+
+  // Copy source files to temporary location using test_copyObject
+  std::vector<std::string> relative_temp_paths;
+  relative_temp_paths.reserve(nsources);
+
+  for (size_t i = 0; i < nsources; ++i) {
+    // Source object path (relative to bucket)
+    std::string source_object = sources[i];
+
+    // Destination object path (relative to bucket, in temp prefix)
+    std::string temp_object =
+        temp_prefix + "source_" + std::to_string(i) + ".txt";
+
+    // Copy using test helper function
+    auto copy_status = test_copyObject(bucket,        // source bucket
+                                       source_object, // source object
+                                       bucket,     // destination bucket (same)
+                                       temp_object // destination object
+    );
+
+    ASSERT_TRUE(copy_status.ok())
+        << "Failed to copy source " << i
+        << " to temporary location: " << copy_status.message();
+
+    // Store the relative path for composeMultifile
+    relative_temp_paths.push_back(temp_object);
+  }
+
+  // Build array of const char* AFTER all strings are in the vector
+  std::vector<const char *> relative_temp_path_ptrs;
+  relative_temp_path_ptrs.reserve(nsources);
+
+  for (const auto &path : relative_temp_paths) {
+    relative_temp_path_ptrs.push_back(path.c_str());
+  }
+
+  // Call composeMultifile to rename files according to pattern
+  ASSERT_EQ(driver_composeMultifile(output_pattern,
+                                    relative_temp_path_ptrs.data(), nsources),
+            kSuccess)
+      << "ComposeMultifile failed";
+
+  // Verify that source files were deleted after renaming
+  for (const auto &relative_temp_path : relative_temp_paths) {
+    std::string temp_full_path =
+        std::string("gs://") + bucket + "/" + relative_temp_path;
+    ASSERT_EQ(driver_fileExists(temp_full_path.c_str()), kFalse)
+        << "Source file " << temp_full_path
+        << " was not deleted after renaming";
+  }
+
+  // Verify that renamed files exist and match the pattern
+  // Expected names: Adult-renamed-000000000000.txt,
+  // Adult-renamed-000000000001.txt, etc.
+  std::vector<std::string> expected_renamed_files;
+  expected_renamed_files.reserve(nsources);
+
+  for (size_t i = 0; i < nsources; ++i) {
+    std::ostringstream oss;
+    oss << temp_prefix << "Adult-renamed-" << std::setfill('0') << std::setw(12)
+        << i << ".txt";
+    expected_renamed_files.push_back(oss.str());
+  }
+
+  // Verify each renamed file exists
+  for (const auto &renamed_file : expected_renamed_files) {
+    std::string full_path = std::string("gs://") + bucket + "/" + renamed_file;
+    ASSERT_EQ(driver_fileExists(full_path.c_str()), kTrue)
+        << "Renamed file " << full_path << " does not exist";
+  }
+
+  // Verify file count by listing objects matching the pattern
+  // Use the globbing pattern to list files
+  std::string list_pattern = temp_prefix + "Adult-renamed-*.txt";
+  std::string list_uri = std::string("gs://") + bucket + "/" + list_pattern;
+
+  // Get file size to trigger listing (this will list all matching files)
+  long long total_size = driver_getFileSize(list_uri.c_str());
+  ASSERT_GT(total_size, 0) << "No files found matching pattern " << list_uri;
+
+  // Alternative verification: manually count files using test_listObjects
+  auto maybe_list = test_listObjects(bucket, list_pattern);
+  ASSERT_TRUE(maybe_list.begin() != maybe_list.end())
+      << "ListObjects returned empty result";
+
+  size_t file_count = 0;
+  for (auto it = maybe_list.begin(); it != maybe_list.end(); ++it) {
+    ASSERT_TRUE(it->ok()) << "Error iterating over listed objects";
+    file_count++;
+  }
+
+  ASSERT_EQ(file_count, nsources)
+      << "Expected " << nsources << " renamed files, found " << file_count;
+
+  // Clean up: remove all renamed files
+  for (const auto &renamed_file : expected_renamed_files) {
+    std::string full_path = std::string("gs://") + bucket + "/" + renamed_file;
+    ASSERT_EQ(driver_remove(full_path.c_str()), kSuccess)
+        << "Failed to remove renamed file " << full_path;
+  }
+
+  // Verify cleanup
+  for (const auto &renamed_file : expected_renamed_files) {
+    std::string full_path = std::string("gs://") + bucket + "/" + renamed_file;
+    ASSERT_EQ(driver_fileExists(full_path.c_str()), kFalse)
+        << "Renamed file " << full_path << " still exists after cleanup";
+  }
+
+  // Clean up temporary directory (remove any remaining files)
+  std::string temp_dir_pattern = "gs://" + bucket + "/" + temp_prefix + "*";
+  driver_remove(temp_dir_pattern.c_str());
+
   ASSERT_EQ(driver_disconnect(), kSuccess) << "Failed to disconnect";
 }
 
@@ -1684,7 +1879,444 @@ TEST_F(GCSDriverTestFixture, Write_Upload_OK) {
   ASSERT_EQ(initial_state, RecordDriverState());
 }
 
-// EXPECT_CALL(*mock_client, UploadChunk)
-//     .WillOnce(Return(QueryResumableUploadResponse{
-//             /*.committed_size=*/absl::nullopt,
-//             /*.object_metadata=*/expected_metadata }));
+TEST_F(GCSDriverTestFixture, Remove_NonExistingFile) {
+  // ListObjects renvoie "NotFound" → driver_remove doit réussir sans supprimer
+  EXPECT_CALL(*mock_client, ListObjects)
+      .WillOnce(Return(gc::Status(gc::StatusCode::kNotFound, "not found")));
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/missing.txt"), kSuccess);
+}
+
+static void
+ExpectDelete(gcs::testing::MockClient &client, const std::string &bucket,
+             const std::string &object_name,
+             gc::StatusOr<gc::storage::internal::EmptyResponse> status =
+                 gc::storage::internal::EmptyResponse{}) {
+  EXPECT_CALL(
+      client,
+      DeleteObject(::testing::Truly(
+          [bucket, object_name](gcs::internal::DeleteObjectRequest const &req) {
+            return req.bucket_name() == bucket &&
+                   req.object_name() == object_name;
+          })))
+      .WillOnce(Return(status));
+}
+
+TEST_F(GCSDriverTestFixture, Remove_SingleFile) {
+  EXPECT_CALL(*mock_client, ListObjects)
+      .WillOnce(
+          Return<LOReturnType>(MakeLOR("mock_bucket", {"file1.txt"}, {10})));
+
+  ExpectDelete(*mock_client, "mock_bucket", "file1.txt");
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file1.txt"), kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
+  EXPECT_CALL(*mock_client, ListObjects)
+      .WillOnce(Return<LOReturnType>(
+          MakeLOR("mock_bucket", {"file1.txt", "file2.txt", "file3.txt"},
+                  {10, 20, 30})));
+
+  ExpectDelete(*mock_client, "mock_bucket", "file1.txt");
+  ExpectDelete(*mock_client, "mock_bucket", "file2.txt");
+  ExpectDelete(*mock_client, "mock_bucket", "file3.txt");
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file*.txt"), kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_Success) {
+  const char *sources[3] = {"input/file_a.txt", "input/file_b.txt",
+                            "input/file_c.txt"};
+
+  const std::string bucket = "mock_bucket";
+  const std::string dest_object = "output/concatenated.txt";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+  metadata.set_name(dest_object);
+
+  // Expect ComposeObject call
+  EXPECT_CALL(
+      *mock_client,
+      ComposeObject(
+          ::testing::Truly([bucket, dest_object](
+                               gcs::internal::ComposeObjectRequest const &req) {
+            return req.bucket_name() == bucket &&
+                   req.object_name() == dest_object &&
+                   req.source_objects().size() == 3 &&
+                   req.source_objects()[0].object_name == "input/file_a.txt" &&
+                   req.source_objects()[1].object_name == "input/file_b.txt" &&
+                   req.source_objects()[2].object_name == "input/file_c.txt";
+          })))
+      .WillOnce(Return(metadata));
+
+  // Expect DeleteObject calls for each source file
+  ExpectDelete(*mock_client, bucket, "input/file_a.txt");
+  ExpectDelete(*mock_client, bucket, "input/file_b.txt");
+  ExpectDelete(*mock_client, bucket, "input/file_c.txt");
+
+  ASSERT_EQ(
+      driver_concat("gs://mock_bucket/output/concatenated.txt", sources, 3),
+      kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
+  const char *sources[2] = {"file1.txt", "file2.txt"};
+
+  // ComposeObject fails
+  EXPECT_CALL(*mock_client, ComposeObject)
+      .WillOnce(Return(gc::Status(gc::StatusCode::kUnknown, "Compose failed")));
+
+  // DeleteObject should NOT be called since compose failed
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
+  const char *sources[2] = {"file1.txt", "file2.txt"};
+
+  const std::string bucket = "mock_bucket";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  // ComposeObject succeeds
+  EXPECT_CALL(*mock_client, ComposeObject).WillOnce(Return(metadata));
+
+  // First delete succeeds
+  ExpectDelete(*mock_client, bucket, "file1.txt");
+
+  // Second delete fails
+  ExpectDelete(*mock_client, bucket, "file2.txt",
+               gc::Status(gc::StatusCode::kUnknown, "Delete failed"));
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
+  const char *sources[2] = {"file1.txt", "file2.txt"};
+
+  const std::string bucket = "mock_bucket";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  // ComposeObject succeeds
+  EXPECT_CALL(*mock_client, ComposeObject).WillOnce(Return(metadata));
+
+  // First delete succeeds
+  ExpectDelete(*mock_client, bucket, "file1.txt");
+
+  // Second delete returns NotFound (should be ignored)
+  ExpectDelete(*mock_client, bucket, "file2.txt",
+               gc::Status(gc::StatusCode::kNotFound, "Not found"));
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_NullPointers) {
+  const char *sources[1] = {"gs://bucket/file.txt"};
+
+  ASSERT_EQ(driver_concat(nullptr, sources, 1), kFailure);
+  ASSERT_EQ(driver_concat("gs://bucket/output.txt", nullptr, 1), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_InvalidDestinationURI) {
+  const char *sources[1] = {"gs://bucket/file.txt"};
+
+  // Invalid URI formats
+  ASSERT_EQ(driver_concat("invalid_uri", sources, 1), kFailure);
+  ASSERT_EQ(driver_concat("gs://bucket_only/", sources, 1), kFailure);
+  ASSERT_EQ(driver_concat("gs:///no_bucket", sources, 1), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_InvalidSourceURI) {
+  const char *sources[2] = {"gs://bucket/valid.txt", "invalid_source_uri"};
+
+  const std::string bucket = "mock_bucket";
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
+  const char *sources[1] = {"single.txt"};
+
+  const std::string bucket = "mock_bucket";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  // ComposeObject with single source
+  EXPECT_CALL(*mock_client,
+              ComposeObject(::testing::Truly(
+                  [bucket](gcs::internal::ComposeObjectRequest const &req) {
+                    return req.bucket_name() == bucket &&
+                           req.source_objects().size() == 1 &&
+                           req.source_objects()[0].object_name == "single.txt";
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect delete of the single source
+  ExpectDelete(*mock_client, bucket, "single.txt");
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 1), kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
+  const char *sources[5] = {"file1.txt", "file2.txt", "file3.txt", "file4.txt",
+                            "file5.txt"};
+
+  const std::string bucket = "mock_bucket";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  // ComposeObject with 5 sources
+  EXPECT_CALL(*mock_client,
+              ComposeObject(::testing::Truly(
+                  [bucket](gcs::internal::ComposeObjectRequest const &req) {
+                    return req.bucket_name() == bucket &&
+                           req.source_objects().size() == 5;
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect delete of all 5 sources
+  for (int i = 1; i <= 5; ++i) {
+    std::string filename = "file" + std::to_string(i) + ".txt";
+    ExpectDelete(*mock_client, bucket, filename);
+  }
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 5), kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_ManyFiles_Batching) {
+  // Test with 70 files
+  // New strategy:
+  // 1. First batch: files[0-31] → temp_000000
+  // 2. Second batch: temp_000000 + files[32-62] → temp_000001
+  // 3. Third batch: temp_000001 + files[63-69] → temp_000002
+  // 4. Final: temp_000002 → output.txt (via CopyObject)
+
+  constexpr size_t num_files = 70;
+  std::vector<std::string> source_names;
+  source_names.reserve(num_files);
+
+  for (size_t i = 0; i < num_files; ++i) {
+    source_names.push_back("file" + std::to_string(i) + ".txt");
+  }
+
+  // Build array of const char* AFTER all strings are in the vector
+  std::vector<const char *> sources;
+  sources.reserve(num_files);
+
+  for (const auto &name : source_names) {
+    sources.push_back(name.c_str());
+  }
+
+  const std::string bucket = "mock_bucket";
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  // ===== First batch: files[0-31] → temp_000000 =====
+  EXPECT_CALL(*mock_client,
+              ComposeObject(::testing::Truly(
+                  [bucket](gcs::internal::ComposeObjectRequest const &req) {
+                    if (req.bucket_name() != bucket)
+                      return false;
+                    if (req.object_name() != ".tmp_concat_output.txt_000000")
+                      return false;
+                    if (req.source_objects().size() != 32)
+                      return false;
+
+                    // Verify first few source objects
+                    for (size_t i = 0; i < 3; ++i) {
+                      std::string expected =
+                          "file" + std::to_string(i) + ".txt";
+                      if (req.source_objects()[i].object_name != expected)
+                        return false;
+                    }
+                    return true;
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect deletion of files[0-31]
+  for (size_t i = 0; i < 32; ++i) {
+    ExpectDelete(*mock_client, bucket, source_names[i]);
+  }
+
+  // ===== Second batch: temp_000000 + files[32-62] → temp_000001 =====
+  EXPECT_CALL(*mock_client,
+              ComposeObject(::testing::Truly(
+                  [bucket](gcs::internal::ComposeObjectRequest const &req) {
+                    if (req.bucket_name() != bucket)
+                      return false;
+                    if (req.object_name() != ".tmp_concat_output.txt_000001")
+                      return false;
+                    if (req.source_objects().size() != 32)
+                      return false;
+
+                    // First source should be the previous temp file
+                    if (req.source_objects()[0].object_name !=
+                        ".tmp_concat_output.txt_000000")
+                      return false;
+
+                    // Next 31 sources should be files[32-62]
+                    for (size_t i = 1; i < 32; ++i) {
+                      std::string expected =
+                          "file" + std::to_string(31 + i) + ".txt";
+                      if (req.source_objects()[i].object_name != expected)
+                        return false;
+                    }
+                    return true;
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect deletion of temp_000000
+  ExpectDelete(*mock_client, bucket, ".tmp_concat_output.txt_000000");
+
+  // Expect deletion of files[32-62]
+  for (size_t i = 32; i < 63; ++i) {
+    ExpectDelete(*mock_client, bucket, source_names[i]);
+  }
+
+  // ===== Third batch: temp_000001 + files[63-69] → temp_000002 =====
+  EXPECT_CALL(*mock_client,
+              ComposeObject(::testing::Truly(
+                  [bucket](gcs::internal::ComposeObjectRequest const &req) {
+                    if (req.bucket_name() != bucket)
+                      return false;
+                    if (req.object_name() != ".tmp_concat_output.txt_000002")
+                      return false;
+                    if (req.source_objects().size() != 8)
+                      return false; // 1 temp + 7 files
+
+                    // First source should be the previous temp file
+                    if (req.source_objects()[0].object_name !=
+                        ".tmp_concat_output.txt_000001")
+                      return false;
+
+                    // Next 7 sources should be files[63-69]
+                    for (size_t i = 1; i < 8; ++i) {
+                      std::string expected =
+                          "file" + std::to_string(62 + i) + ".txt";
+                      if (req.source_objects()[i].object_name != expected)
+                        return false;
+                    }
+                    return true;
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect deletion of temp_000001
+  ExpectDelete(*mock_client, bucket, ".tmp_concat_output.txt_000001");
+
+  // Expect deletion of files[63-69]
+  for (size_t i = 63; i < 70; ++i) {
+    ExpectDelete(*mock_client, bucket, source_names[i]);
+  }
+
+  // ===== Final step: CopyObject temp_000002 → output.txt =====
+  EXPECT_CALL(*mock_client,
+              CopyObject(::testing::Truly(
+                  [bucket](gcs::internal::CopyObjectRequest const &req) {
+                    return req.source_bucket() == bucket &&
+                           req.source_object() ==
+                               ".tmp_concat_output.txt_000002" &&
+                           req.destination_bucket() == bucket &&
+                           req.destination_object() == "output.txt";
+                  })))
+      .WillOnce(Return(metadata));
+
+  // Expect deletion of final temp file
+  ExpectDelete(*mock_client, bucket, ".tmp_concat_output.txt_000002");
+
+  ASSERT_EQ(
+      driver_concat("gs://mock_bucket/output.txt", sources.data(), num_files),
+      kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, ComposeMultifile_Success) {
+  const char *sources[3] = {"file_a.txt", "file_b.txt", "file_c.txt"};
+
+  const std::string bucket = "mock_bucket";
+
+  // Expected renamed files
+  std::vector<std::string> expected_names = {"output/data_000000000000.txt",
+                                             "output/data_000000000001.txt",
+                                             "output/data_000000000002.txt"};
+
+  gcs::ObjectMetadata metadata;
+  metadata.set_bucket(bucket);
+
+  for (size_t i = 0; i < 3; ++i) {
+    const std::string source = sources[i];
+    const std::string expected = expected_names[i];
+
+    // Expect CopyObject call instead of ComposeObject
+    EXPECT_CALL(*mock_client,
+                CopyObject(::testing::Truly(
+                    [bucket, source,
+                     expected](gcs::internal::CopyObjectRequest const &req) {
+                      return req.source_bucket() == bucket &&
+                             req.source_object() == source &&
+                             req.destination_bucket() == bucket &&
+                             req.destination_object() == expected;
+                    })))
+        .WillOnce(Return(metadata));
+
+    // Expect DeleteObject call for original file
+    ExpectDelete(*mock_client, bucket, source);
+  }
+
+  ASSERT_EQ(
+      driver_composeMultifile("gs://mock_bucket/output/data_*.txt", sources, 3),
+      kSuccess);
+}
+
+TEST_F(GCSDriverTestFixture, ComposeMultifile_InvalidPattern) {
+  const char *sources[1] = {"file.txt"};
+
+  // No '*' in pattern
+  ASSERT_EQ(driver_composeMultifile("gs://mock_bucket/output.txt", sources, 1),
+            kFailure);
+
+  // Multiple '*'
+  ASSERT_EQ(
+      driver_composeMultifile("gs://mock_bucket/output_*_*.txt", sources, 1),
+      kFailure);
+
+  // Prefix ends with digit
+  ASSERT_EQ(
+      driver_composeMultifile("gs://mock_bucket/output1*.txt", sources, 1),
+      kFailure);
+
+  // Suffix starts with digit
+  ASSERT_EQ(
+      driver_composeMultifile("gs://mock_bucket/output_*1.txt", sources, 1),
+      kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, ComposeMultifile_NonRelativePath) {
+  const char *sources[2] = {"gs://bucket/file.txt", // Absolute GCS path
+                            "relative/file.txt"};
+
+  ASSERT_EQ(
+      driver_composeMultifile("gs://mock_bucket/output_*.txt", sources, 2),
+      kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, ComposeMultifile_NullPointers) {
+  const char *sources[1] = {"file.txt"};
+
+  ASSERT_EQ(driver_composeMultifile(nullptr, sources, 1), kFailure);
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", nullptr, 1), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, ComposeMultifile_EmptyList) {
+  const char *sources[1] = {"file.txt"};
+
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", sources, 0), kFailure);
+}

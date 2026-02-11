@@ -30,7 +30,7 @@ target_include_directories(basic_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
 target_link_libraries(basic_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage
                                          khiopsdriver_file_gcs)
 
-gtest_discover_tests(basic_test)
+gtest_discover_tests(basic_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(plugin_test plugin_test.cpp path_helper.cpp)
 target_include_directories(plugin_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)

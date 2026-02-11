@@ -168,6 +168,18 @@ VISIBLE int driver_copyFromLocal(const char *sourcefilename,
 VISIBLE int driver_concat(const char *destfilename,
                           const char **sourcefilenames, size_t sourcefilecount);
 
+// Renames multiple files to follow a globbing pattern with sequence numbers
+//   sDestFilePathName is a globbing pattern in format 'prefix*suffix' where:
+//   - prefix must contain bucket name (gs://bucket/path)
+//   - prefix must not end with a digit
+//   - suffix is optional and must not start with a digit
+//   sSourceFilePathNames is an array of relative file paths (no gs:// allowed)
+//   nSourceFileCount is the number of source files
+// returns kSuccess on success, kFailure on error
+VISIBLE int driver_composeMultifile(const char *sDestFilePathName,
+                                    const char **sSourceFilePathNames,
+                                    size_t nSourceFileCount);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */

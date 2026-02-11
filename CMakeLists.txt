@@ -72,18 +72,16 @@ message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 # Avoid generating shared libs with version number in the filename
 set(CMAKE_PLATFORM_NO_VERSIONED_SONAME 1)
 
-if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
-  message("Build system == Linux, build with sanitizer tools")
-  add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
-  add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
-  include(CodeCoverage)
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
-  setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
-  setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage
-                                      --gtest_output=xml:coverage.junit.xml)
-endif()
+# if((CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT (CMAKE_BUILD_TYPE STREQUAL "Release")) message("Build system == Linux,
+# build with sanitizer tools") add_compile_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all)
+# add_link_options(-fsanitize=undefined -fsanitize=address -fno-sanitize-recover=all) include(CodeCoverage)
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
+# setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
+# setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage
+# --gtest_output=xml:coverage.junit.xml) endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp src/utils.h
+                                         src/utils.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)

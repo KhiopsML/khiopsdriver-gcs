@@ -30,6 +30,17 @@
 extern "C" {
 #endif /* __cplusplus */
 
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+
+VISIBLE gc::Status test_copyObject(const std::string &source_bucket,
+                                   const std::string &source_object,
+                                   const std::string &dest_bucket,
+                                   const std::string &dest_object);
+
+VISIBLE gcs::ListObjectsReader
+test_listObjects(const std::string &bucket, const std::string &glob_pattern);
+
 VISIBLE void test_setClient(::google::cloud::storage::Client &&mock_client);
 
 VISIBLE void test_unsetClient();
