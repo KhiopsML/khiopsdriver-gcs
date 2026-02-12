@@ -1673,7 +1673,10 @@ int driver_composeMultifile(const char *sDestFilePathName,
     return kFailure;
   }
 
-  const auto &[prefix, suffix] = *maybe_pattern;
+  // ✅ C++14: Décomposer manuellement au lieu d'utiliser structured binding
+  const auto &pattern_result = *maybe_pattern;
+  const std::string &prefix = pattern_result.first;
+  const std::string &suffix = pattern_result.second;
 
   // Extract bucket and base object path from prefix using ParseGcsUri
   auto maybe_dest_names = ParseGcsUri(prefix);
@@ -1704,7 +1707,11 @@ int driver_composeMultifile(const char *sDestFilePathName,
   for (size_t i = 0; i < nSourceFileCount; ++i) {
     // Generate the new name with sequence number
     std::string sequence_number = GenerateSequenceNumber(i);
-    std::string new_object_name = base_object + sequence_number + suffix;
+
+    // ✅ C++14: Utiliser std::ostringstream pour la concaténation
+    std::ostringstream new_name_oss;
+    new_name_oss << base_object << sequence_number << suffix;
+    std::string new_object_name = new_name_oss.str();
 
     spdlog::debug("Renaming {} to {}", sSourceFilePathNames[i],
                   new_object_name);

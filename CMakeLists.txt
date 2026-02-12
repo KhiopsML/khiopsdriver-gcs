@@ -78,7 +78,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp src/utils.h
+                                         src/utils.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
