@@ -108,8 +108,16 @@ option(BUILD_TESTS "Build test programs" OFF)
 
 if(BUILD_TESTS)
   add_executable(KhiopsPluginTest src/khiopsplugintest.cpp)
+  target_compile_options(
+    KhiopsPluginTest
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4101;/wd4625;/wd4710;/wd4711>
+    PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
   target_link_libraries(KhiopsPluginTest PRIVATE fmt::fmt ${CMAKE_DL_LIBS})
   add_executable(drivertest src/drivertest.cpp)
+  target_compile_options(
+    drivertest
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4101;/wd4625;/wd4710;/wd4711>
+    PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
   target_link_libraries(drivertest ${CMAKE_DL_LIBS} google-cloud-cpp::storage) # Link to dl
   add_subdirectory(test)
 endif(BUILD_TESTS)
