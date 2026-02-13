@@ -14,8 +14,8 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #else
-#include "errhandlingapi.h"
 #include <windows.h>
+#include "errhandlingapi.h"
 #endif
 #include <fstream>
 #include <iostream>

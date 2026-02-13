@@ -53,14 +53,14 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 # Set the location of the built artifacts:
 #
 # - Shared and static library target directory: lib
-# - Executable target directory: bin
+# - Executable target directory: lib
 # - We must use these weird generator expressions to avoid the Debug and Release directories in VS
 # - More info: https://stackoverflow.com/q/47175912
 #
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
-message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/bin/")
+message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/lib/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
 # Avoid generating shared libs with version number in the filename
@@ -102,8 +102,7 @@ endif()
 
 target_compile_options(
   khiopsdriver_file_gcs
-  PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:-Wall;/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/wd4365;/wd5045>
+  PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/wd4365;/wd5045>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 option(BUILD_TESTS "Build test programs" OFF)
@@ -131,7 +130,7 @@ install(
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib # lib on windows
   RUNTIME DESTINATION bin # dll on windows
-)
+  PUBLIC_HEADER DESTINATION include)
 
 # When packaging as a 'Python' wheel, prevent the metadata module from being copied into the wheel
 file(REMOVE "${CMAKE_INSTALL_PREFIX}/metadata.py")
