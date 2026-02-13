@@ -25,6 +25,17 @@
 #endif
 #endif
 
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+
+VISIBLE gc::Status test_copyObject(const std::string &source_bucket,
+                                   const std::string &source_object,
+                                   const std::string &dest_bucket,
+                                   const std::string &dest_object);
+
+VISIBLE gcs::ListObjectsReader
+test_listObjects(const std::string &bucket, const std::string &glob_pattern);
+
 /* Use of C linkage from C++ */
 #ifdef __cplusplus
 extern "C" {

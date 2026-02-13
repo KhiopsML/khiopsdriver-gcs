@@ -26,6 +26,7 @@
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
 #include "spdlog/spdlog.h"
+#include "utils.h"
 
 using namespace gcsplugin;
 
@@ -408,6 +409,23 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
         std::move(writer_struct));
   }
   return InsertHandle<WriterPtr, HandleType::kWrite>(std::move(writer_struct));
+}
+
+gc::Status test_copyObject(const std::string &source_bucket,
+                           const std::string &source_object,
+                           const std::string &dest_bucket,
+                           const std::string &dest_object) {
+  auto result =
+      client.CopyObject(source_bucket, source_object, dest_bucket, dest_object);
+  if (!result) {
+    return result.status();
+  }
+  return gc::Status();
+}
+
+gcs::ListObjectsReader test_listObjects(const std::string &bucket,
+                                        const std::string &glob_pattern) {
+  return client.ListObjects(bucket, gcs::MatchGlob(glob_pattern));
 }
 
 const char *driver_getDriverName() { return driver_name; }
@@ -1191,20 +1209,38 @@ int driver_remove(const char *filename) {
   ERROR_ON_NULL_ARG(filename, "Error passing null pointer to remove", kFailure);
 
   spdlog::debug("remove {}", filename);
-
   assert(driver_isConnected());
 
-  auto maybe_names = GetBucketAndObjectNames(filename);
+  auto maybe_names = ParseGcsUri(filename);
   ERROR_ON_NAMES(maybe_names, kFailure);
-  auto &names = *maybe_names;
+  const auto &names = *maybe_names;
 
-  const auto status = client.DeleteObject(names.bucket, names.object);
-  if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
-    LogBadStatus(status, "Error deleting object");
+  auto maybe_list = ListObjects(names.bucket, names.object);
+  if (!maybe_list) {
+    if (maybe_list.status().code() == gc::StatusCode::kNotFound) {
+      return kSuccess; // aucun objet correspondant : rien à faire
+    }
+    LogBadStatus(maybe_list.status(), "Error listing objects to delete");
     return kFailure;
   }
 
-  return kSuccess;
+  bool failure_detected = false;
+  for (auto it = maybe_list->begin(); it != maybe_list->end(); ++it) {
+    if (!*it) {
+      LogBadStatus(it->status(), "Error iterating objects to delete");
+      failure_detected = true;
+      continue;
+    }
+
+    const std::string &object_name = (*it)->name();
+    const auto status = client.DeleteObject(names.bucket, object_name);
+    if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
+      LogBadStatus(status, "Error deleting object '" + object_name + "'");
+      failure_detected = true;
+    }
+  }
+
+  return failure_detected ? kFailure : kSuccess;
 }
 
 int driver_rmdir(const char *filename) {
@@ -1431,4 +1467,283 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
                   kFailure);
 
   return kSuccess;
+}
+
+int driver_concat(const char *sDestFilePathName,
+                  const char **sSourceFilePathNames, size_t nSourceFileCount) {
+  if (!sDestFilePathName || !sSourceFilePathNames) {
+    LogError("Error passing null pointers as arguments to driver_concat");
+    return kFailure;
+  }
+
+  if (nSourceFileCount < 1) {
+    LogError("Error passing invalid number of files to driver_concat");
+    return kFailure;
+  }
+
+  spdlog::debug("driver_concat {} with {} sources:", sDestFilePathName,
+                nSourceFileCount);
+
+  assert(driver_isConnected());
+
+  // Parse destination to get bucket name
+  auto maybe_names = GetBucketAndObjectNames(sDestFilePathName);
+  ERROR_ON_NAMES(maybe_names, kFailure);
+  const auto &names = *maybe_names;
+  const std::string &bucket = names.bucket;
+
+  // Validate all source paths are relative
+  std::vector<std::string> sources;
+
+  for (size_t i = 0; i < nSourceFileCount; ++i) {
+    if (!IsRelativePath(sSourceFilePathNames[i])) {
+      std::ostringstream os;
+      os << "Source file path must be relative (no gs:// allowed): "
+         << sSourceFilePathNames[i];
+      LogError(os.str());
+      return kFailure;
+    }
+
+    std::string source(sSourceFilePathNames[i]);
+    spdlog::debug("- {}", source);
+    sources.push_back(source);
+  }
+
+  // GCS ComposeObject limit: maximum 32 source objects per operation
+  constexpr size_t MAX_COMPOSE_SOURCES = 32;
+
+  bool failure_detected = false;
+
+  // Helper function to generate temporary file names
+  size_t temp_counter = 0;
+  auto generate_temp_name = [&]() -> std::string {
+    std::ostringstream oss;
+    oss << ".tmp_concat_" << names.object << "_" << std::setfill('0')
+        << std::setw(6) << temp_counter++;
+    return oss.str();
+  };
+
+  // Helper function to compose sources and delete them
+  auto compose_and_delete = [&](const std::vector<std::string> &batch_sources,
+                                const std::string &dest_object) -> bool {
+    std::vector<gcs::ComposeSourceObject> sourceObjects;
+    for (const auto &source : batch_sources) {
+      sourceObjects.push_back(gcs::ComposeSourceObject{source, {}, {}});
+    }
+
+    auto maybe_compose =
+        client.ComposeObject(bucket, sourceObjects, dest_object);
+    if (!maybe_compose) {
+      LogBadStatus(maybe_compose.status(),
+                   "Error during composition to " + dest_object);
+      return false;
+    }
+
+    // Delete source files after successful composition
+    for (const auto &source : batch_sources) {
+      auto delete_status = client.DeleteObject(bucket, source);
+      if (!delete_status.ok() &&
+          delete_status.code() != gc::StatusCode::kNotFound) {
+        std::ostringstream os;
+        os << "Error deleting source file '" << source << "'";
+        LogBadStatus(delete_status, os.str());
+        failure_detected = true;
+      }
+    }
+
+    return true;
+  };
+
+  // Special case: if we have <= 32 files, compose directly to destination
+  if (sources.size() <= MAX_COMPOSE_SOURCES) {
+    spdlog::debug("Direct composition: {} files to {}", sources.size(),
+                  names.object);
+
+    if (!compose_and_delete(sources, names.object)) {
+      return kFailure;
+    }
+
+    return failure_detected ? kFailure : kSuccess;
+  }
+
+  // Iterative concatenation strategy:
+  // 1. Compose first 32 files into temp_0
+  // 2. Compose temp_0 + next 31 files into temp_1
+  // 3. Compose temp_1 + next 31 files into temp_2
+  // ... until all files are consumed
+  // Final: rename last temp to destination
+
+  std::string current_result;
+  size_t files_processed = 0;
+
+  // First batch: compose first 32 files
+  {
+    std::vector<std::string> first_batch(sources.begin(),
+                                         sources.begin() + MAX_COMPOSE_SOURCES);
+
+    current_result = generate_temp_name();
+
+    spdlog::debug("Initial batch: composing {} files into {}",
+                  first_batch.size(), current_result);
+
+    if (!compose_and_delete(first_batch, current_result)) {
+      return kFailure;
+    }
+
+    files_processed = MAX_COMPOSE_SOURCES;
+  }
+
+  // Subsequent batches: compose current_result + next 31 files
+  while (files_processed < sources.size()) {
+    size_t remaining = sources.size() - files_processed;
+    size_t batch_size = std::min(MAX_COMPOSE_SOURCES - 1, remaining);
+
+    std::vector<std::string> batch;
+    batch.reserve(batch_size + 1);
+
+    // Add current result as first element
+    batch.push_back(current_result);
+
+    // Add next batch_size files
+    batch.insert(batch.end(), sources.begin() + files_processed,
+                 sources.begin() + files_processed + batch_size);
+
+    std::string new_result = generate_temp_name();
+
+    spdlog::debug("Iterative batch: composing {} files ({} new) into {}",
+                  batch.size(), batch_size, new_result);
+
+    if (!compose_and_delete(batch, new_result)) {
+      // Clean up current_result on failure
+      client.DeleteObject(bucket, current_result);
+      return kFailure;
+    }
+
+    current_result = new_result;
+    files_processed += batch_size;
+  }
+
+  // Rename final temp file to destination using CopyObject + Delete
+  spdlog::debug("Final step: renaming {} to {}", current_result, names.object);
+
+  auto maybe_copy =
+      client.CopyObject(bucket, current_result, bucket, names.object);
+  if (!maybe_copy) {
+    LogBadStatus(maybe_copy.status(),
+                 "Error renaming final result to destination");
+    client.DeleteObject(bucket, current_result);
+    return kFailure;
+  }
+
+  // Delete the temporary file
+  auto delete_status = client.DeleteObject(bucket, current_result);
+  if (!delete_status.ok() &&
+      delete_status.code() != gc::StatusCode::kNotFound) {
+    LogBadStatus(delete_status, "Error deleting final temporary file");
+    failure_detected = true;
+  }
+
+  return failure_detected ? kFailure : kSuccess;
+}
+
+int driver_composeMultifile(const char *sDestFilePathName,
+                            const char **sSourceFilePathNames,
+                            size_t nSourceFileCount) {
+  if (!sDestFilePathName || !sSourceFilePathNames) {
+    LogError(
+        "Error passing null pointers as arguments to driver_composeMultifile");
+    return kFailure;
+  }
+
+  if (nSourceFileCount < 1) {
+    LogError(
+        "Error passing invalid number of files to driver_composeMultifile");
+    return kFailure;
+  }
+
+  spdlog::debug("driver_composeMultifile {} with {} sources:",
+                sDestFilePathName, nSourceFileCount);
+
+  assert(driver_isConnected());
+
+  // Parse and validate the globbing pattern
+  auto maybe_pattern = ParseGlobbingPattern(sDestFilePathName);
+  if (!maybe_pattern) {
+    LogBadStatus(maybe_pattern.status(), "Invalid globbing pattern");
+    return kFailure;
+  }
+
+  // ✅ C++14: Décomposer manuellement au lieu d'utiliser structured binding
+  const auto &pattern_result = *maybe_pattern;
+  const std::string &prefix = pattern_result.first;
+  const std::string &suffix = pattern_result.second;
+
+  // Extract bucket and base object path from prefix using ParseGcsUri
+  auto maybe_dest_names = ParseGcsUri(prefix);
+  if (!maybe_dest_names) {
+    LogBadStatus(maybe_dest_names.status(),
+                 "Error parsing destination pattern");
+    return kFailure;
+  }
+
+  const std::string &dest_bucket = maybe_dest_names->bucket;
+  const std::string &base_object = maybe_dest_names->object;
+
+  // Validate all source paths are relative
+  for (size_t i = 0; i < nSourceFileCount; ++i) {
+    if (!IsRelativePath(sSourceFilePathNames[i])) {
+      std::ostringstream os;
+      os << "Source file path must be relative (no gs:// allowed): "
+         << sSourceFilePathNames[i];
+      LogError(os.str());
+      return kFailure;
+    }
+    spdlog::debug("- {}", sSourceFilePathNames[i]);
+  }
+
+  // Rename each source file to follow the globbing pattern using CopyObject
+  bool failure_detected = false;
+
+  for (size_t i = 0; i < nSourceFileCount; ++i) {
+    // Generate the new name with sequence number
+    std::string sequence_number = GenerateSequenceNumber(i);
+
+    // ✅ C++14: Utiliser std::ostringstream pour la concaténation
+    std::ostringstream new_name_oss;
+    new_name_oss << base_object << sequence_number << suffix;
+    std::string new_object_name = new_name_oss.str();
+
+    spdlog::debug("Renaming {} to {}", sSourceFilePathNames[i],
+                  new_object_name);
+
+    // Use CopyObject instead of ComposeObject for better performance
+    auto maybe_copy =
+        client.CopyObject(dest_bucket,             // source bucket
+                          sSourceFilePathNames[i], // source object
+                          dest_bucket,             // destination bucket
+                          new_object_name          // destination object
+        );
+
+    if (!maybe_copy) {
+      std::ostringstream os;
+      os << "Error renaming '" << sSourceFilePathNames[i] << "' to '"
+         << new_object_name << "'";
+      LogBadStatus(maybe_copy.status(), os.str());
+      failure_detected = true;
+      continue;
+    }
+
+    // Delete the original source file
+    auto delete_status =
+        client.DeleteObject(dest_bucket, sSourceFilePathNames[i]);
+    if (!delete_status.ok() &&
+        delete_status.code() != gc::StatusCode::kNotFound) {
+      std::ostringstream os;
+      os << "Error deleting original file '" << sSourceFilePathNames[i] << "'";
+      LogBadStatus(delete_status, os.str());
+      failure_detected = true;
+    }
+  }
+
+  return failure_detected ? kFailure : kSuccess;
 }

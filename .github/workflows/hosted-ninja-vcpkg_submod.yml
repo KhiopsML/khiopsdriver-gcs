@@ -29,16 +29,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - os: windows-latest
-            triplet: x64-windows
-          - os: ubuntu-latest
-            triplet: x64-linux
-          - os: macos-13
-            triplet: x64-osx
-          - os: macos-14
-            triplet: arm64-osx
+          - {os: ubuntu-latest, triplet: x64-linux}
+          - {os: macos-latest, triplet: arm64-osx}
+          - {os: macos-15-intel, triplet: x64-osx}
+          - {os: macos-14, triplet: arm64-osx}
+          - {os: windows-latest, triplet: x64-windows}
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -115,7 +111,13 @@ jobs:
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
           buildPreset: 'build-ninja-rel'
           testPreset: 'test-ninja-rel'
-          testPresetAdditionalArgs: "['--output-on-failure']"
+          testPresetAdditionalArgs: '["--output-on-failure", "--output-junit", "test_results.xml"]'
+
+      - name: Upload results of cloud storage tests
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: ${{ github.workspace }}/build/release/test_results.xml
   
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4

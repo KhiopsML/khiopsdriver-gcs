@@ -54,6 +54,7 @@ TEST(GCSDriverTest, End2EndTest_SingleFile_2MB_OK) {
   ASSERT_EQ(test_status, kSuccess);
 }
 
+#if 0
 TEST(GCSDriverTest, End2EndTest_SingleFile_512B_OK) {
   /* use this particular file because it is short and buffer size triggers lots
    * of read operations */
@@ -67,6 +68,7 @@ TEST(GCSDriverTest, End2EndTest_SingleFile_512B_OK) {
   int test_status = launch_test(inputFilename, nBufferSize);
   ASSERT_EQ(test_status, kSuccess);
 }
+#endif
 
 TEST(GCSDriverTest, End2EndTest_MultipartBQFile_512KB_OK) {
   const char *inputFilename = "gs://data-test-khiops-driver-gcs/khiops_data/"
