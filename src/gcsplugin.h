@@ -2,7 +2,7 @@
 
 #define KHIOPS_STR(s) #s
 // Driver version
-#define DRIVER_VERSION KHIOPS_STR(0.0.16-a1)
+#define DRIVER_VERSION KHIOPS_STR(0.0.16)
 // Release versions must have 3 digits, for example KHIOPS_STR(1.2.0)
 // Alpha, beta ou release candidate have an extra suffix, for example :
 // - KHIOPS_STR(1.2.0-a.1)
