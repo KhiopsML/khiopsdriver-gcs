@@ -1,9 +1,8 @@
 # This file is used to package this project as a pip package.
 
 [build-system]
-requires = ["py-build-cmake"]
-build-backend = "py_build_cmake.build"
-
+requires = ["scikit-build-core>=0.11.6"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "khiops-driver-gcs"
@@ -14,39 +13,52 @@ license-files = ["LICENSE"]
 maintainers = [{name = "Khiops Team", email = "khiops.team@orange.com"}]
 dynamic = ["version", "description"]
 
-
-[tool.py-build-cmake.module]
-name = "metadata"  # The metadata module will be run by py-build-cmake to set the package version and description
-
-# In the source distribution, only keep the files that are needed to build the program
-[tool.py-build-cmake.sdist]
-include = ["*"]
-exclude = [
+[tool.scikit-build]
+sdist.include = ["/vcpkg"]
+sdist.exclude = [
     ".*",
     "__pycache__",
-    "dist",
-    "wheelhouse",
-    "scripts",
-    "test/LearningTest",
-    "test/LearningTestTool",
-    "vcpkg/buildtrees",
-    "vcpkg/downloads",
-    "vcpkg/packages"
+    "/dist",
+    "/wheelhouse",
+    "/scripts",
+    "/test/LearningTest",
+    "/test/LearningTestTool",
+    "/vcpkg/buildtrees",
+    "/vcpkg/downloads",
+    "/vcpkg/packages",
 ]
+wheel.py-api = "py3"
+cmake.version = "CMakeLists.txt"
+cmake.args = ["--preset", "ninja-rel", "-G", "Ninja"]
+cmake.define.CMAKE_BINARY_DIR = "build/ninja-rel"
+build-dir = "build/ninja-rel"
+ninja.make-fallback = false
 
-[tool.py-build-cmake.cmake]
-minimum_version = "3.21"
-find_python = false   # C++-only package
-find_python3 = false   # C++-only package
-preset = "configure-ninja-rel"
-build_presets = ["build-ninja-rel"]
-generator = "Ninja"  # This is already set in the preset but py-build-cmake has to be told what generator we use, so that it does not force the platform specification
-build_path = "build/release"  # Avoid creation of a custom directory by py-build-cmake (which does not use the one specified in the preset)
-
-[tool.py-build-cmake.wheel]
-python_tag = "py3"  # C++-only package
-python_abi = "none"  # C++-only package
-
+[tool.scikit-build.metadata]
+version.provider = "scikit_build_core.metadata.regex"
+version.input = "src/gcsplugin.h"
+version.regex = '''(?x)
+    \# \s* define \s+ DRIVER_VERSION \s+ KHIOPS_STR
+    \(
+    (?P<major> \d+)
+    \.
+    (?P<minor> \d+)
+    \.
+    (?P<patch> \d+)
+    (?:
+        -
+        (?P<prereltype> a | b | rc)
+        \.
+        (?P<prereln> \d+)
+    )?
+    \)
+'''
+version.result = "{major}.{minor}.{patch}{prereltype}{prereln}"
+version.remove = "(None){,2}$"  # prereltype and prereln groups are None if not found
+description.provider = "scikit_build_core.metadata.regex"
+description.input = "CMakeLists.txt"
+description.regex = '(?x)  set  \s*  \(  \s*  CPACK_PACKAGE_DESCRIPTION_SUMMARY  \s+  "(?P<description>[^"]*)"  \s*  \)  '
+description.result = "{description}"
 
 [tool.cibuildwheel]
 build = "cp39-*"

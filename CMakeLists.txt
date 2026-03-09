@@ -132,9 +132,6 @@ install(
   RUNTIME DESTINATION bin # dll on windows
   PUBLIC_HEADER DESTINATION include)
 
-# When packaging as a 'Python' wheel, prevent the metadata module from being copied into the wheel
-file(REMOVE "${CMAKE_INSTALL_PREFIX}/metadata.py")
-
 set(CPACK_PACKAGE_VENDOR Orange)
 set(CPACK_PACKAGE_HOMEPAGE_URL https://khiops.org)
 set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
