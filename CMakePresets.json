@@ -2,7 +2,7 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "configure-ninja-dbg",
+      "name": "ninja-dbg",
       "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
@@ -11,7 +11,7 @@
       "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
     {
-      "name": "configure-ninja-rel",
+      "name": "ninja-rel",
       "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
@@ -22,25 +22,25 @@
   ],
   "buildPresets": [
     {
-      "name": "build-ninja-dbg",
-      "configurePreset": "configure-ninja-dbg"
+      "name": "ninja-dbg",
+      "configurePreset": "ninja-dbg"
     },
     {
-      "name": "build-ninja-rel",
-      "configurePreset": "configure-ninja-rel"
+      "name": "ninja-rel",
+      "configurePreset": "ninja-rel"
     }
   ],
   "testPresets": [
     {
-      "name": "test-ninja-dbg",
-      "configurePreset": "configure-ninja-dbg",
+      "name": "ninja-dbg",
+      "configurePreset": "ninja-dbg",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "test-ninja-rel",
-      "configurePreset": "configure-ninja-rel",
+      "name": "ninja-rel",
+      "configurePreset": "ninja-rel",
       "output": {
         "outputOnFailure": true
       }
