@@ -148,7 +148,7 @@ using HandlePtr = std::unique_ptr<Handle>;
 using HandleContainer = std::vector<HandlePtr>;
 using HandleIt = HandleContainer::iterator;
 
-bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
+inline bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
   return (op1.bucketname_ == op2.bucketname_ &&
           op1.filename_ == op2.filename_ && op1.offset_ == op2.offset_ &&
           op1.commonHeaderLength_ == op2.commonHeaderLength_ &&
@@ -157,7 +157,7 @@ bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
           op1.total_size_ == op2.total_size_);
 }
 
-bool operator==(const WriteFile &op1, const WriteFile &op2) {
+inline bool operator==(const WriteFile &op1, const WriteFile &op2) {
   return (op1.bucketname_ == op2.bucketname_ && op1.filename_ == op2.filename_);
 }
 } // namespace gcsplugin

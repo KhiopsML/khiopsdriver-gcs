@@ -14,23 +14,23 @@ include(GoogleTest)
 
 # Find dependencies
 find_package(Boost CONFIG REQUIRED)
-add_executable(basic_test basic_test.cpp drivertest.cpp)
+add_executable(gcs_test mocking_test.cpp nonmocking_test.cpp drivertest.cpp)
 
 target_compile_options(
-  basic_test
+  gcs_test
   PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4101;/wd4625;/wd4710;/wd4711;/wd4365;/wd5045>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang>:-Wall;-Wextra;-pedantic;-Wno-unused-lambda-capture>
   PRIVATE $<$<CXX_COMPILER_ID:Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
 # MSVC requires /bigobj to build in debug config
-target_compile_options(basic_test PRIVATE $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:MSVC>>:/bigobj>)
+target_compile_options(gcs_test PRIVATE $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:MSVC>>:/bigobj>)
 
-target_include_directories(basic_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
+target_include_directories(gcs_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
 
-target_link_libraries(basic_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage
+target_link_libraries(gcs_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage
                                          khiopsdriver_file_gcs)
 
-gtest_discover_tests(basic_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+gtest_discover_tests(gcs_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(plugin_test plugin_test.cpp path_helper.cpp)
 target_include_directories(plugin_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)

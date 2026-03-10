@@ -45,7 +45,8 @@ jobs:
     # for the hosting system will be automatically
     # choosen (x64 is the default on all platforms, 
     # e.g. x64-osx).
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }} 
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      STORAGE_DRIVER_NAME: GCS
 
     steps:
       - uses: actions/checkout@v4
@@ -82,17 +83,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'configure-ninja-dbg'
+          configurePreset: 'ninja-dbg'
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
-          buildPreset: 'build-ninja-dbg'
-          testPreset: 'test-ninja-dbg'
+          buildPreset: 'ninja-dbg'
+          testPreset: 'ninja-dbg'
           testPresetAdditionalArgs: "['--output-on-failure']"
+        env:
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
 
       # GCOV seems to be broken with newer versions of GCC, so we disable it for now.
       # - name: Generate coverage report
       #   if: matrix.os == 'ubuntu-latest'
       #   run: |
-      #     cmake --build --preset test-ninja-dbg --target khiops-gcs_coverage --target khiops-gcs_cobertura
+      #     cmake --build --preset ninja-dbg --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       # - name: Upload coverage results
       #   uses: actions/upload-artifact@v4
@@ -107,11 +110,13 @@ jobs:
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'configure-ninja-rel'
+          configurePreset: 'ninja-rel'
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
-          buildPreset: 'build-ninja-rel'
-          testPreset: 'test-ninja-rel'
+          buildPreset: 'ninja-rel'
+          testPreset: 'ninja-rel'
           testPresetAdditionalArgs: '["--output-on-failure", "--output-junit", "test_results.xml"]'
+        env:
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
 
       - name: Upload results of cloud storage tests
         if: always()

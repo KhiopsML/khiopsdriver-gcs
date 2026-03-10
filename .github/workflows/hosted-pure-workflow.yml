@@ -48,7 +48,8 @@ jobs:
       # Let's use GitHub Action cache as storage for the vcpkg Binary Caching feature.
       VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
       # Allow setting triplet to something else than platform's default
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }} 
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      STORAGE_DRIVER_NAME: GCS
 
 
     steps:
@@ -107,8 +108,8 @@ jobs:
       #   run: |
       #     sudo apt-get update
       #     sudo apt-get install lcov gcovr
-      #     cmake --preset configure-ninja-dbg -DBUILD_TESTS=ON
-      #     cmake --build --preset build-ninja-dbg
+      #     cmake --preset ninja-dbg -DBUILD_TESTS=ON
+      #     cmake --build --preset ninja-dbg
       #     ctest --preset test--ninja-dbg --output-on-failure
       #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
@@ -129,7 +130,7 @@ jobs:
       # store the built packages artifacts.
       - name: Restore from cache the dependencies and generate project files
         run: |
-          cmake --preset configure-ninja-rel -DBUILD_TESTS=ON
+          cmake --preset ninja-rel -DBUILD_TESTS=ON
 
       # Build (Release configuration only) the whole project with Ninja (which is spawn by CMake).
       #
@@ -138,11 +139,13 @@ jobs:
       # run: cmake --build --preset ninja-vcpkg --config Release
       - name: Build (Release configuration)
         run: |
-          cmake --build --preset build-ninja-rel
+          cmake --build --preset ninja-rel
 
       # Test the whole project with CTest, again Release configuration only.
       - name: Test release
-        run: ctest --preset test-ninja-rel --output-junit test_results.xml
+        run: ctest --preset ninja-rel --output-junit test_results.xml
+        env:
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
 
       - name: Upload results of cloud storage tests
         if: always()
