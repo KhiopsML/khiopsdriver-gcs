@@ -112,13 +112,22 @@ void EraseRemove(HandleIt pos) {
   active_handles.pop_back();
 }
 
+int GetGeneration(int64_t *generation, const std::string &bucket_name, const std::string &filename) {
+  auto metadata = client.GetObjectMetadata(bucket_name, filename);
+  if(!metadata) return -1;
+  *generation = metadata->generation();
+  return 0;
+}
+
 // Definition of helper functions
 gc::StatusOr<long long int>
 DownloadFileRangeToBuffer(const std::string &bucket_name,
                           const std::string &object_name, char *buffer,
-                          std::int64_t start_range, std::int64_t end_range) {
+                          std::int64_t start_range, std::int64_t end_range,
+                          int64_t generation) {
   auto reader = client.ReadObject(bucket_name, object_name,
-                                  gcs::ReadRange(start_range, end_range));
+                                  gcs::ReadRange(start_range, end_range),
+                                  gcs::IfGenerationMatch(generation));
   if (!reader) {
     auto &o_status = reader.status();
     return gc::Status{o_status.code(), "Error while creating reading stream; " +
@@ -167,9 +176,13 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
 
   auto read_range_and_update = [&](const std::string &filename, tOffset start,
                                    tOffset end) -> gc::Status {
+    int64_t generation;
+    if(GetGeneration(&generation, bucket_name, filename)) {
+      return gc::Status(gc::StatusCode::kFailedPrecondition, "The file has been updated while trying to read it.");
+    }
     auto maybe_actual_read = DownloadFileRangeToBuffer(
         bucket_name, filename, buffer_pos, static_cast<int64_t>(start),
-        static_cast<int64_t>(end));
+        static_cast<int64_t>(end), generation);
     if (!maybe_actual_read) {
       offset = offset_bak;
       RETURN_STATUS(maybe_actual_read);
@@ -776,6 +789,14 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
   cumulative_sizes.push_back(filesizes[0]);
   long long common_header_size{0};
 
+  // Allocate a generation vector big enough to hold the generations of all parts.
+  // A single-part file will result in a vector of size 1.
+  std::vector<int64_t> generations(filenames.size());
+  // Get generation of first part.
+  if(GetGeneration(&generations.data()[0], bucketname, filenames[0])) {
+    // TODO: Handle error.
+  }
+
   if (filenames.size() > 1) {
     // multifile
     // check headers
@@ -788,6 +809,11 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
 
     for (long unsigned int i = 1; i < filenames.size(); i++) {
       RETURN_STATUS_ON_ERROR(*list_it);
+
+      // Get generation of current part.
+      if(GetGeneration(&generations.data()[i], bucketname, filenames[i])) {
+        // TODO: Handle error.
+      }
 
       cumulative_sizes.push_back(cumulative_sizes.back() +
                                  static_cast<long long>(filesizes[i]));
@@ -820,7 +846,8 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
   tOffset total_size = cumulative_sizes.back();
   return ReaderPtr(new MultiPartFile{
       std::move(bucketname), std::move(objectname), 0, common_header_size,
-      std::move(filenames), std::move(cumulative_sizes), total_size});
+      std::move(filenames), std::move(cumulative_sizes), total_size,
+      std::move(generations)});
 }
 
 gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname,

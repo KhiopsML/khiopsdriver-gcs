@@ -82,6 +82,8 @@ struct MultiPartFile {
   std::vector<std::string> filenames_;
   std::vector<tOffset> cumulativeSize_;
   tOffset total_size_{0};
+  // Protection when reading a file that is being written to.
+  std::vector<int64_t> generations;
 };
 
 struct WriteFile {
