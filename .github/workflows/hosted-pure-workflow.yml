@@ -145,7 +145,7 @@ jobs:
       - name: Test release
         run: ctest --preset ninja-rel --output-junit test_results.xml
         env:
-          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
       - name: Upload results of cloud storage tests
         if: always()

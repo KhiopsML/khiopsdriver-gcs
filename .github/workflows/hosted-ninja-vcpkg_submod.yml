@@ -89,7 +89,7 @@ jobs:
           testPreset: 'ninja-dbg'
           testPresetAdditionalArgs: "['--output-on-failure']"
         env:
-          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
       # GCOV seems to be broken with newer versions of GCC, so we disable it for now.
       # - name: Generate coverage report
@@ -116,7 +116,7 @@ jobs:
           testPreset: 'ninja-rel'
           testPresetAdditionalArgs: '["--output-on-failure", "--output-junit", "test_results.xml"]'
         env:
-          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-azure
+          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
       - name: Upload results of cloud storage tests
         if: always()
