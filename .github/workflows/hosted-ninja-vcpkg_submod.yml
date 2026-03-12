@@ -87,7 +87,6 @@ jobs:
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
           buildPreset: 'ninja-dbg'
           testPreset: 'ninja-dbg'
-          testPresetAdditionalArgs: "['--output-on-failure']"
         env:
           STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
@@ -114,7 +113,7 @@ jobs:
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
           buildPreset: 'ninja-rel'
           testPreset: 'ninja-rel'
-          testPresetAdditionalArgs: '["--output-on-failure", "--output-junit", "test_results.xml"]'
+          testPresetAdditionalArgs: '["--output-junit", "test_results.xml"]'
         env:
           STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
