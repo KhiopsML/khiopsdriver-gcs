@@ -71,10 +71,20 @@ using LOReturnType = gc::StatusOr<gcs::internal::ListObjectsResponse>;
         std::move(mock_source));                                               \
   }
 
+// Forward declaration
+gcs::ObjectMetadata MakeObjectMetadata(const std::string &bucket_name,
+                                       const std::string &name,
+                                       int64_t generation, uint64_t size);
+
 class GCSDriverTestFixture : public ::testing::Test {
 protected:
   void SetUp() override {
     mock_client = std::make_shared<gcs::testing::MockClient>();
+
+    ON_CALL(*mock_client, GetObjectMetadata).WillByDefault([](gcs::internal::GetObjectMetadataRequest const &req) {
+      return MakeObjectMetadata(req.bucket_name(), req.object_name(), /*generation*/ 1, /*size*/ 0);
+    });
+
     auto client = gcs::testing::UndecoratedClientFromMock(mock_client);
     test_setClient(std::move(client));
   }

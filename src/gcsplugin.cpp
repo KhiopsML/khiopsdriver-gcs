@@ -390,9 +390,10 @@ void *test_addReaderHandle(const std::string &bucket, const std::string &object,
                            const std::vector<std::string> &filenames,
                            const std::vector<long long int> &cumulativeSize,
                            long long total_size) {
+  std::vector<int64_t> generations(filenames.size(), 1);
   ReaderPtr reader_ptr{new MultiPartFile{bucket, object, offset,
                                          commonHeaderLength, filenames,
-                                         cumulativeSize, total_size}};
+                                         cumulativeSize, total_size, std::move(generations)}};
   return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_ptr));
 }
 
