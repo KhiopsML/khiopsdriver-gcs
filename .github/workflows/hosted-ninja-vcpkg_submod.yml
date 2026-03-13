@@ -46,7 +46,6 @@ jobs:
     # choosen (x64 is the default on all platforms, 
     # e.g. x64-osx).
       VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
-      STORAGE_DRIVER_NAME: GCS
 
     steps:
       - uses: actions/checkout@v4

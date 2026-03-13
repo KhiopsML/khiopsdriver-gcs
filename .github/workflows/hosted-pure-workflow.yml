@@ -49,8 +49,6 @@ jobs:
       VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
       # Allow setting triplet to something else than platform's default
       VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
-      STORAGE_DRIVER_NAME: GCS
-
 
     steps:
     # Set env vars needed for vcpkg to leverage the GitHub Action cache as a storage

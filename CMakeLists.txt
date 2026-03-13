@@ -123,6 +123,7 @@ if(BUILD_TESTS)
   target_link_libraries(drivertest ${CMAKE_DL_LIBS} google-cloud-cpp::storage)
 
   add_subdirectory(test)
+  set(storage_driver_target_name khiopsdriver_file_gcs)
   add_subdirectory("shared/integrationtests")
 endif(BUILD_TESTS)
 
