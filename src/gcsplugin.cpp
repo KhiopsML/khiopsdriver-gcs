@@ -112,9 +112,11 @@ void EraseRemove(HandleIt pos) {
   active_handles.pop_back();
 }
 
-int GetGeneration(int64_t *generation, const std::string &bucket_name, const std::string &filename) {
+int GetGeneration(int64_t *generation, const std::string &bucket_name,
+                  const std::string &filename) {
   auto metadata = client.GetObjectMetadata(bucket_name, filename);
-  if(!metadata) return -1;
+  if (!metadata)
+    return -1;
   *generation = metadata->generation();
   return 0;
 }
@@ -177,8 +179,9 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
   auto read_range_and_update = [&](const std::string &filename, tOffset start,
                                    tOffset end) -> gc::Status {
     int64_t generation;
-    if(GetGeneration(&generation, bucket_name, filename)) {
-      return gc::Status(gc::StatusCode::kFailedPrecondition, "The file has been updated while trying to read it.");
+    if (GetGeneration(&generation, bucket_name, filename)) {
+      return gc::Status(gc::StatusCode::kFailedPrecondition,
+                        "The file has been updated while trying to read it.");
     }
     auto maybe_actual_read = DownloadFileRangeToBuffer(
         bucket_name, filename, buffer_pos, static_cast<int64_t>(start),
@@ -391,9 +394,9 @@ void *test_addReaderHandle(const std::string &bucket, const std::string &object,
                            const std::vector<long long int> &cumulativeSize,
                            long long total_size) {
   std::vector<int64_t> generations(filenames.size(), 1);
-  ReaderPtr reader_ptr{new MultiPartFile{bucket, object, offset,
-                                         commonHeaderLength, filenames,
-                                         cumulativeSize, total_size, std::move(generations)}};
+  ReaderPtr reader_ptr{
+      new MultiPartFile{bucket, object, offset, commonHeaderLength, filenames,
+                        cumulativeSize, total_size, std::move(generations)}};
   return InsertHandle<ReaderPtr, HandleType::kRead>(std::move(reader_ptr));
 }
 
@@ -790,11 +793,11 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
   cumulative_sizes.push_back(filesizes[0]);
   long long common_header_size{0};
 
-  // Allocate a generation vector big enough to hold the generations of all parts.
-  // A single-part file will result in a vector of size 1.
+  // Allocate a generation vector big enough to hold the generations of all
+  // parts. A single-part file will result in a vector of size 1.
   std::vector<int64_t> generations(filenames.size());
   // Get generation of first part.
-  if(GetGeneration(&generations.data()[0], bucketname, filenames[0])) {
+  if (GetGeneration(&generations.data()[0], bucketname, filenames[0])) {
     // TODO: Handle error.
   }
 
@@ -812,7 +815,7 @@ gc::StatusOr<ReaderPtr> MakeReaderPtr(std::string bucketname,
       RETURN_STATUS_ON_ERROR(*list_it);
 
       // Get generation of current part.
-      if(GetGeneration(&generations.data()[i], bucketname, filenames[i])) {
+      if (GetGeneration(&generations.data()[i], bucketname, filenames[i])) {
         // TODO: Handle error.
       }
 
@@ -1067,8 +1070,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
       return -1;
     }
 
-    computed_offset =
-        (h.total_size_ == 0) ? offset : h.total_size_ - 1 + offset;
+    computed_offset = (h.total_size_ == 0) ? offset : h.total_size_ + offset;
     break;
   default:
     LogError("Invalid seek mode " + std::to_string(whence));
@@ -1143,7 +1145,7 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   // required is already done above
   const tOffset total_size = h.total_size_;
   if (offset >= total_size) {
-    LogError("Error trying to read more bytes while already out of bounds");
+    LogError("Cannot read after end of file.");
     return -1;
   }
 
@@ -1219,7 +1221,8 @@ int driver_fflush(void *stream) {
   ERROR_NO_STREAM(stream_it, -1);
   Handle &stream_h = **stream_it;
 
-  if (HandleType::kWrite != stream_h.type) {
+  if (HandleType::kWrite != stream_h.type &&
+      HandleType::kAppend != stream_h.type) {
     LogError("Cannot flush on not writing stream");
     return -1;
   }
@@ -1520,21 +1523,26 @@ int driver_concat(const char *sDestFilePathName,
   const auto &names = *maybe_names;
   const std::string &bucket = names.bucket;
 
-  // Validate all source paths are relative
+  // Validate all source paths belong to the destination bucket
   std::vector<std::string> sources;
 
   for (size_t i = 0; i < nSourceFileCount; ++i) {
-    if (!IsRelativePath(sSourceFilePathNames[i])) {
+    auto maybe_source_names = ParseGcsUri(sSourceFilePathNames[i]);
+    if (!maybe_source_names) {
+      LogBadStatus(maybe_source_names.status(), "Error parsing source URL");
+      return kFailure;
+    }
+
+    if (maybe_source_names->bucket != bucket) {
       std::ostringstream os;
-      os << "Source file path must be relative (no gs:// allowed): "
-         << sSourceFilePathNames[i];
+      os << "Source file bucket '" << maybe_source_names->bucket
+         << "' must match destination bucket '" << bucket << "'";
       LogError(os.str());
       return kFailure;
     }
 
-    std::string source(sSourceFilePathNames[i]);
-    spdlog::debug("- {}", source);
-    sources.push_back(source);
+    spdlog::debug("- {}", sSourceFilePathNames[i]);
+    sources.push_back(std::move(maybe_source_names->object));
   }
 
   // GCS ComposeObject limit: maximum 32 source objects per operation

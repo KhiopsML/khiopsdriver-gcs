@@ -12,6 +12,11 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
+set(STORAGE_DRIVER_TEST_URL_PREFIX_FOR_TESTS "$ENV{STORAGE_DRIVER_TEST_URL_PREFIX}")
+if(STORAGE_DRIVER_TEST_URL_PREFIX_FOR_TESTS STREQUAL "")
+  set(STORAGE_DRIVER_TEST_URL_PREFIX_FOR_TESTS "gs://data-test-khiops-driver-gcs")
+endif()
+
 # Find dependencies
 find_package(Boost CONFIG REQUIRED)
 add_executable(gcs_test mocking_test.cpp nonmocking_test.cpp drivertest.cpp test_drivermetadata.cpp ../src/gcsplugin.h)
@@ -28,9 +33,12 @@ target_compile_options(gcs_test PRIVATE $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_I
 target_include_directories(gcs_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
 
 target_link_libraries(gcs_test PRIVATE GTest::gtest GTest::gmock GTest::gmock_main google-cloud-cpp::storage
-                                         khiopsdriver_file_gcs)
+                                       khiopsdriver_file_gcs)
 
-gtest_discover_tests(gcs_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+gtest_discover_tests(
+  gcs_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  PROPERTIES LABELS "unit" ENVIRONMENT "STORAGE_DRIVER_TEST_URL_PREFIX=${STORAGE_DRIVER_TEST_URL_PREFIX_FOR_TESTS}")
 
 add_executable(plugin_test plugin_test.cpp path_helper.cpp)
 target_include_directories(plugin_test PRIVATE ${${PROJECT_NAME}_SOURCE_DIR}/src)
@@ -51,4 +59,7 @@ else()
   target_link_libraries(plugin_test PRIVATE gtest ${CMAKE_DL_LIBS}) # Link to dl
 endif()
 
-gtest_discover_tests(plugin_test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+gtest_discover_tests(
+  plugin_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  PROPERTIES LABELS "unit" ENVIRONMENT "STORAGE_DRIVER_TEST_URL_PREFIX=${STORAGE_DRIVER_TEST_URL_PREFIX_FOR_TESTS}")

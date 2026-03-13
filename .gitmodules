@@ -3,4 +3,4 @@
 	url = https://github.com/microsoft/vcpkg.git
 [submodule "shared"]
 	path = shared
-	url = https://github.com/KhiopsML/khiopsdriver-shared
+	url = git@github.com:KhiopsML/khiopsdriver-shared.git

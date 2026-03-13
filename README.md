@@ -83,3 +83,36 @@ kh.train_predictor(
     max_trees=0,
 )
 ```
+## Development: Coverage reports
+
+Coverage targets are available on Linux in non-Release builds when `BUILD_TESTS=ON`.
+Tests are executed through `ctest` so coverage matches the test registry.
+
+Configure and build in Debug mode:
+
+    cmake --preset ninja-dbg -DBUILD_TESTS=ON
+    cmake --build --preset ninja-dbg
+
+Run tests directly with ctest (optional baseline check):
+
+    ctest --preset ninja-dbg --output-on-failure
+
+Generate unit-only coverage (tests labeled `unit`):
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura_unit
+
+Generate full coverage (all tests known by `ctest`):
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage_full
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura_full
+
+Artifacts are generated under `build/debug/`:
+
+- HTML reports: `build/debug/coverage-unit/index.html` and `build/debug/coverage-full/index.html`
+- Cobertura XML: `build/debug/coverage-unit.xml` and `build/debug/coverage-full.xml`
+
+Legacy targets are still available and map to full coverage:
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura

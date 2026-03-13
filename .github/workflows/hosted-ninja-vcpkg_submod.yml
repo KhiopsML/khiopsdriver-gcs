@@ -89,21 +89,33 @@ jobs:
         env:
           STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
-      # GCOV seems to be broken with newer versions of GCC, so we disable it for now.
-      # - name: Generate coverage report
-      #   if: matrix.os == 'ubuntu-latest'
-      #   run: |
-      #     cmake --build --preset ninja-dbg --target khiops-gcs_coverage --target khiops-gcs_cobertura
+      - name: Generate coverage reports
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        run: |
+          find build/debug -name '*.gcda' -delete
+          export GCOV=gcov
+          cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit --target khiops-gcs_cobertura_unit --target khiops-gcs_coverage_full --target khiops-gcs_cobertura_full
 
-      # - name: Upload coverage results
-      #   uses: actions/upload-artifact@v4
-      #   if: matrix.os == 'ubuntu-latest'
-      #   with:
-      #     name: coverage
-      #     path: |
-      #       builds/ninja-multi-vcpkg/coverage/*
-      #       builds/ninja-multi-vcpkg/coverage.*
-      #     if-no-files-found: ignore
+      - name: Upload coverage results (unit)
+        if: matrix.os == 'ubuntu-latest' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.os }}
+          path: |
+            build/debug/coverage-unit/**
+            build/debug/coverage-unit.xml
+          if-no-files-found: warn
+
+      - name: Upload coverage results (full)
+        if: matrix.os == 'ubuntu-latest' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full-${{ matrix.os }}
+          path: |
+            build/debug/coverage-full/**
+            build/debug/coverage-full.xml
+          if-no-files-found: warn
 
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10

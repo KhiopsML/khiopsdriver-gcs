@@ -38,6 +38,12 @@ if(BUILD_TESTS)
   enable_testing()
 endif()
 
+# Default integration-test URL prefix for this repository when not provided by CI/user.
+if(BUILD_TESTS AND NOT DEFINED ENV{STORAGE_DRIVER_TEST_URL_PREFIX})
+  set(ENV{STORAGE_DRIVER_TEST_URL_PREFIX} "gs://data-test-khiops-driver-gcs")
+  message(STATUS "Defaulting STORAGE_DRIVER_TEST_URL_PREFIX to gs://data-test-khiops-driver-gcs")
+endif()
+
 # Find dependencies
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
@@ -73,9 +79,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
   if(BUILD_TESTS)
     include(CodeCoverage)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
-    setup_target_for_coverage(${PROJECT_NAME}_coverage basic_test coverage)
-    setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura basic_test coverage
-                                        --gtest_output=xml:coverage.junit.xml)
+    # Unit-only coverage (tests labeled "unit")
+    setup_target_for_coverage(${PROJECT_NAME}_coverage_unit ${CMAKE_CTEST_COMMAND} coverage-unit
+                              "--output-on-failure;-L;unit;-E;GCSDriverTest\\.")
+    setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura_unit ${CMAKE_CTEST_COMMAND} coverage-unit
+                                        "--output-on-failure;-L;unit;-E;GCSDriverTest\\.")
+
+    # Full coverage (all tests known by ctest)
+    setup_target_for_coverage(${PROJECT_NAME}_coverage_full ${CMAKE_CTEST_COMMAND} coverage-full "--output-on-failure")
+    setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura_full ${CMAKE_CTEST_COMMAND} coverage-full
+                                        "--output-on-failure")
+
+    # Backward-compatible target names, mapped to unit coverage for reliability in local/IDE runs where integration
+    # credentials may be missing.
+    add_custom_target(${PROJECT_NAME}_coverage DEPENDS ${PROJECT_NAME}_coverage_unit)
+    add_custom_target(${PROJECT_NAME}_cobertura DEPENDS ${PROJECT_NAME}_cobertura_unit)
   endif()
 endif()
 
