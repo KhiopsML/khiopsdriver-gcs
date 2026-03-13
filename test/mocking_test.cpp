@@ -81,9 +81,11 @@ protected:
   void SetUp() override {
     mock_client = std::make_shared<gcs::testing::MockClient>();
 
-    ON_CALL(*mock_client, GetObjectMetadata).WillByDefault([](gcs::internal::GetObjectMetadataRequest const &req) {
-      return MakeObjectMetadata(req.bucket_name(), req.object_name(), /*generation*/ 1, /*size*/ 0);
-    });
+    ON_CALL(*mock_client, GetObjectMetadata)
+        .WillByDefault([](gcs::internal::GetObjectMetadataRequest const &req) {
+          return MakeObjectMetadata(req.bucket_name(), req.object_name(),
+                                    /*generation*/ 1, /*size*/ 0);
+        });
 
     auto client = gcs::testing::UndecoratedClientFromMock(mock_client);
     test_setClient(std::move(client));
@@ -1568,8 +1570,9 @@ TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
 }
 
 TEST_F(GCSDriverTestFixture, Concat_Success) {
-  const char *sources[3] = {"input/file_a.txt", "input/file_b.txt",
-                            "input/file_c.txt"};
+  const char *sources[3] = {"gs://mock_bucket/input/file_a.txt",
+                            "gs://mock_bucket/input/file_b.txt",
+                            "gs://mock_bucket/input/file_c.txt"};
 
   const std::string bucket = "mock_bucket";
   const std::string dest_object = "output/concatenated.txt";
@@ -1604,7 +1607,8 @@ TEST_F(GCSDriverTestFixture, Concat_Success) {
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
-  const char *sources[2] = {"file1.txt", "file2.txt"};
+  const char *sources[2] = {"gs://mock_bucket/file1.txt",
+                            "gs://mock_bucket/file2.txt"};
 
   // ComposeObject fails
   EXPECT_CALL(*mock_client, ComposeObject)
@@ -1617,7 +1621,8 @@ TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
-  const char *sources[2] = {"file1.txt", "file2.txt"};
+  const char *sources[2] = {"gs://mock_bucket/file1.txt",
+                            "gs://mock_bucket/file2.txt"};
 
   const std::string bucket = "mock_bucket";
 
@@ -1638,7 +1643,8 @@ TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
-  const char *sources[2] = {"file1.txt", "file2.txt"};
+  const char *sources[2] = {"gs://mock_bucket/file1.txt",
+                            "gs://mock_bucket/file2.txt"};
 
   const std::string bucket = "mock_bucket";
 
@@ -1674,16 +1680,29 @@ TEST_F(GCSDriverTestFixture, Concat_InvalidDestinationURI) {
   ASSERT_EQ(driver_concat("gs:///no_bucket", sources, 1), kFailure);
 }
 
-TEST_F(GCSDriverTestFixture, Concat_InvalidSourceURI) {
-  const char *sources[2] = {"gs://bucket/valid.txt", "invalid_source_uri"};
+TEST_F(GCSDriverTestFixture, Concat_SourceDifferentBucket_Fails) {
+  const char *sources[2] = {"gs://mock_bucket/valid.txt",
+                            "gs://other_bucket/other.txt"};
 
-  const std::string bucket = "mock_bucket";
+  EXPECT_CALL(*mock_client, ComposeObject).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+  EXPECT_CALL(*mock_client, CopyObject).Times(0);
+
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Concat_SourceRelativePath_Fails) {
+  const char *sources[2] = {"file1.txt", "gs://mock_bucket/file2.txt"};
+
+  EXPECT_CALL(*mock_client, ComposeObject).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+  EXPECT_CALL(*mock_client, CopyObject).Times(0);
 
   ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
-  const char *sources[1] = {"single.txt"};
+  const char *sources[1] = {"gs://mock_bucket/single.txt"};
 
   const std::string bucket = "mock_bucket";
 
@@ -1707,8 +1726,10 @@ TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
-  const char *sources[5] = {"file1.txt", "file2.txt", "file3.txt", "file4.txt",
-                            "file5.txt"};
+  const char *sources[5] = {
+      "gs://mock_bucket/file1.txt", "gs://mock_bucket/file2.txt",
+      "gs://mock_bucket/file3.txt", "gs://mock_bucket/file4.txt",
+      "gs://mock_bucket/file5.txt"};
 
   const std::string bucket = "mock_bucket";
 
@@ -1749,12 +1770,18 @@ TEST_F(GCSDriverTestFixture, Concat_ManyFiles_Batching) {
     source_names.push_back("file" + std::to_string(i) + ".txt");
   }
 
+  std::vector<std::string> source_uris;
+  source_uris.reserve(num_files);
+  for (const auto &name : source_names) {
+    source_uris.push_back("gs://mock_bucket/" + name);
+  }
+
   // Build array of const char* AFTER all strings are in the vector
   std::vector<const char *> sources;
   sources.reserve(num_files);
 
-  for (const auto &name : source_names) {
-    sources.push_back(name.c_str());
+  for (const auto &uri : source_uris) {
+    sources.push_back(uri.c_str());
   }
 
   const std::string bucket = "mock_bucket";

@@ -116,3 +116,20 @@ Legacy targets are still available and map to full coverage:
 
     cmake --build --preset ninja-dbg --target khiops-gcs_coverage
     cmake --build --preset ninja-dbg --target khiops-gcs_cobertura
+
+## Development: GitHub CI coverage UX
+
+Coverage reporting in CI uses only native GitHub capabilities (no external service).
+
+On Linux workflow runs:
+
+- The workflow writes a `Coverage Report` section to the run summary.
+- Pull requests receive a single updatable comment with current coverage status.
+- Coverage artifacts are uploaded only when the expected reports are generated.
+
+Artifact names in GitHub Actions:
+
+- `coverage-unit-ubuntu-latest`
+- `coverage-full-ubuntu-latest`
+
+If coverage generation fails or skips, upload is skipped consistently and the summary/comment explicitly indicates missing reports.

@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+      issues: 'write'
     env:
     #
     # [OPTIONAL] Define the vcpkg's triplet 
@@ -97,25 +98,158 @@ jobs:
           export GCOV=gcov
           cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit --target khiops-gcs_cobertura_unit --target khiops-gcs_coverage_full --target khiops-gcs_cobertura_full
 
+      - name: Detect generated coverage reports
+        id: coverage_probe
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unit_ready=false
+          full_ready=false
+
+          if [[ -f build/debug/coverage-unit/index.html && -f build/debug/coverage-unit.xml ]]; then
+            unit_ready=true
+          fi
+
+          if [[ -f build/debug/coverage-full/index.html && -f build/debug/coverage-full.xml ]]; then
+            full_ready=true
+          fi
+
+          echo "unit_ready=${unit_ready}" >> "$GITHUB_OUTPUT"
+          echo "full_ready=${full_ready}" >> "$GITHUB_OUTPUT"
+
+          echo "Coverage probe summary: unit_ready=${unit_ready}, full_ready=${full_ready}"
+
+      - name: Coverage unit upload skipped
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready != 'true'
+        run: |
+          echo "Skipping unit coverage upload: expected files not generated (build/debug/coverage-unit/index.html, build/debug/coverage-unit.xml)."
+
+      - name: Coverage full upload skipped
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready != 'true'
+        run: |
+          echo "Skipping full coverage upload: expected files not generated (build/debug/coverage-full/index.html, build/debug/coverage-full.xml)."
+
       - name: Upload coverage results (unit)
-        if: matrix.os == 'ubuntu-latest' && always()
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-unit-${{ matrix.os }}
           path: |
             build/debug/coverage-unit/**
             build/debug/coverage-unit.xml
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload coverage results (full)
-        if: matrix.os == 'ubuntu-latest' && always()
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-full-${{ matrix.os }}
           path: |
             build/debug/coverage-full/**
             build/debug/coverage-full.xml
-          if-no-files-found: warn
+          if-no-files-found: error
+
+      - name: Coverage summary
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unit_status="${{ steps.coverage_probe.outputs.unit_ready }}"
+          full_status="${{ steps.coverage_probe.outputs.full_ready }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          {
+            echo "## Coverage Report"
+            echo ""
+            echo "- Unit coverage generated: ${unit_status}"
+            echo "- Full coverage generated: ${full_status}"
+            echo "- Workflow run: ${run_url}"
+            echo ""
+            echo "### Expected Artifact Names"
+            echo "- coverage-unit-${{ matrix.os }}"
+            echo "- coverage-full-${{ matrix.os }}"
+            echo ""
+            echo "### Report Paths"
+            if [[ "${unit_status}" == "true" ]]; then
+              echo "- Unit HTML: build/debug/coverage-unit/index.html"
+              echo "- Unit XML: build/debug/coverage-unit.xml"
+            else
+              echo "- Unit report not generated"
+            fi
+
+            if [[ "${full_status}" == "true" ]]; then
+              echo "- Full HTML: build/debug/coverage-full/index.html"
+              echo "- Full XML: build/debug/coverage-full.xml"
+            else
+              echo "- Full report not generated"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment coverage status on PR
+        if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          UNIT_READY: ${{ steps.coverage_probe.outputs.unit_ready }}
+          FULL_READY: ${{ steps.coverage_probe.outputs.full_ready }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const marker = '<!-- coverage-report-status -->';
+            const unitReady = process.env.UNIT_READY === 'true';
+            const fullReady = process.env.FULL_READY === 'true';
+            const runUrl = process.env.RUN_URL;
+
+            const lines = [
+              marker,
+              '## Coverage Report',
+              '',
+              `- Unit coverage generated: ${unitReady ? 'true' : 'false'}`,
+              `- Full coverage generated: ${fullReady ? 'true' : 'false'}`,
+              `- Workflow run: ${runUrl}`,
+              '',
+              'Artifacts (if generated):',
+              `- coverage-unit-${{ matrix.os }}`,
+              `- coverage-full-${{ matrix.os }}`,
+              '',
+              unitReady
+                ? '- Unit report: `build/debug/coverage-unit/index.html` and `build/debug/coverage-unit.xml`'
+                : '- Unit report skipped or not generated.',
+              fullReady
+                ? '- Full report: `build/debug/coverage-full/index.html` and `build/debug/coverage-full.xml`'
+                : '- Full report skipped or not generated.'
+            ];
+
+            const body = lines.join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
 
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10
