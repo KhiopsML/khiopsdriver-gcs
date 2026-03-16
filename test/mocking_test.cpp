@@ -855,15 +855,15 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd) {
 
   auto test_func = [seek_failure](const std::vector<TestParams> vals,
                                   Handle &sample,
-                                  long long sample_starting_offset) {
+                                  long long sample_starting_offset,
+                                  long long sample_filesize) {
     for (const auto &v : vals) {
       int res{0};
       ASSERT_NO_THROW(res = driver_fseek(&sample, v.offset, std::ios::end));
       ASSERT_EQ(res, v.expected_result);
-      ASSERT_EQ(sample.GetReader().offset_,
-                v.expected_result == seek_failure
-                    ? sample_starting_offset
-                    : sample_starting_offset + v.offset);
+      ASSERT_EQ(sample.GetReader().offset_, v.expected_result == seek_failure
+                                                ? sample_starting_offset
+                                                : sample_filesize + v.offset);
       sample.GetReader().offset_ = sample_starting_offset;
     }
   };
@@ -876,14 +876,15 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd) {
                            {"mock_file"}, {filesize}, filesize));
 
   std::vector<TestParams> test_values = {
-      TestParams{0, seek_success},
-      TestParams{-starting_offset, seek_success},
-      TestParams{1, seek_success},
-      TestParams{-(starting_offset + 1), seek_failure},
+      TestParams{0, seek_success}, TestParams{-starting_offset, seek_success},
+      TestParams{2, seek_success}, // Seek beyond end of file should succeed, as
+                                   // per standard library behaviour
+      TestParams{-(filesize + 1),
+                 seek_failure}, // Seek before start of file should fail
       TestParams{std::numeric_limits<long long>::min(), seek_failure},
       TestParams{std::numeric_limits<long long>::max(), seek_failure}};
 
-  test_func(test_values, *test_reader, starting_offset);
+  test_func(test_values, *test_reader, starting_offset, filesize);
 
   // special case: file of size 0, offset 0
 
@@ -892,7 +893,7 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd) {
 
   std::vector<TestParams> special_test_values = {
       TestParams{std::numeric_limits<long long>::max(), seek_success}};
-  test_func(special_test_values, *test_reader, 0);
+  test_func(special_test_values, *test_reader, 0, 0);
 }
 
 TEST_F(GCSDriverTestFixture, Read_BadArgs) {
