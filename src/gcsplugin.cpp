@@ -143,6 +143,10 @@ DownloadFileRangeToBuffer(const std::string &bucket_name,
                                            o_status.message()};
   }
 
+  if (start_range >= end_range) {
+    return gc::Status{gc::StatusCode::kOutOfRange, "Cannot read after end of file."};
+  }
+
   long long int num_read = static_cast<long long>(reader.gcount());
   spdlog::debug("read = {}", num_read);
 
@@ -1144,10 +1148,6 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   // special case: if offset >= total_size, error if not 0 byte required. 0 byte
   // required is already done above
   const tOffset total_size = h.total_size_;
-  if (offset >= total_size) {
-    LogError("Cannot read after end of file.");
-    return -1;
-  }
 
   // normal cases
   if (offset + to_read > total_size) {
