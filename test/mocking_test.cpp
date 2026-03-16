@@ -596,7 +596,7 @@ TEST_F(GCSDriverTestFixture, Close) {
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess) {
   MultiPartFile expected_struct{"mock_bucket", "mock_file", 0, 0,
-                                {"mock_file"}, {10},        10};
+                                {"mock_file"}, {10},        10, {1}};
 
   PrepareListObjects(MakeLOR("mock_bucket", {"mock_file"}, {10}));
   OpenSuccess(expected_struct);
@@ -634,7 +634,7 @@ TEST_F(GCSDriverTestFixture,
                                 {"mock_file_0", "mock_file_1"},
                                 {static_cast<long long>(mock_file_0_size),
                                  static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size)};
+                                static_cast<long long>(total_size), {1}};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
@@ -668,7 +668,7 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess) {
                                 {"mock_file_0", "mock_file_1"},
                                 {static_cast<long long>(mock_file_0_size),
                                  static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size)};
+                                static_cast<long long>(total_size), {1}};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
