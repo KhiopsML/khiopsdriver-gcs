@@ -132,6 +132,10 @@ DownloadFileRangeToBuffer(const std::string &bucket_name,
                                   gcs::IfGenerationMatch(generation));
   if (!reader) {
     auto &o_status = reader.status();
+    if (o_status.code() == gc::StatusCode::kFailedPrecondition) {
+      return gc::Status{o_status.code(),
+                        "The file has been updated while reading it."};
+    }
     return gc::Status{o_status.code(), "Error while creating reading stream; " +
                                            o_status.message()};
   }
@@ -144,7 +148,8 @@ DownloadFileRangeToBuffer(const std::string &bucket_name,
   }
 
   if (start_range >= end_range) {
-    return gc::Status{gc::StatusCode::kOutOfRange, "Cannot read after end of file."};
+    return gc::Status{gc::StatusCode::kOutOfRange,
+                      "Cannot read after end of file."};
   }
 
   long long int num_read = static_cast<long long>(reader.gcount());
@@ -167,8 +172,15 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
   const tOffset common_header_length = multifile.commonHeaderLength_;
   const std::string &bucket_name = multifile.bucketname_;
   const auto &filenames = multifile.filenames_;
-  char *buffer_pos = buffer;
+  const auto &generations = multifile.generations;
   tOffset &offset = multifile.offset_;
+
+  if (filenames.empty() || cumul_sizes.empty()) {
+    return gc::Status{gc::StatusCode::kOutOfRange,
+                      "Cannot read from an empty multipart file."};
+  }
+
+  char *buffer_pos = buffer;
   const tOffset offset_bak = offset; // in case of irrecoverable error, leave
                                      // the multifile in its starting state
 
@@ -177,16 +189,28 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
   size_t idx = static_cast<size_t>(
       std::distance(cumul_sizes.begin(), greater_than_offset_it));
 
-  spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset,
-                *greater_than_offset_it);
+  // If offset is at/after the tracked end, route through the last file so that
+  // generation consistency checks still run before returning EOF/out-of-range.
+  if (idx == cumul_sizes.size()) {
+    idx = cumul_sizes.size() - 1;
+  }
 
-  auto read_range_and_update = [&](const std::string &filename, tOffset start,
+  if (idx >= cumul_sizes.size() || idx >= filenames.size() ||
+      idx >= generations.size()) {
+    return gc::Status{gc::StatusCode::kOutOfRange,
+                      "Cannot read after end of file."};
+  }
+
+  const tOffset range_end_for_log =
+      (greater_than_offset_it == cumul_sizes.end()) ? cumul_sizes.back()
+                                                    : *greater_than_offset_it;
+
+  spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset,
+                range_end_for_log);
+
+  auto read_range_and_update = [&](const std::string &filename,
+                                   int64_t generation, tOffset start,
                                    tOffset end) -> gc::Status {
-    int64_t generation;
-    if (GetGeneration(&generation, bucket_name, filename)) {
-      return gc::Status(gc::StatusCode::kInternal,
-                        "Failed to retrieve generation of object.");
-    }
     auto maybe_actual_read = DownloadFileRangeToBuffer(
         bucket_name, filename, buffer_pos, static_cast<int64_t>(start),
         static_cast<int64_t>(end), generation);
@@ -219,18 +243,20 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
   const tOffset read_end =
       std::min(file_start + to_read, file_start + cumul_sizes[idx] - offset);
 
-  gc::Status read_status =
-      read_range_and_update(filenames[idx], file_start, read_end);
+  gc::Status read_status = read_range_and_update(
+      filenames[idx], generations[idx], file_start, read_end);
 
   // continue with the next files
-  while (read_status.ok() && to_read) {
+  while (read_status.ok() && to_read && (idx + 1) < cumul_sizes.size() &&
+         (idx + 1) < filenames.size()) {
     // read the missing bytes in the next files as necessary
     idx++;
     const tOffset start = common_header_length;
     const tOffset end = std::min(start + to_read, start + cumul_sizes[idx] -
                                                       cumul_sizes[idx - 1]);
 
-    read_status = read_range_and_update(filenames[idx], start, end);
+    read_status =
+        read_range_and_update(filenames[idx], generations[idx], start, end);
   }
 
   return read_status.ok() ? bytes_read : gc::StatusOr<long long>{read_status};
@@ -1145,19 +1171,17 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   }
   // end of overflow prevention
 
-  // special case: if offset >= total_size, error if not 0 byte required. 0 byte
-  // required is already done above
-  const tOffset total_size = h.total_size_;
-
   // normal cases
+  /*
   if (offset + to_read > total_size) {
     to_read = total_size - offset;
     spdlog::debug(
         "offset {}, req len {} exceeds file size ({}) -> reducing len to {}",
         offset, to_read, total_size, to_read);
   } else {
-    spdlog::debug("offset = {} to_read = {}", offset, to_read);
-  }
+   */
+  spdlog::debug("offset = {} to_read = {}", offset, to_read);
+  //}
 
   auto maybe_read = ReadBytesInFile(h, reinterpret_cast<char *>(ptr), to_read);
   RETURN_ON_ERROR(maybe_read, "Error while reading from file", -1);

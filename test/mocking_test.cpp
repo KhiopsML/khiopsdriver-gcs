@@ -595,7 +595,7 @@ TEST_F(GCSDriverTestFixture, Close) {
 }
 
 TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_OneFileSuccess) {
-  MultiPartFile expected_struct{"mock_bucket", "mock_file", 0, 0,
+  MultiPartFile expected_struct{"mock_bucket", "mock_file", 0,  0,
                                 {"mock_file"}, {10},        10, {1}};
 
   PrepareListObjects(MakeLOR("mock_bucket", {"mock_file"}, {10}));
@@ -634,7 +634,8 @@ TEST_F(GCSDriverTestFixture,
                                 {"mock_file_0", "mock_file_1"},
                                 {static_cast<long long>(mock_file_0_size),
                                  static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size), {1}};
+                                static_cast<long long>(total_size),
+                                {1}};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
@@ -668,7 +669,8 @@ TEST_F(GCSDriverTestFixture, OpenReadModeAndClose_TwoFilesCommonHeaderSuccess) {
                                 {"mock_file_0", "mock_file_1"},
                                 {static_cast<long long>(mock_file_0_size),
                                  static_cast<long long>(total_size)},
-                                static_cast<long long>(total_size), {1}};
+                                static_cast<long long>(total_size),
+                                {1}};
 
   TestMultifileOpenSuccess(file0_file1_response, mock_file_0, mock_file_1,
                            expected_struct);
@@ -894,6 +896,17 @@ TEST_F(GCSDriverTestFixture, SeekFromEnd) {
   std::vector<TestParams> special_test_values = {
       TestParams{std::numeric_limits<long long>::max(), seek_success}};
   test_func(special_test_values, *test_reader, 0, 0);
+
+  // Read after successful seek beyond EOF should fail and not attempt I/O.
+  Handle *read_after_seek_reader = reinterpret_cast<Handle *>(
+      test_addReaderHandle("mock_bucket", "mock_file", 0, 0, {"mock_file"},
+                           {filesize}, filesize));
+  ASSERT_EQ(driver_fseek(read_after_seek_reader, 2, std::ios::end), 0);
+  ASSERT_EQ(read_after_seek_reader->GetReader().offset_, filesize + 2);
+
+  char buff[4] = {};
+  ASSERT_EQ(driver_fread(buff, sizeof(uint8_t), 1, read_after_seek_reader), -1);
+  ASSERT_EQ(read_after_seek_reader->GetReader().offset_, filesize + 2);
 }
 
 TEST_F(GCSDriverTestFixture, Read_BadArgs) {
@@ -961,6 +974,7 @@ TEST_F(GCSDriverTestFixture, Read_OneFile) {
   test_reader->GetReader().offset_ = filesize + 1;
 
   ASSERT_EQ(driver_fread(buff, size, 1, test_reader), -1);
+  ASSERT_EQ(test_reader->GetReader().offset_, filesize + 1);
 
   // basic case: offset 0, 1 byte to read
   test_reader->GetReader().offset_ = 0;
@@ -1046,6 +1060,20 @@ TEST_F(GCSDriverTestFixture, Read_OneFile) {
   for (long long i : one_file_try_reading_more_than_possible_test_values) {
     test_try_read_more_bytes_than_available(i);
   }
+}
+
+TEST_F(GCSDriverTestFixture, Read_NFiles_OffsetBeyondEOF_FailsNoIO) {
+  constexpr long long size_0{5};
+  constexpr long long size_1{7};
+  constexpr long long total_size{size_0 + size_1};
+
+  Handle *test_reader = reinterpret_cast<Handle *>(test_addReaderHandle(
+      "mock_bucket", "mock_file", total_size + 3, 0,
+      {"mock_file_0", "mock_file_1"}, {size_0, total_size}, total_size));
+
+  char buff[8] = {};
+  ASSERT_EQ(driver_fread(buff, sizeof(uint8_t), 1, test_reader), -1);
+  ASSERT_EQ(test_reader->GetReader().offset_, total_size + 3);
 }
 
 TEST_F(GCSDriverTestFixture, Read_NFiles_NoCommonHeader) {
