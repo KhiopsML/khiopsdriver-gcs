@@ -180,8 +180,8 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
                                    tOffset end) -> gc::Status {
     int64_t generation;
     if (GetGeneration(&generation, bucket_name, filename)) {
-      return gc::Status(gc::StatusCode::kFailedPrecondition,
-                        "The file has been updated while trying to read it.");
+      return gc::Status(gc::StatusCode::kInternal,
+                        "Failed to retrieve generation of object.");
     }
     auto maybe_actual_read = DownloadFileRangeToBuffer(
         bucket_name, filename, buffer_pos, static_cast<int64_t>(start),
