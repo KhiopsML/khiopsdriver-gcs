@@ -47,6 +47,8 @@ jobs:
     # choosen (x64 is the default on all platforms, 
     # e.g. x64-osx).
       VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      # We can define the prefix here as, opposed to the Azure driver worflow, it will not change between testing steps.
+      STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
     steps:
       - uses: actions/checkout@v4
@@ -87,8 +89,6 @@ jobs:
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
           buildPreset: 'ninja-dbg'
           testPreset: 'ninja-dbg'
-        env:
-          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
       - name: Generate coverage reports
         if: matrix.os == 'ubuntu-latest'
@@ -259,8 +259,6 @@ jobs:
           buildPreset: 'ninja-rel'
           testPreset: 'ninja-rel'
           testPresetAdditionalArgs: '["--output-junit", "test_results.xml"]'
-        env:
-          STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
       - name: Upload results of cloud storage tests
         if: always()
