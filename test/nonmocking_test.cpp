@@ -119,25 +119,24 @@ TEST(GCSDriverTest, Concat) {
         << "Failed to copy source " << i
         << " to temporary location: " << copy_status.message();
 
-    // Store the relative path for concat
-    relative_temp_paths.push_back(temp_object);
+    // Store the source path for concat
+    relative_temp_paths.push_back("gs://" + bucket + "/" + temp_object);
   }
 
   // ✅ Construire le tableau de pointeurs APRÈS avoir fini d'ajouter tous les
   // strings
-  std::vector<const char *> relative_temp_path_ptrs;
-  relative_temp_path_ptrs.reserve(nsources);
+  std::vector<const char *> temp_path_ptrs;
+  temp_path_ptrs.reserve(nsources);
 
   for (const auto &path : relative_temp_paths) {
-    relative_temp_path_ptrs.push_back(path.c_str());
+    temp_path_ptrs.push_back(path.c_str());
   }
 
   ASSERT_EQ(driver_fileExists(output), kFalse)
       << "The output file exists before concatenation";
 
   // Concatenate using relative paths
-  ASSERT_EQ(driver_concat(output, relative_temp_path_ptrs.data(), nsources),
-            kSuccess)
+  ASSERT_EQ(driver_concat(output, temp_path_ptrs.data(), nsources), kSuccess)
       << "Concatenation failed";
 
   // Verify source files were deleted after concatenation
