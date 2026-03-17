@@ -19,7 +19,7 @@ endif()
 
 # Find dependencies
 find_package(Boost CONFIG REQUIRED)
-add_executable(gcs_test mocking_test.cpp nonmocking_test.cpp drivertest.cpp test_drivermetadata.cpp ../src/gcsplugin.h)
+add_executable(gcs_test mocking_test.cpp nonmocking_test.cpp test_drivermetadata.cpp ../src/gcsplugin.h)
 
 target_compile_options(
   gcs_test
