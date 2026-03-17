@@ -92,6 +92,8 @@ jobs:
           configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
           buildPreset: 'ninja-dbg'
           testPreset: 'ninja-dbg'
+        env:
+          CTEST_PARALLEL_LEVEL: ''
 
       - name: Generate coverage reports
         if: matrix.os == 'ubuntu-latest'
@@ -260,6 +262,8 @@ jobs:
           buildPreset: 'ninja-rel'
           testPreset: 'ninja-rel'
           testPresetAdditionalArgs: '["--output-junit", "test_results.xml"]'
+        env:
+          CTEST_PARALLEL_LEVEL: ''
 
       - name: Upload results of cloud storage tests
         if: always()
