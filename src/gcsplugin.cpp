@@ -158,6 +158,36 @@ DownloadFileRangeToBuffer(const std::string &bucket_name,
   return num_read;
 }
 
+struct OffsetChunkLookup {
+  size_t initial_chunk_index;
+  bool offset_at_or_past_last_chunk;
+  tOffset range_end_for_log;
+};
+
+OffsetChunkLookup LookupInitialChunk(const std::vector<tOffset> &cumul_sizes,
+                                     tOffset offset) {
+  auto first_chunk_end_after_offset =
+      std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
+
+  const bool offset_at_or_past_last_chunk =
+      (first_chunk_end_after_offset == cumul_sizes.end());
+
+  size_t idx = static_cast<size_t>(
+      std::distance(cumul_sizes.begin(), first_chunk_end_after_offset));
+
+  // If offset is at/after the tracked end, route through the last file so
+  // generation checks still run before signaling EOF/out-of-range.
+  if (idx == cumul_sizes.size()) {
+    idx = cumul_sizes.size() - 1;
+  }
+
+  const tOffset range_end_for_log = offset_at_or_past_last_chunk
+                                        ? cumul_sizes.back()
+                                        : *first_chunk_end_after_offset;
+
+  return {idx, offset_at_or_past_last_chunk, range_end_for_log};
+}
+
 gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
                                         tOffset to_read) {
   // Start at first usable file chunk
@@ -184,16 +214,9 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
   const tOffset offset_bak = offset; // in case of irrecoverable error, leave
                                      // the multifile in its starting state
 
-  auto greater_than_offset_it =
-      std::upper_bound(cumul_sizes.begin(), cumul_sizes.end(), offset);
-  size_t idx = static_cast<size_t>(
-      std::distance(cumul_sizes.begin(), greater_than_offset_it));
-
-  // If offset is at/after the tracked end, route through the last file so that
-  // generation consistency checks still run before returning EOF/out-of-range.
-  if (idx == cumul_sizes.size()) {
-    idx = cumul_sizes.size() - 1;
-  }
+  const OffsetChunkLookup chunk_lookup =
+      LookupInitialChunk(cumul_sizes, offset);
+  size_t idx = chunk_lookup.initial_chunk_index;
 
   if (idx >= cumul_sizes.size() || idx >= filenames.size() ||
       idx >= generations.size()) {
@@ -201,12 +224,25 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
                       "Cannot read after end of file."};
   }
 
-  const tOffset range_end_for_log =
-      (greater_than_offset_it == cumul_sizes.end()) ? cumul_sizes.back()
-                                                    : *greater_than_offset_it;
+  // Skip empty chunks (equal cumulative boundaries). They can legitimately
+  // exist in multipart datasets and must not trigger invalid 0-length ranges.
+  if (!chunk_lookup.offset_at_or_past_last_chunk) {
+    while (idx < cumul_sizes.size()) {
+      const tOffset prev_cumul = (idx == 0) ? 0 : cumul_sizes[idx - 1];
+      if (cumul_sizes[idx] > prev_cumul && cumul_sizes[idx] > offset) {
+        break;
+      }
+      ++idx;
+    }
+  }
+
+  if (idx >= cumul_sizes.size() || idx >= filenames.size() ||
+      idx >= generations.size()) {
+    return bytes_read;
+  }
 
   spdlog::debug("Use item {} to read @ {} (end = {})", idx, offset,
-                range_end_for_log);
+                chunk_lookup.range_end_for_log);
 
   auto read_range_and_update = [&](const std::string &filename,
                                    int64_t generation, tOffset start,
@@ -248,12 +284,17 @@ gc::StatusOr<long long> ReadBytesInFile(MultiPartFile &multifile, char *buffer,
 
   // continue with the next files
   while (read_status.ok() && to_read && (idx + 1) < cumul_sizes.size() &&
-         (idx + 1) < filenames.size()) {
+         (idx + 1) < filenames.size() && (idx + 1) < generations.size()) {
     // read the missing bytes in the next files as necessary
     idx++;
+
+    const tOffset chunk_capacity = cumul_sizes[idx] - cumul_sizes[idx - 1];
+    if (chunk_capacity <= 0) {
+      continue;
+    }
+
     const tOffset start = common_header_length;
-    const tOffset end = std::min(start + to_read, start + cumul_sizes[idx] -
-                                                      cumul_sizes[idx - 1]);
+    const tOffset end = std::min(start + to_read, start + chunk_capacity);
 
     read_status =
         read_range_and_update(filenames[idx], generations[idx], start, end);
