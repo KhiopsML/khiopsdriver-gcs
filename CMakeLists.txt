@@ -81,9 +81,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COVERAGE} ${CMAKE_CXX_FLAGS_DEBUG}")
     # Unit-only coverage (tests labeled "unit")
     setup_target_for_coverage(${PROJECT_NAME}_coverage_unit ${CMAKE_CTEST_COMMAND} coverage-unit
-                              "--output-on-failure;-L;unit;-E;GCSDriverTest\\.")
+                              "--output-on-failure;-L;unit")
     setup_target_for_coverage_cobertura(${PROJECT_NAME}_cobertura_unit ${CMAKE_CTEST_COMMAND} coverage-unit
-                                        "--output-on-failure;-L;unit;-E;GCSDriverTest\\.")
+                                        "--output-on-failure;-L;unit")
 
     # Full coverage (all tests known by ctest)
     setup_target_for_coverage(${PROJECT_NAME}_coverage_full ${CMAKE_CTEST_COMMAND} coverage-full "--output-on-failure")
