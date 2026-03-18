@@ -16,7 +16,7 @@
 name: hosted-ninja-vcpkg_submod-autocache
 on:
   workflow_dispatch:
-  # push: 
+  push: 
   # pull_request:
   #   branches: 
   #   - v11
@@ -29,19 +29,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
         include:
-          - os: windows-latest
-            triplet: x64-windows
-          - os: ubuntu-latest
-            triplet: x64-linux
-          - os: macos-13
-            triplet: x64-osx
-          - os: macos-14
-            triplet: arm64-osx
+          - {os: ubuntu-latest, triplet: x64-linux}
+          - {os: macos-latest, triplet: arm64-osx}
+          - {os: macos-15-intel, triplet: x64-osx}
+          - {os: macos-14, triplet: arm64-osx}
+          - {os: windows-latest, triplet: x64-windows}
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: 'read'
       id-token: 'write'
+      issues: 'write'
     env:
     #
     # [OPTIONAL] Define the vcpkg's triplet 
@@ -49,14 +49,16 @@ jobs:
     # for the hosting system will be automatically
     # choosen (x64 is the default on all platforms, 
     # e.g. x64-osx).
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }} 
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      # We can define the prefix here as, opposed to the Azure driver worflow, it will not change between testing steps.
+      STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - uses: lukka/get-cmake@v3.30.1
+      - uses: lukka/get-cmake@v3.30.3
 
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
@@ -86,44 +88,196 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'ninja-multi-vcpkg'
-          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Debug']"
-          buildPreset: 'ninja-vcpkg-debug'
-          testPreset: 'test-debug'
-          testPresetAdditionalArgs: "['--output-on-failure']"
+          configurePreset: 'ninja-dbg'
+          configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
+          buildPreset: 'ninja-dbg'
+          testPreset: 'ninja-dbg'
+        env:
+          CTEST_PARALLEL_LEVEL: ''
 
-      # GCOV seems to be broken with newer versions of GCC, so we disable it for now.
-      # - name: Generate coverage report
-      #   if: matrix.os == 'ubuntu-latest'
-      #   run: |
-      #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
+      - name: Generate coverage reports
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        run: |
+          find build/debug -name '*.gcda' -delete
+          export GCOV=gcov
+          cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit --target khiops-gcs_cobertura_unit --target khiops-gcs_coverage_full --target khiops-gcs_cobertura_full
 
-      # - name: Upload coverage results
-      #   uses: actions/upload-artifact@v4
-      #   if: matrix.os == 'ubuntu-latest'
-      #   with:
-      #     name: coverage
-      #     path: |
-      #       builds/ninja-multi-vcpkg/coverage/*
-      #       builds/ninja-multi-vcpkg/coverage.*
-      #     if-no-files-found: ignore
+      - name: Detect generated coverage reports
+        id: coverage_probe
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+
+          unit_ready=false
+          full_ready=false
+
+          if [[ -f build/debug/coverage-unit/index.html && -f build/debug/coverage-unit.xml ]]; then
+            unit_ready=true
+          fi
+
+          if [[ -f build/debug/coverage-full/index.html && -f build/debug/coverage-full.xml ]]; then
+            full_ready=true
+          fi
+
+          echo "unit_ready=${unit_ready}" >> "$GITHUB_OUTPUT"
+          echo "full_ready=${full_ready}" >> "$GITHUB_OUTPUT"
+
+          echo "Coverage probe summary: unit_ready=${unit_ready}, full_ready=${full_ready}"
+
+      - name: Coverage unit upload skipped
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready != 'true'
+        run: |
+          echo "Skipping unit coverage upload: expected files not generated (build/debug/coverage-unit/index.html, build/debug/coverage-unit.xml)."
+
+      - name: Coverage full upload skipped
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready != 'true'
+        run: |
+          echo "Skipping full coverage upload: expected files not generated (build/debug/coverage-full/index.html, build/debug/coverage-full.xml)."
+
+      - name: Upload coverage results (unit)
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.os }}
+          path: |
+            build/debug/coverage-unit/**
+            build/debug/coverage-unit.xml
+          if-no-files-found: error
+
+      - name: Upload coverage results (full)
+        if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full-${{ matrix.os }}
+          path: |
+            build/debug/coverage-full/**
+            build/debug/coverage-full.xml
+          if-no-files-found: error
+
+      - name: Coverage summary
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+
+          unit_status="${{ steps.coverage_probe.outputs.unit_ready }}"
+          full_status="${{ steps.coverage_probe.outputs.full_ready }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          {
+            echo "## Coverage Report"
+            echo ""
+            echo "- Unit coverage generated: ${unit_status}"
+            echo "- Full coverage generated: ${full_status}"
+            echo "- Workflow run: ${run_url}"
+            echo ""
+            echo "### Expected Artifact Names"
+            echo "- coverage-unit-${{ matrix.os }}"
+            echo "- coverage-full-${{ matrix.os }}"
+            echo ""
+            echo "### Report Paths"
+            if [[ "${unit_status}" == "true" ]]; then
+              echo "- Unit HTML: build/debug/coverage-unit/index.html"
+              echo "- Unit XML: build/debug/coverage-unit.xml"
+            else
+              echo "- Unit report not generated"
+            fi
+
+            if [[ "${full_status}" == "true" ]]; then
+              echo "- Full HTML: build/debug/coverage-full/index.html"
+              echo "- Full XML: build/debug/coverage-full.xml"
+            else
+              echo "- Full report not generated"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment coverage status on PR
+        if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          UNIT_READY: ${{ steps.coverage_probe.outputs.unit_ready }}
+          FULL_READY: ${{ steps.coverage_probe.outputs.full_ready }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const marker = '<!-- coverage-report-status -->';
+            const unitReady = process.env.UNIT_READY === 'true';
+            const fullReady = process.env.FULL_READY === 'true';
+            const runUrl = process.env.RUN_URL;
+
+            const lines = [
+              marker,
+              '## Coverage Report',
+              '',
+              `- Unit coverage generated: ${unitReady ? 'true' : 'false'}`,
+              `- Full coverage generated: ${fullReady ? 'true' : 'false'}`,
+              `- Workflow run: ${runUrl}`,
+              '',
+              'Artifacts (if generated):',
+              `- coverage-unit-${{ matrix.os }}`,
+              `- coverage-full-${{ matrix.os }}`,
+              '',
+              unitReady
+                ? '- Unit report: `build/debug/coverage-unit/index.html` and `build/debug/coverage-unit.xml`'
+                : '- Unit report skipped or not generated.',
+              fullReady
+                ? '- Full report: `build/debug/coverage-full/index.html` and `build/debug/coverage-full.xml`'
+                : '- Full report skipped or not generated.'
+            ];
+
+            const body = lines.join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
 
       - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: 'ninja-multi-vcpkg'
-          configurePresetAdditionalArgs: "['-DCMAKE_BUILD_TYPE=Release']"
-          buildPreset: 'ninja-vcpkg-release'
-          testPreset: 'test-release'
-          testPresetAdditionalArgs: "['--output-on-failure']"
+          configurePreset: 'ninja-rel'
+          configurePresetAdditionalArgs: '["-DBUILD_TESTS=ON"]'
+          buildPreset: 'ninja-rel'
+          testPreset: 'ninja-rel'
+          testPresetAdditionalArgs: '["--output-junit", "test_results.xml"]'
+        env:
+          CTEST_PARALLEL_LEVEL: ''
+
+      - name: Upload results of cloud storage tests
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: ${{ github.workspace }}/build/release/test_results.xml
   
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
           path: |
-            builds/ninja-multi-vcpkg/lib/*.dylib
-            builds/ninja-multi-vcpkg/lib/*.so
-            builds/ninja-multi-vcpkg/lib/*.dll
-            builds/ninja-multi-vcpkg/lib/*.lib
+            build/release/lib/*.dylib
+            build/release/lib/*.so
+            build/release/bin/*.dll
+            build/release/bin/*.lib
           if-no-files-found: ignore

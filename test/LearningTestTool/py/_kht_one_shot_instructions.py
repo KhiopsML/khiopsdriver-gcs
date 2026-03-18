@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Orange. All rights reserved.
+# Copyright (c) 2023-2025 Orange. All rights reserved.
 # This software is distributed under the BSD 3-Clause-clear License, the text of which is available
 # at https://spdx.org/licenses/BSD-3-Clause-Clear.html or see the "LICENSE" file for more details.
 
@@ -98,171 +98,6 @@ def instruction_bench(test_dir):
     print("database_name " + database_name + " // Database file")
     print("Exit                           // OK")
     print("// <- Benchmark")
-
-
-def instruction_work(test_dir):
-    results_dir = os.path.join(test_dir, kht.RESULTS)
-    results_ref_dir, _ = results.get_results_ref_dir(test_dir, show=True)
-    if results_ref_dir is None:
-        return
-    test_dir_name = utils.test_dir_name(test_dir)
-    suite_dir_name = utils.suite_dir_name(test_dir)
-    tool_dir_name = utils.tool_dir_name(test_dir)
-
-    # Transformation du fichier .prm
-    transform_prm = False
-    if transform_prm:
-        file_path = os.path.join(test_dir, kht.TEST_PRM)
-        lines = utils.read_file_lines(file_path)
-        try:
-            with open(file_path, "w", errors="ignore") as the_file:
-                for line in lines:
-                    if line.find("EpsilonBinNumber") >= 0:
-                        continue
-                    if line.find("OutlierManagementHeuristic") >= 0:
-                        continue
-                    if line.find("OptimalAlgorithm") >= 0:
-                        continue
-                    if line.find("EpsilonBinWidth") >= 0:
-                        continue
-                    if line.find("MaxIntervalNumber") >= 0:
-                        continue
-                    if line.find("HistogramCriterion") >= 0:
-                        continue
-                    if line.find("MaxHierarchyLevel") >= 0:
-                        continue
-                    the_file.write(line)
-        except Exception as e:
-            print("BUG: " + file_path + " : " + str(e))
-
-    # Parcours du repertoire de reference
-    compare_histograms = True
-    if compare_histograms:
-        print("COMPARE " + test_dir)
-        indicators = [
-            "Null cost",
-            "Reference null cost",
-            "Cost",
-            "Level",
-            "Partition cost",
-        ]
-        if os.path.isdir(results_ref_dir):
-            for file_name in os.listdir(results_ref_dir):
-                ref_file_path = os.path.join(results_ref_dir, file_name)
-                test_file_path = os.path.join(results_dir, file_name)
-                if not os.path.isfile(test_file_path):
-                    print("Missing ref file: " + file_name)
-                elif "istogram.log" in file_name:
-                    ref_lines = utils.read_file_lines(ref_file_path)
-                    test_lines = utils.read_file_lines(test_file_path)
-                    ref_indicators = {}
-                    test_indicators = {}
-                    ref_histogram = []
-                    test_histogram = []
-                    # Analyse des resultats de references
-                    for line in ref_lines:
-                        # Collecte des indicateurs
-                        for indicator in indicators:
-                            if len(line) < 70 and indicator in line:
-                                fields = line[:-1].split("\t")
-                                try:
-                                    ref_indicators[indicator] = float(
-                                        fields[len(fields) - 1]
-                                    )
-                                except Exception as e:
-                                    print(
-                                        "  "
-                                        + file_name
-                                        + ": Ref conversion error: "
-                                        + line[:-1]
-                                        + " "
-                                        + str(e)
-                                    )
-                        # Collectes des lignes de l'histogramme
-                        if (
-                            len(ref_histogram) > 0
-                            or "Lower bound\tUpper bound\tFrequency" in line
-                        ):
-                            ref_histogram.append(line)
-                    # Analyse des resultats de test
-                    for line in test_lines:
-                        # Collecte des indicateurs
-                        for indicator in indicators:
-                            if len(line) < 70 and indicator in line:
-                                fields = line[:-1].split("\t")
-                                try:
-                                    test_indicators[indicator] = float(
-                                        fields[len(fields) - 1]
-                                    )
-                                except Exception as e:
-                                    print(
-                                        "  "
-                                        + file_name
-                                        + ": Test conversion error: "
-                                        + line[:-1]
-                                        + " "
-                                        + str(e)
-                                    )
-                        # Collectes des lignes de l'histogramme
-                        if (
-                            len(test_histogram) > 0
-                            or "Lower bound\tUpper bound\tFrequency" in line
-                        ):
-                            test_histogram.append(line)
-                    # Comparaison des resultats
-                    for indicator in indicators:
-                        ref_value = ref_indicators[indicator]
-                        test_value = test_indicators[indicator]
-                        if (
-                            abs(ref_value - test_value)
-                            > abs(ref_value + test_value) / 100000
-                        ):
-                            print(
-                                "  "
-                                + file_name
-                                + ": Difference in "
-                                + indicator
-                                + ": "
-                                + str(ref_value)
-                                + " vs "
-                                + str(test_value)
-                            )
-                    if len(ref_histogram) != len(test_histogram):
-                        print(
-                            "  "
-                            + file_name
-                            + ": Difference in interval number: "
-                            + str(len(ref_histogram) - 1)
-                            + " vs "
-                            + str(len(test_histogram) - 1)
-                        )
-                    else:
-                        for i in range(len(ref_histogram)):
-                            ref_line = ref_histogram[i]
-                            test_line = test_histogram[i]
-                            ref_line_fields = ref_line.split("\t")
-                            test_line_fields = test_line.split("\t")
-                            # Comparaison des 9 permiers champs
-                            compare_ok = True
-                            for f in range(8):
-                                compare_ok = (
-                                    compare_ok
-                                    and ref_line_fields[f] == test_line_fields[f]
-                                )
-                                if not compare_ok:
-                                    print(
-                                        "  "
-                                        + file_name
-                                        + ": Difference in interval "
-                                        + str(i)
-                                        + " field "
-                                        + str(f + 1)
-                                        + ": \n\t"
-                                        + ref_line
-                                        + "\t"
-                                        + test_line
-                                    )
-                                    break
 
 
 def instruction_compare_snb_perfs(test_dir):
@@ -607,95 +442,333 @@ def instruction_new_data_path(test_dir):
                 print("BUG: " + prm_file_path + " : " + str(e))
 
 
-def instruction_simplify_scenario_v11(test_dir):
-    """
-    Update scenario file (V11) to remove unnecessary default instruction for parameters APIMode and MemoryLimit
-    The script should be applied to the whole LearningTest tree using
-      "kht_apply <LarningTest dir> new-data-path -f all"
-    The LearningTest directory tree should be save before using this script, in order
-    to recover from some potential erroneous modifications of existing scenarios.
-    """
-    prm_file_path = os.path.join(test_dir, kht.TEST_PRM)
-    if os.path.isfile(prm_file_path):
-        # Read content of prm file
-        try:
-            with open(prm_file_path, "r", errors="ignore") as prm_file:
-                lines = prm_file.readlines()
-        except Exception as e:
-            print("BUG: " + prm_file_path + " : " + str(e))
-        # Update management of data path
-        pattern1 = "AnalysisSpec.SystemParameters.APIMode true        // API mode"
-        pattern2 = (
-            "AnalysisSpec.SystemParameters.MemoryLimit 2000     // Memory limit in MB"
-        )
-        new_lines = []
-        removed_lines = []
-        new_scenario_necessary = False
-        data_path_block_current_line = -1
-        data_path_block_main_dictionary = ""
-        for i, line in enumerate(lines):
-            line = line.strip()
-            # Case of a line containing a data path
-            if pattern1 in line or pattern2 in line:
-                removed_lines.append(line)
-                new_scenario_necessary = True
-            # Standard case
-            else:
-                new_lines.append(line)
-                # Infos to specific instruction, to help evaluating impacts
-                show_specific_instruction = False
-                if show_specific_instruction:
-                    instruction1 = "AnalysisSpec.SystemParameters.APIMode"
-                    instruction2 = "AnalysisSpec.SystemParameters.MemoryLimit"
-                    if instruction1 in line or instruction2 in line:
-                        test_dir_name = utils.test_dir_name(test_dir)
-                        suite_dir_name = utils.suite_dir_name(test_dir)
-                        tool_dir_name = utils.tool_dir_name(test_dir)
-                        # Show standard removed lines
-                        if len(removed_lines) > 0:
-                            for removed_line in removed_lines:
-                                print(
-                                    tool_dir_name
-                                    + "/"
-                                    + suite_dir_name
-                                    + "/"
-                                    + test_dir_name
-                                    + ": REMOVED "
-                                    + removed_line
-                                )
-                            removed_lines = []
-                        # Show specific lines
-                        print(
-                            tool_dir_name
-                            + "/"
-                            + suite_dir_name
-                            + "/"
-                            + test_dir_name
-                            + ": "
-                            + line
-                        )
-                        if (
-                            instruction2 in line
-                            and "2000" in line
-                            and not pattern2 in line
-                        ):
+def instruction_clean_version(test_dir):
+    # Collecte de tous les repertoires de resultats, de reference ou non
+    all_results_dir = [os.path.join(test_dir, kht.RESULTS)]
+    results_ref_dir, all_results_ref_dirs = results.get_results_ref_dir(
+        test_dir, show=True
+    )
+    for dir in all_results_ref_dirs:
+        all_results_dir.append(os.path.join(test_dir, dir))
+    # Nettoyage de chaque repertoire de reference
+    for dir in all_results_dir:
+        check.clean_version_from_results(dir)
+
+
+def instruction_clean_intervals(test_dir):
+    """Renommage systematique du separateur ';' en ',' dans les intervalles"""
+    results_dir = os.path.join(test_dir, kht.RESULTS)
+    results_ref_dir, _ = results.get_results_ref_dir(test_dir, show=True)
+    if results_ref_dir is None:
+        return
+    test_dir_name = utils.test_dir_name(test_dir)
+    suite_dir_name = utils.suite_dir_name(test_dir)
+    tool_dir_name = utils.tool_dir_name(test_dir)
+    # Collecte de tous les repertoires de resultats, de reference
+    all_results_dir = []
+    results_ref_dir, all_results_ref_dirs = results.get_results_ref_dir(
+        test_dir, show=True
+    )
+
+    # On ne traite pas les repertoires avec tests de fichers a l'ancien format
+    if "SemiColumn" not in test_dir:
+        # Traitement des eventuels fichiers de Coclustering utilises en entree des prm et presents a la racine
+        for name in os.listdir(test_dir):
+            path_name = os.path.join(test_dir, name)
+            if "Coclustering" in name and ".khcj" in name:
+                lines = utils.read_file_lines(path_name)
+                # Transformation du fichier test.prm pour transformer les ";" en ","
+                to_transform = False
+                new_lines = []
+                for i, line in enumerate(lines):
+                    # Recherche si ";"" est utilise en tant que separateur
+                    fields = line.split()
+                    if ";" in line:
+                        line = line.replace(";", ",")
+                        to_transform = True
+                    new_lines.append(line)
+                if to_transform:
+                    utils.write_file_lines(path_name, new_lines)
+                    print(
+                        tool_dir_name
+                        + "/"
+                        + suite_dir_name
+                        + "/"
+                        + test_dir_name
+                        + "/"
+                        + name
+                    )
+            if "SubDir" in name:
+                for name2 in os.listdir(path_name):
+                    if "Coclustering" in name2 and ".khcj" in name2:
+                        path_name2 = os.path.join(path_name, name2)
+                        lines = utils.read_file_lines(path_name2)
+                        # Transformation du fichier test.prm pour transformer les ";" en ","
+                        to_transform = False
+                        new_lines = []
+                        for i, line in enumerate(lines):
+                            # Recherche si ";"" est utilise en tant que separateur
+                            fields = line.split()
+                            if ";" in line:
+                                line = line.replace(";", ",")
+                                to_transform = True
+                            new_lines.append(line)
+                        if to_transform:
+                            utils.write_file_lines(path_name2, new_lines)
                             print(
                                 tool_dir_name
                                 + "/"
                                 + suite_dir_name
                                 + "/"
                                 + test_dir_name
-                                + ": NON-STANDARD "
-                                + line
+                                + "/"
+                                + name2
                             )
-        # Write content of prm file
-        if new_scenario_necessary:
+
+        # Traitement du contenu des repertoires results.ref
+        for dir in all_results_ref_dirs:
+            all_results_dir.append(os.path.join(test_dir, dir))
+
+            # Nettoyage de chaque repertoire de reference
+            for results_ref_dir in all_results_dir:
+                # Parcours des fichiers du repertoire de references
+                for name in os.listdir(results_ref_dir):
+                    path_name = os.path.join(test_dir, results_ref_dir, name)
+
+                    # Noms des fichiers devant etre traites
+                    bFileOk = (
+                        "PreparationReport" in name
+                        or "Preparation2DReport" in name
+                        or "EvaluationReport" in name
+                        or "ModelingReport" in name
+                        or "Deploy" in name
+                        or "Coclustering" in name
+                    )
+                    bSpecialFileOk = (
+                        "Label_D_Iris" in name
+                        or "D_20newsgroups" in name
+                        or "R_Adult_relationship" in name
+                        or "D_Adult" in name
+                        or "I_Iris" in name
+                        or "D_Iris" in name
+                        or "R_Iris" in name
+                        or "R_Isolet" in name
+                        or "D_spliceJunction" in name
+                        or "ClustersVariables" in name
+                        or "ClustersAge" in name
+                    )
+                    if bFileOk or bSpecialFileOk:
+                        lines = utils.read_file_lines(path_name)
+                        # Transformation du fichier test.prm pour transformer les ";" en ","
+                        to_transform = False
+                        new_lines = []
+                        for i, line in enumerate(lines):
+                            # Recherche si ";" est utilise en tant que separateur dans un intervalle de valeurs
+                            fields = line.split()
+                            if "inf;" in line:
+                                line = line.replace("inf;", "inf,")
+                                to_transform = True
+                            if ";+inf" in line:
+                                line = line.replace(";+inf", ",+inf")
+                                to_transform = True
+                            for i in range(0, 10):
+                                nb1 = line.count(str(i) + ";")
+                                nb2 = line.count(";)")
+                                nb3 = line.count("; )")
+                                nb4 = line.count("[") + line.count("]")
+                                if nb1 > nb2 and nb1 > nb3 and nb4 >= 2 * nb1:
+                                    line = line.replace(str(i) + ";", str(i) + ",")
+                                    to_transform = True
+                            new_lines.append(line)
+                        if to_transform:
+                            utils.write_file_lines(path_name, new_lines)
+                            print(
+                                tool_dir_name
+                                + "/"
+                                + suite_dir_name
+                                + "/"
+                                + test_dir_name
+                                + "/"
+                                + name
+                            )
+
+
+def instruction_copy_importance(test_dir):
+    """Recopie des importances de variable de results vers les repertoires results.ref"""
+
+    def find_lines_using_pattern(lines, pattern):
+        # Retourne un dictionnaire des lignes comportant le pattern, avec l'index de ligne en cle
+        indexed_lines = {}
+        for i, line in enumerate(lines):
+            if pattern in line:
+                indexed_lines[i] = line
+        return indexed_lines
+
+    def find_lines_in_section(lines, start_pattern_line, stop_pattern_line):
+        # Retourne un dictionnaire des lignes dans les sections, avec l'index de ligne en cle
+        indexed_lines = {}
+        in_section = False
+        for i, line in enumerate(lines):
+            trimed_line = line.strip()
+            if trimed_line == start_pattern_line:
+                in_section = True
+            elif trimed_line == stop_pattern_line:
+                in_section = False
+            elif in_section:
+                indexed_lines[i] = line
+        return indexed_lines
+
+    def replace_indexed_lines(lines, indexed_lines):
+        # Renvoie la liste des lignes en ayant remplacee celles du dictionnaire des lignes indexes
+        output_lines = []
+        for i, line in enumerate(lines):
+            if indexed_lines.get(i) is not None:
+                output_lines.append(indexed_lines.get(i))
+            else:
+                output_lines.append(line)
+        return output_lines
+
+    # Debut de la methode principale
+    results_dir = os.path.join(test_dir, kht.RESULTS)
+    results_ref_dir, _ = results.get_results_ref_dir(test_dir, show=True)
+    if results_ref_dir is None:
+        return
+    test_dir_name = utils.test_dir_name(test_dir)
+    suite_dir_name = utils.suite_dir_name(test_dir)
+    tool_dir_name = utils.tool_dir_name(test_dir)
+    # Collecte de tous les repertoires de resultats, de reference
+    all_results_dir = []
+    results_ref_dir, all_results_ref_dirs = results.get_results_ref_dir(
+        test_dir, show=True
+    )
+
+    # Traitement du contenu des repertoires results.ref
+    for ref_dir in all_results_ref_dirs:
+        all_results_dir.append(os.path.join(test_dir, ref_dir))
+
+        # Recopie dans chaque repertoire de reference
+        for results_ref_dir in all_results_dir:
+            # Parcours des fichiers du repertoire de references
+            for name in os.listdir(results_ref_dir):
+                path_name = os.path.join(test_dir, results_ref_dir, name)
+                initial_path_name = os.path.join(results_dir, name)
+
+                # Traitement si existance du fichier d'origine
+                if os.path.isfile(initial_path_name):
+                    to_transform = False
+                    lines = None
+                    indexed_lines = None
+
+                    # Dictionnaires de modelisation: changement des lignes comportant une meta-data Importance
+                    if name.endswith(".kdicj"):
+                        lines = utils.read_file_lines(initial_path_name)
+                        indexed_lines = find_lines_using_pattern(lines, '"Importance":')
+                    elif ".model.kdic" in name:
+                        lines = utils.read_file_lines(initial_path_name)
+                        indexed_lines = find_lines_using_pattern(lines, "<Importance=")
+                    # Rapport de modelisation: changement de la section sur les variables selectionnees du SNB
+                    elif name.endswith(".ModelingReport.xls"):
+                        lines = utils.read_file_lines(initial_path_name)
+                        indexed_lines = find_lines_in_section(
+                            lines, "Prepared name	Name	Level	Weight	Importance", ""
+                        )
+                    # Rapport .khj: : changement de la section sur les variables selectionnees du SNB
+                    elif name.endswith(".khj"):
+                        lines = utils.read_file_lines(initial_path_name)
+                        indexed_lines = find_lines_in_section(
+                            lines, '"selectedVariables": [', "}"
+                        )
+
+                    # Reecriture du fichier
+                    to_transform = indexed_lines is not None and len(indexed_lines) > 0
+                    if to_transform:
+                        new_lines = replace_indexed_lines(lines, indexed_lines)
+                        utils.write_file_lines(path_name, new_lines)
+                        print(
+                            tool_dir_name
+                            + "/"
+                            + suite_dir_name
+                            + "/"
+                            + test_dir_name
+                            + "/"
+                            + ref_dir
+                            + "/"
+                            + name
+                            + " : "
+                            + str(len(indexed_lines))
+                        )
+
+
+def instruction_work(test_dir):
+    results_dir = os.path.join(test_dir, kht.RESULTS)
+    results_ref_dir, _ = results.get_results_ref_dir(test_dir, show=True)
+    if results_ref_dir is None:
+        return
+    test_dir_name = utils.test_dir_name(test_dir)
+    suite_dir_name = utils.suite_dir_name(test_dir)
+    tool_dir_name = utils.tool_dir_name(test_dir)
+
+    # Import khiops-python
+    try:
+        from khiops import core as kh
+    except ImportError:
+        print("This command requires the khiops-python python package")
+        exit(1)
+    import math
+
+    # Parcours des fichiers du repertoire de references pour rechercher les resultats d'evaluation
+    # et exporter un fichier sur les varaiables selectionnees par le snb
+    output_dir = "C:\\temp\\AllSnbReports"
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+    for name in os.listdir(results_dir):
+        path_name = os.path.join(test_dir, results_ref_dir, name)
+        if name.endswith(".khj"):
             try:
-                with open(prm_file_path, "w", errors="ignore") as prm_file:
-                    for line in new_lines:
-                        prm_file.write(line + "\n")
-            except Exception as e:
-                print("BUG: " + prm_file_path + " : " + str(e))
+                all_reports = kh.read_analysis_results_file(path_name)
+                modeling_report = all_reports.modeling_report
+                if modeling_report is not None:
+                    snb_predictor = modeling_report.get_snb_predictor()
+                    if snb_predictor is not None:
+                        output_name = modeling_report.dictionary + "_"
+                        output_name += modeling_report.target_variable + "_"
+                        if (
+                            all_reports.preparation_report.learning_task
+                            == "Classification analysis"
+                        ):
+                            output_name += "C" + str(
+                                len(all_reports.preparation_report.target_values)
+                            )
+                        else:
+                            output_name += "R"
+                        output_name += (
+                            "("
+                            + str(
+                                all_reports.preparation_report.informative_variable_number
+                            )
+                            + ")"
+                        )
+                        print(output_name)
+                        output_path = os.path.join(
+                            output_dir, "SnbReport_" + output_name + ".txt"
+                        )
+                        if snb_predictor.selected_variables is not None:
+                            with open(output_path, "w") as output_file:
+                                output_file.write(
+                                    "Name\tLevel\tWeight\tImportance\tImportanceV10\n"
+                                )
+                                for variable in snb_predictor.selected_variables:
+                                    line = variable.name + "\t"
+                                    line += str(variable.level) + "\t"
+                                    line += str(variable.weight) + "\t"
+                                    line += str(variable.importance) + "\t"
+                                    line += (
+                                        str(math.sqrt(variable.level * variable.weight))
+                                        + "\n"
+                                    )
+                                    output_file.write(line)
+            except Exception:
+                "pass"
 
 
 def instruction_template(test_dir):
@@ -756,9 +829,21 @@ def register_one_shot_instructions():
     )
     standard_instructions.register_instruction(
         available_instructions,
-        "simplify-scenario-v11",
-        instruction_simplify_scenario_v11,
-        "update scenarios to remove default pararameters APIMode and MemoryLimit",
+        "clean-version",
+        instruction_clean_version,
+        "clean version info in all results dirs",
+    )
+    standard_instructions.register_instruction(
+        available_instructions,
+        "clean-intervals",
+        instruction_clean_intervals,
+        "rename ';' to ',' in all intervals",
+    )
+    standard_instructions.register_instruction(
+        available_instructions,
+        "copy-importance",
+        instruction_copy_importance,
+        "copy var importance from results to results.ref dirs",
     )
     standard_instructions.register_instruction(
         available_instructions,

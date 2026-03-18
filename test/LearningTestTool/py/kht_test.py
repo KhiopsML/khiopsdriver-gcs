@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Orange. All rights reserved.
+# Copyright (c) 2023-2025 Orange. All rights reserved.
 # This software is distributed under the BSD 3-Clause-clear License, the text of which is available
 # at https://spdx.org/licenses/BSD-3-Clause-Clear.html or see the "LICENSE" file for more details.
 
@@ -489,13 +489,19 @@ def evaluate_tool_on_test_dir(
             )  # Suppression eventuelle des lignes de copyright
             lines = utils.filter_empty_lines(lines)  # Suppression des lignes vides
 
-            # Pour les test KNI, le stdout contient une ligne avec le nombre de records
+            # Pour les tests KNI, le stdout contient une ligne avec le nombre de records ou une erreur d'ouverture ou de recoddage
             if is_kni:
                 lines = utils.filter_lines_with_pattern(
                     lines, ["Recoded record number:"]
                 )
                 lines = utils.filter_lines_with_pattern(
                     lines, ["Error : Finish opening stream error:"]
+                )
+                lines = utils.filter_lines_with_pattern(
+                    lines, ["Error : Open stream error:"]
+                )
+                lines = utils.filter_lines_with_pattern(
+                    lines, ["Error : Recode failure ", " in record "]
                 )
             # Cas particulier du coclustering en mode debug
             if is_coclustering:
@@ -607,6 +613,9 @@ def evaluate_tool_on_test_dir(
                 exception,
             )
 
+        # Nettoyage de toute reference a la version des fichiers de resultats
+        check.clean_version_from_results(results_dir)
+
     # Restore initial path
     if os.name == "nt":
         os.environ["path"] = initial_path
@@ -615,7 +624,6 @@ def evaluate_tool_on_test_dir(
 
     # Comparaison des resultats
     os.chdir(suite_dir)
-    test_dir = os.path.join(suite_dir, test_dir_name)
     check.check_results(test_dir)
 
 

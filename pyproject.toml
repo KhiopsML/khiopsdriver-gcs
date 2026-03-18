@@ -1,0 +1,75 @@
+# This file is used to package this project as a pip package.
+
+[build-system]
+requires = ["scikit-build-core>=0.11.6"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "khiops-driver-gcs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "BSD-3-Clause-Clear"
+license-files = ["LICENSE"]
+maintainers = [{name = "Khiops Team", email = "khiops.team@orange.com"}]
+dynamic = ["version", "description"]
+
+[tool.scikit-build]
+sdist.include = ["/vcpkg"]
+sdist.exclude = [
+    ".*",
+    "__pycache__",
+    "/dist",
+    "/wheelhouse",
+    "/scripts",
+    "/test/LearningTest",
+    "/test/LearningTestTool",
+    "/vcpkg/buildtrees",
+    "/vcpkg/downloads",
+    "/vcpkg/packages",
+]
+wheel.py-api = "py3"
+cmake.version = "CMakeLists.txt"
+cmake.args = ["--preset", "ninja-rel", "-G", "Ninja"]
+cmake.define.CMAKE_BINARY_DIR = "build/ninja-rel"
+build-dir = "build/ninja-rel"
+ninja.make-fallback = false
+
+[tool.scikit-build.metadata]
+version.provider = "scikit_build_core.metadata.regex"
+version.input = "src/gcsplugin.h"
+version.regex = '''(?x)
+    \# \s* define \s+ DRIVER_VERSION \s+ KHIOPS_STR
+    \(
+    (?P<major> \d+)
+    \.
+    (?P<minor> \d+)
+    \.
+    (?P<patch> \d+)
+    (?:
+        -
+        (?P<prereltype> a | b | rc)
+        \.
+        (?P<prereln> \d+)
+    )?
+    \)
+'''
+version.result = "{major}.{minor}.{patch}{prereltype}{prereln}"
+version.remove = "(None){,2}$"  # prereltype and prereln groups are None if not found
+description.provider = "scikit_build_core.metadata.regex"
+description.input = "CMakeLists.txt"
+description.regex = '(?x)  set  \s*  \(  \s*  CPACK_PACKAGE_DESCRIPTION_SUMMARY  \s+  "(?P<description>[^"]*)"  \s*  \)  '
+description.result = "{description}"
+
+[tool.cibuildwheel]
+build = "cp39-*"
+skip = "*musllinux*"  # Khiops itself does not compile under musl linuxes, so there is no need for musl linux Khiops drivers
+archs = "auto64"  # Do not build 32-bit wheels
+
+# Install build-time dependencies in containers created by cibuildwheel
+# This is compatible with Debian-like and Fedora-like distributions
+[tool.cibuildwheel.linux]
+before-all = [
+    "DEB_NEEDS='zip perl ninja-build'",
+    "FED_NEEDS='zip perl ninja-build'",
+    "apt-get install -y $DEB_NEEDS || dnf install -y $FED_NEEDS"
+]

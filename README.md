@@ -7,7 +7,7 @@ This repository hosts the source code for the Khiops filesystem driver enabling 
 If you just want to start using Khiops with your data located on GCS, simply install the driver package next to Khiops.
 If you installed Khiops the standard way, the driver package can be installed via conda like so:
 
-    conda install -c khiops khiops-driver-gcs
+    conda install -c conda-forge khiops-driver-gcs
 
 Or, if you have used your system package manager, you will have to install the driver by the same method. For debian/ubuntu, you will do this:
 
@@ -83,3 +83,53 @@ kh.train_predictor(
     max_trees=0,
 )
 ```
+## Development: Coverage reports
+
+Coverage targets are available on Linux in non-Release builds when `BUILD_TESTS=ON`.
+Tests are executed through `ctest` so coverage matches the test registry.
+
+Configure and build in Debug mode:
+
+    cmake --preset ninja-dbg -DBUILD_TESTS=ON
+    cmake --build --preset ninja-dbg
+
+Run tests directly with ctest (optional baseline check):
+
+    ctest --preset ninja-dbg --output-on-failure
+
+Generate unit-only coverage (tests labeled `unit`):
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura_unit
+
+Generate full coverage (all tests known by `ctest`):
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage_full
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura_full
+
+Artifacts are generated under `build/debug/`:
+
+- HTML reports: `build/debug/coverage-unit/index.html` and `build/debug/coverage-full/index.html`
+- Cobertura XML: `build/debug/coverage-unit.xml` and `build/debug/coverage-full.xml`
+
+Legacy targets are still available and map to full coverage:
+
+    cmake --build --preset ninja-dbg --target khiops-gcs_coverage
+    cmake --build --preset ninja-dbg --target khiops-gcs_cobertura
+
+## Development: GitHub CI coverage UX
+
+Coverage reporting in CI uses only native GitHub capabilities (no external service).
+
+On Linux workflow runs:
+
+- The workflow writes a `Coverage Report` section to the run summary.
+- Pull requests receive a single updatable comment with current coverage status.
+- Coverage artifacts are uploaded only when the expected reports are generated.
+
+Artifact names in GitHub Actions:
+
+- `coverage-unit-ubuntu-latest`
+- `coverage-full-ubuntu-latest`
+
+If coverage generation fails or skips, upload is skipped consistently and the summary/comment explicitly indicates missing reports.

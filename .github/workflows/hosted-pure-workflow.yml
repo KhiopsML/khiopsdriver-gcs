@@ -25,16 +25,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
         include:
-          - os: windows-latest
-            triplet: x64-windows
-          - os: ubuntu-latest
-            triplet: x64-linux
-          - os: macos-13
-            triplet: x64-osx
-          - os: macos-14
-            triplet: arm64-osx
+          - {os: ubuntu-latest, triplet: x64-linux}
+          - {os: macos-latest, triplet: arm64-osx}
+          - {os: macos-15-intel, triplet: x64-osx}
+          - {os: macos-14, triplet: arm64-osx}
+          - {os: windows-latest, triplet: x64-windows}
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -49,8 +48,9 @@ jobs:
       # Let's use GitHub Action cache as storage for the vcpkg Binary Caching feature.
       VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
       # Allow setting triplet to something else than platform's default
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }} 
-
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      # We can define the prefix here as, opposed to the Azure driver worflow, it will not change between testing steps.
+      STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
     steps:
     # Set env vars needed for vcpkg to leverage the GitHub Action cache as a storage
@@ -66,10 +66,9 @@ jobs:
           submodules: true
       - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
         run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
-        shell: bash
 
       # Setup the build machine with the most recent versions of CMake and Ninja. Both are cached if not already: on subsequent runs both will be quickly restored from GitHub cache service.
-      - uses: lukka/get-cmake@v3.30.1
+      - uses: lukka/get-cmake@v3.30.3
 
       # Restore vcpkg from the GitHub Action cache service. Note that packages are restored by vcpkg's binary caching
       # when it is being run afterwards by CMake.
@@ -108,9 +107,9 @@ jobs:
       #   run: |
       #     sudo apt-get update
       #     sudo apt-get install lcov gcovr
-      #     cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Debug
-      #     cmake --build --preset ninja-vcpkg-debug
-      #     ctest --preset test-debug --output-on-failure
+      #     cmake --preset ninja-dbg -DBUILD_TESTS=ON
+      #     cmake --build --preset ninja-dbg
+      #     ctest --preset test--ninja-dbg --output-on-failure
       #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       # - name: Upload coverage results
@@ -130,7 +129,7 @@ jobs:
       # store the built packages artifacts.
       - name: Restore from cache the dependencies and generate project files
         run: |
-          cmake --preset ninja-multi-vcpkg -DCMAKE_BUILD_TYPE=Release
+          cmake --preset ninja-rel -DBUILD_TESTS=ON
 
       # Build (Release configuration only) the whole project with Ninja (which is spawn by CMake).
       #
@@ -139,21 +138,27 @@ jobs:
       # run: cmake --build --preset ninja-vcpkg --config Release
       - name: Build (Release configuration)
         run: |
-          cmake --build --preset ninja-vcpkg-release
+          cmake --build --preset ninja-rel
 
       # Test the whole project with CTest, again Release configuration only.
-      - name: Test (Release configuration)
-        run: |
-          ctest --preset test-release --output-on-failure
+      - name: Test release
+        run: ctest --preset ninja-rel --output-junit test_results.xml
+        env:
+          CTEST_PARALLEL_LEVEL: ''
 
+      - name: Upload results of cloud storage tests
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: ${{ github.workspace }}/build/release/test_results.xml
 
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
           path: |
-            builds/ninja-multi-vcpkg/lib/*.dylib
-            builds/ninja-multi-vcpkg/lib/*.so
-            builds/ninja-multi-vcpkg/lib/*.dll
-            builds/ninja-multi-vcpkg/lib/*.lib
+            build/release/lib/*.dylib
+            build/release/lib/*.so
+            build/release/bin/*.dll
+            build/release/bin/*.lib
           if-no-files-found: ignore

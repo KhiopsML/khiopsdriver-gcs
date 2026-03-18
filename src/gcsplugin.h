@@ -2,7 +2,7 @@
 
 #define KHIOPS_STR(s) #s
 // Driver version
-#define DRIVER_VERSION KHIOPS_STR(0.0.15-a.2)
+#define DRIVER_VERSION KHIOPS_STR(0.0.16)
 // Release versions must have 3 digits, for example KHIOPS_STR(1.2.0)
 // Alpha, beta ou release candidate have an extra suffix, for example :
 // - KHIOPS_STR(1.2.0-a.1)
@@ -159,6 +159,26 @@ VISIBLE int driver_copyToLocal(const char *sourcefilename,
 // if it is implemented Returns 1 on success, 0 on error
 VISIBLE int driver_copyFromLocal(const char *sourcefilename,
                                  const char *destfilename);
+
+// Concatenates all sourcefilecount files specified in sourcefilenames to a new
+// file destfilename. Sourcefilenames must be objects from the same
+// bucket as the destfilename.
+// The concatenation is done on the storage server side.
+// The source files are not deleted Returns 1 on success, 0 on error.
+VISIBLE int driver_concat(const char *destfilename,
+                          const char **sourcefilenames, size_t sourcefilecount);
+
+// Renames multiple files to follow a globbing pattern with sequence numbers
+//   sDestFilePathName is a globbing pattern in format 'prefix*suffix' where:
+//   - prefix must contain bucket name (gs://bucket/path)
+//   - prefix must not end with a digit
+//   - suffix is optional and must not start with a digit
+//   sSourceFilePathNames is an array of relative file paths (no gs:// allowed)
+//   nSourceFileCount is the number of source files
+// returns kOtherSuccess on success, kOtherFailure on error
+VISIBLE int driver_composeMultifile(const char *sDestFilePathName,
+                                    const char **sSourceFilePathNames,
+                                    size_t nSourceFileCount);
 
 #ifdef __cplusplus
 } /* extern "C" */

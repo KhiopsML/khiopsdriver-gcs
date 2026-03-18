@@ -77,17 +77,33 @@ function(SETUP_TARGET_FOR_COVERAGE _targetname _testrunner _outputname)
     message(FATAL_ERROR "genhtml not found! Aborting...")
   endif() # NOT GENHTML_PATH
 
+  # Generate a small runner script that does not fail the target when tests fail. This allows coverage artifacts to be
+  # generated from partial test execution.
+  set(_coverage_runner_script "${CMAKE_BINARY_DIR}/${_targetname}_run_tests.cmake")
+  set(_coverage_runner_cmd "execute_process(COMMAND \"${_testrunner}\"")
+  foreach(_runner_arg IN LISTS ARGV3)
+    string(APPEND _coverage_runner_cmd " \"${_runner_arg}\"")
+  endforeach()
+  string(APPEND _coverage_runner_cmd " RESULT_VARIABLE _rv)\n")
+  string(
+    APPEND
+    _coverage_runner_cmd
+    "if(NOT _rv EQUAL 0)\n  message(WARNING \"Coverage test runner exited with code \${_rv}; continuing with coverage generation\")\nendif()\n"
+  )
+  file(WRITE "${_coverage_runner_script}" "${_coverage_runner_cmd}")
+
   # Setup target
   add_custom_target(
     ${_targetname}
     # Cleanup lcov
     ${LCOV_PATH} --directory . --zerocounters
     # Run tests
-    COMMAND ${_testrunner} ${ARGV3}
+    COMMAND ${CMAKE_COMMAND} -P ${_coverage_runner_script}
     # Capturing lcov counters and generating report
-    COMMAND ${LCOV_PATH} --directory . --capture --output-file ${_outputname}.info
-    COMMAND ${LCOV_PATH} --remove ${_outputname}.info '*/build/*' '*/tests/*' '/usr/*' '*/vcpkg_installed/*' '*/_deps/*'
-            --output-file ${_outputname}.info.cleaned
+    COMMAND ${LCOV_PATH} --rc geninfo_unexecuted_blocks=1 --ignore-errors mismatch,inconsistent --directory . --capture
+            --output-file ${_outputname}.info
+    COMMAND ${LCOV_PATH} --ignore-errors mismatch,inconsistent,unused --remove ${_outputname}.info '*/build/*'
+            '*/test/*' '*/tests/*' '/usr/*' '*/vcpkg_installed/*' '*/_deps/*' --output-file ${_outputname}.info.cleaned
     COMMAND ${GENHTML_PATH} -o ${_outputname} ${_outputname}.info.cleaned
     COMMAND ${CMAKE_COMMAND} -E remove ${_outputname}.info ${_outputname}.info.cleaned
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -97,8 +113,8 @@ function(SETUP_TARGET_FOR_COVERAGE _targetname _testrunner _outputname)
   add_custom_command(
     TARGET ${_targetname}
     POST_BUILD
-    COMMAND ;
-    COMMENT "Open ./${_outputname}/index.html in your browser to view the coverage report.")
+    COMMAND ${CMAKE_COMMAND} -E echo "Coverage HTML report: ${CMAKE_BINARY_DIR}/${_outputname}/index.html"
+    COMMENT "Coverage HTML report generated.")
 
 endfunction() # SETUP_TARGET_FOR_COVERAGE
 
@@ -117,13 +133,40 @@ function(SETUP_TARGET_FOR_COVERAGE_COBERTURA _targetname _testrunner _outputname
     message(FATAL_ERROR "gcovr not found! Aborting...")
   endif() # NOT GCOVR_PATH
 
+  # Generate a small runner script that does not fail the target when tests fail. This allows Cobertura output to be
+  # produced from partial test execution.
+  set(_coverage_runner_script "${CMAKE_BINARY_DIR}/${_targetname}_run_tests.cmake")
+  set(_coverage_runner_cmd "execute_process(COMMAND \"${_testrunner}\"")
+  foreach(_runner_arg IN LISTS ARGV3)
+    string(APPEND _coverage_runner_cmd " \"${_runner_arg}\"")
+  endforeach()
+  string(APPEND _coverage_runner_cmd " RESULT_VARIABLE _rv)\n")
+  string(
+    APPEND
+    _coverage_runner_cmd
+    "if(NOT _rv EQUAL 0)\n  message(WARNING \"Coverage test runner exited with code \${_rv}; continuing with coverage generation\")\nendif()\n"
+  )
+  file(WRITE "${_coverage_runner_script}" "${_coverage_runner_cmd}")
+
+  # Run gcovr in a separate script and tolerate failures (e.g. gcov incompat). This keeps the target runnable even when
+  # Cobertura XML cannot be produced.
+  set(_coverage_gcovr_script "${CMAKE_BINARY_DIR}/${_targetname}_run_gcovr.cmake")
+  set(_coverage_gcovr_cmd
+      "execute_process(COMMAND \"${GCOVR_PATH}\" --gcov-ignore-errors all --merge-mode-functions merge-use-line-min -x -r \"${CMAKE_SOURCE_DIR}\" -e \"${CMAKE_SOURCE_DIR}/tests/\" -e \"${CMAKE_SOURCE_DIR}/build/\" -o \"${_outputname}.xml\" RESULT_VARIABLE _rv)\n"
+  )
+  string(
+    APPEND
+    _coverage_gcovr_cmd
+    "if(NOT _rv EQUAL 0)\n  message(WARNING \"gcovr exited with code \${_rv}; Cobertura XML may be missing\")\nendif()\n"
+  )
+  file(WRITE "${_coverage_gcovr_script}" "${_coverage_gcovr_cmd}")
+
   add_custom_target(
     ${_targetname}
     # Run tests
-    ${_testrunner} ${ARGV3}
+    COMMAND ${CMAKE_COMMAND} -P ${_coverage_runner_script}
     # Running gcovr
-    COMMAND ${GCOVR_PATH} -x -r ${CMAKE_SOURCE_DIR} -e '${CMAKE_SOURCE_DIR}/tests/' -e '${CMAKE_SOURCE_DIR}/build/' -o
-            ${_outputname}.xml
+    COMMAND ${CMAKE_COMMAND} -P ${_coverage_gcovr_script}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Running gcovr to produce Cobertura code coverage report.")
 
@@ -131,7 +174,7 @@ function(SETUP_TARGET_FOR_COVERAGE_COBERTURA _targetname _testrunner _outputname
   add_custom_command(
     TARGET ${_targetname}
     POST_BUILD
-    COMMAND ;
-    COMMENT "Cobertura code coverage report saved in ${_outputname}.xml.")
+    COMMAND ${CMAKE_COMMAND} -E echo "Cobertura XML report (if generated): ${CMAKE_BINARY_DIR}/${_outputname}.xml"
+    COMMENT "Cobertura coverage step finished.")
 
 endfunction() # SETUP_TARGET_FOR_COVERAGE_COBERTURA

@@ -25,6 +25,17 @@
 #endif
 #endif
 
+namespace gc = ::google::cloud;
+namespace gcs = gc::storage;
+
+VISIBLE gc::Status test_copyObject(const std::string &source_bucket,
+                                   const std::string &source_object,
+                                   const std::string &dest_bucket,
+                                   const std::string &dest_object);
+
+VISIBLE gcs::ListObjectsReader
+test_listObjects(const std::string &bucket, const std::string &glob_pattern);
+
 /* Use of C linkage from C++ */
 #ifdef __cplusplus
 extern "C" {
@@ -51,18 +62,18 @@ VISIBLE void *test_addWriterHandle(bool appendMode = false,
 #endif /* __cplusplus */
 
 namespace gcsplugin {
-constexpr int kSuccess{1};
-constexpr int kFailure{0};
+constexpr int kSuccess{0};
+constexpr int kFailure{-1};
 
-constexpr int kCloseSuccess{0};
-constexpr int kCloseEOF{-1};
+constexpr int kOtherSuccess{1};
+constexpr int kOtherFailure{0};
 
-constexpr int kFalse{0};
 constexpr int kTrue{1};
+constexpr int kFalse{0};
 
 using tOffset = long long;
 
-struct Reader {
+struct MultiPartFile {
   std::string bucketname_;
   std::string filename_;
   tOffset offset_{0};
@@ -71,15 +82,19 @@ struct Reader {
   std::vector<std::string> filenames_;
   std::vector<tOffset> cumulativeSize_;
   tOffset total_size_{0};
+  // Protection when reading a file that is being written to.
+  std::vector<int64_t> generations;
 };
 
-struct Writer {
+struct WriteFile {
   std::string bucketname_;
   std::string filename_;
   std::string append_target_;
   google::cloud::storage::ObjectWriteStream writer_;
 };
 
+using Reader = MultiPartFile;
+using Writer = WriteFile;
 using ReaderPtr = std::unique_ptr<Reader>;
 using WriterPtr = std::unique_ptr<Writer>;
 
@@ -135,7 +150,7 @@ using HandlePtr = std::unique_ptr<Handle>;
 using HandleContainer = std::vector<HandlePtr>;
 using HandleIt = HandleContainer::iterator;
 
-bool operator==(const Reader &op1, const Reader &op2) {
+inline bool operator==(const MultiPartFile &op1, const MultiPartFile &op2) {
   return (op1.bucketname_ == op2.bucketname_ &&
           op1.filename_ == op2.filename_ && op1.offset_ == op2.offset_ &&
           op1.commonHeaderLength_ == op2.commonHeaderLength_ &&
@@ -144,7 +159,7 @@ bool operator==(const Reader &op1, const Reader &op2) {
           op1.total_size_ == op2.total_size_);
 }
 
-bool operator==(const Writer &op1, const Writer &op2) {
+inline bool operator==(const WriteFile &op1, const WriteFile &op2) {
   return (op1.bucketname_ == op2.bucketname_ && op1.filename_ == op2.filename_);
 }
 } // namespace gcsplugin
