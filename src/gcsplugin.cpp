@@ -1107,7 +1107,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
 
   if (HandleType::kRead != stream_h->type) {
     LogError("Cannot seek on not reading stream");
-    return -1;
+    return kFailure;
   }
 
   spdlog::debug("fseek {} {} {}", stream, offset, whence);
@@ -1123,7 +1123,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
   case std::ios::cur:
     if (offset > max_val - h.offset_) {
       LogError("Signed overflow prevented");
-      return -1;
+      return kFailure;
     }
     computed_offset = h.offset_ + offset;
     break;
@@ -1132,28 +1132,28 @@ int driver_fseek(void *stream, long long int offset, int whence) {
       long long minus1 = h.total_size_ - 1;
       if (offset > max_val - minus1) {
         LogError("Signed overflow prevented");
-        return -1;
+        return kFailure;
       }
     }
     if ((offset == std::numeric_limits<long long>::min()) &&
         (h.total_size_ == 0)) {
       LogError("Signed overflow prevented");
-      return -1;
+      return kFailure;
     }
 
     computed_offset = (h.total_size_ == 0) ? offset : h.total_size_ + offset;
     break;
   default:
     LogError("Invalid seek mode " + std::to_string(whence));
-    return -1;
+    return kFailure;
   }
 
   if (computed_offset < 0) {
     LogError("Invalid seek offset " + std::to_string(computed_offset));
-    return -1;
+    return kFailure;
   }
   h.offset_ = computed_offset;
-  return 0;
+  return kSuccess;
 }
 
 const char *driver_getlasterror() {
@@ -1171,21 +1171,21 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
 
   if (0 == size) {
     LogError("Error passing size of 0");
-    return -1;
+    return kFailure;
   }
 
   // confirm stream's presence
   auto to_stream = FindHandle(stream);
   if (to_stream == active_handles.end()) {
     LogError("Cannot identify stream");
-    return -1;
+    return kFailure;
   }
 
   auto &stream_h = *to_stream;
 
   if (HandleType::kRead != stream_h->type) {
     LogError("Cannot read on not reading stream");
-    return -1;
+    return kFailure;
   }
 
   spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
@@ -1196,19 +1196,19 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
 
   // fast exit for 0 read
   if (0 == count) {
-    return 0;
+    return 0LL;
   }
 
   // prevent overflow
   if (WillSizeCountProductOverflow(size, count)) {
     LogError("product size * count is too large, would overflow");
-    return -1;
+    return kFailure;
   }
 
   tOffset to_read{static_cast<tOffset>(size * count)};
   if (offset > std::numeric_limits<long long>::max() - to_read) {
     LogError("signed overflow prevented on reading attempt");
-    return -1;
+    return kFailure;
   }
   // end of overflow prevention
 
@@ -1237,7 +1237,7 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
 
   if (0 == size) {
     LogError("Error passing size 0 to fwrite");
-    return -1;
+    return kFailure;
   }
 
   spdlog::debug("fwrite {} {} {} {}", ptr, size, count, stream);
@@ -1250,19 +1250,19 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
 
   if (HandleType::kRead == type) {
     LogError("Cannot write on not writing stream");
-    return -1;
+    return kFailure;
   }
 
   // fast exit for 0
   if (0 == count) {
-    return 0;
+    return 0LL;
   }
 
   // prevent integer overflow
   if (WillSizeCountProductOverflow(size, count)) {
     LogError(
         "Error on write: product size * count is too large, would overflow");
-    return -1;
+    return kFailure;
   }
 
   const long long to_write = static_cast<long long>(size * count);
@@ -1271,7 +1271,7 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
   writer.write(static_cast<const char *>(ptr), to_write);
   if (writer.bad()) {
     LogBadStatus(writer.last_status(), "Error during upload");
-    return -1;
+    return kFailure;
   }
   spdlog::debug("Write status after write: good {}, bad {}, fail {}",
                 writer.good(), writer.bad(), writer.fail());
@@ -1289,16 +1289,16 @@ int driver_fflush(void *stream) {
   if (HandleType::kWrite != stream_h.type &&
       HandleType::kAppend != stream_h.type) {
     LogError("Cannot flush on not writing stream");
-    return -1;
+    return kFailure;
   }
 
   auto &out_stream = stream_h.GetWriter().writer_;
   if (!out_stream.flush()) {
     LogBadStatus(out_stream.last_status(), "Error during upload");
-    return -1;
+    return kFailure;
   }
 
-  return 0;
+  return kSuccess;
 }
 
 int driver_remove(const char *filename) {
