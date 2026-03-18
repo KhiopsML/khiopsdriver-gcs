@@ -564,7 +564,7 @@ int driver_connect() {
     buffer << t.rdbuf();
     if (t.fail()) {
       LogError("Error initializing token from file");
-      return kFailure;
+      return kOtherFailure;
     }
     std::shared_ptr<gc::Credentials> creds =
         gc::MakeServiceAccountCredentials(buffer.str());
@@ -575,7 +575,7 @@ int driver_connect() {
   client = gcs::Client{std::move(options)};
 
   bIsConnected = true;
-  return kSuccess;
+  return kOtherSuccess;
 }
 
 int driver_disconnect() {
@@ -597,7 +597,7 @@ int driver_disconnect() {
   bIsConnected = false;
 
   if (failures.empty()) {
-    return kSuccess;
+    return kOtherSuccess;
   }
 
   std::ostringstream os;
@@ -606,7 +606,7 @@ int driver_disconnect() {
     os << status << '\n';
   }
   LogError(os.str());
-  return kFailure;
+  return kOtherFailure;
 }
 
 int driver_isConnected() { return bIsConnected ? 1 : 0; }
@@ -1070,12 +1070,12 @@ void *driver_fopen(const char *filename, char mode) {
 int driver_fclose(void *stream) {
   assert(driver_isConnected());
 
-  ERROR_ON_NULL_ARG(stream, "Error passing null pointer to fclose", kCloseEOF);
+  ERROR_ON_NULL_ARG(stream, "Error passing null pointer to fclose", kFailure);
 
   spdlog::debug("fclose {}", (void *)stream);
 
   auto stream_it = FindHandle(stream);
-  ERROR_NO_STREAM(stream_it, kCloseEOF);
+  ERROR_NO_STREAM(stream_it, kFailure);
   auto &h_ptr = *stream_it;
 
   gc::Status status;
@@ -1088,10 +1088,10 @@ int driver_fclose(void *stream) {
 
   if (!status.ok()) {
     LogBadStatus(status, "Error while closing writer stream");
-    return kFailure;
+    return kOtherFailure;
   }
 
-  return kCloseSuccess;
+  return kSuccess;
 }
 
 int driver_fseek(void *stream, long long int offset, int whence) {
@@ -1302,22 +1302,22 @@ int driver_fflush(void *stream) {
 }
 
 int driver_remove(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to remove", kFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to remove", kOtherFailure);
 
   spdlog::debug("remove {}", filename);
   assert(driver_isConnected());
 
   auto maybe_names = ParseGcsUri(filename);
-  ERROR_ON_NAMES(maybe_names, kFailure);
+  ERROR_ON_NAMES(maybe_names, kOtherFailure);
   const auto &names = *maybe_names;
 
   auto maybe_list = ListObjects(names.bucket, names.object);
   if (!maybe_list) {
     if (maybe_list.status().code() == gc::StatusCode::kNotFound) {
-      return kSuccess; // aucun objet correspondant : rien à faire
+      return kOtherSuccess; // aucun objet correspondant : rien à faire
     }
     LogBadStatus(maybe_list.status(), "Error listing objects to delete");
-    return kFailure;
+    return kOtherFailure;
   }
 
   bool failure_detected = false;
@@ -1336,31 +1336,31 @@ int driver_remove(const char *filename) {
     }
   }
 
-  return failure_detected ? kFailure : kSuccess;
+  return failure_detected ? kOtherFailure : kOtherSuccess;
 }
 
 int driver_rmdir(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to rmdir", kFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to rmdir", kOtherFailure);
 
   spdlog::debug("rmdir {}", filename);
 
   assert(driver_isConnected());
   spdlog::debug("Remove dir (does nothing...)");
-  return kSuccess;
+  return kOtherSuccess;
 }
 
 int driver_mkdir(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to mkdir", kFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to mkdir", kOtherFailure);
 
   spdlog::debug("mkdir {}", filename);
 
   assert(driver_isConnected());
-  return kSuccess;
+  return kOtherSuccess;
 }
 
 long long int driver_diskFreeSpace(const char *filename) {
   ERROR_ON_NULL_ARG(filename, "Error passing null pointer to diskFreeSpace",
-                    kFailure);
+                    kOtherFailure);
 
   spdlog::debug("diskFreeSpace {}", filename);
 
@@ -1375,19 +1375,19 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 
   if (!sSourceFilePathName || !sDestFilePathName) {
     LogError("Error passing null pointer to driver_copyToLocal");
-    return kFailure;
+    return kOtherFailure;
   }
 
   spdlog::debug("copyToLocal {} {}", sSourceFilePathName, sDestFilePathName);
 
   auto maybe_names = GetBucketAndObjectNames(sSourceFilePathName);
-  ERROR_ON_NAMES(maybe_names, kFailure);
+  ERROR_ON_NAMES(maybe_names, kOtherFailure);
 
   const std::string &bucket_name = maybe_names->bucket;
   const std::string &object_name = maybe_names->object;
 
   auto maybe_reader = MakeReaderPtr(bucket_name, object_name);
-  RETURN_ON_ERROR(maybe_reader, "Error while opening Remote file", kFailure);
+  RETURN_ON_ERROR(maybe_reader, "Error while opening Remote file", kOtherFailure);
 
   ReaderPtr &reader = *maybe_reader;
   const size_t nb_files = reader->filenames_.size();
@@ -1398,7 +1398,7 @@ int driver_copyToLocal(const char *sSourceFilePathName,
     std::ostringstream os;
     os << "Failed to open local file for writing: " << sDestFilePathName;
     LogError(os.str());
-    return kFailure;
+    return kOtherFailure;
   }
 
   // Allocate a relay buffer
@@ -1474,12 +1474,12 @@ int driver_copyToLocal(const char *sSourceFilePathName,
   // Read the whole first file
   gcs::ObjectReadStream read_stream;
   if (!operation(read_stream, filenames.front())) {
-    return kFailure;
+    return kOtherFailure;
   }
 
   // fast exit
   if (nb_files == 1) {
-    return kSuccess;
+    return kOtherSuccess;
   }
 
   // Read from the next files
@@ -1489,21 +1489,21 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 
   for (size_t i = 1; i < nb_files; i++) {
     if (!operation(read_stream, filenames[i], skip_header, header_size)) {
-      return kFailure;
+      return kOtherFailure;
     }
   }
 
   // done copying
   spdlog::debug("Done copying");
 
-  return kSuccess;
+  return kOtherSuccess;
 }
 
 int driver_copyFromLocal(const char *sSourceFilePathName,
                          const char *sDestFilePathName) {
   if (!sSourceFilePathName || !sDestFilePathName) {
     LogError("Error passing null pointers as arguments to copyFromLocal");
-    return kFailure;
+    return kOtherFailure;
   }
 
   spdlog::debug("copyFromLocal {} {}", sSourceFilePathName, sDestFilePathName);
@@ -1511,7 +1511,7 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   assert(driver_isConnected());
 
   auto maybe_names = GetBucketAndObjectNames(sDestFilePathName);
-  ERROR_ON_NAMES(maybe_names, kFailure);
+  ERROR_ON_NAMES(maybe_names, kOtherFailure);
 
   // Open the local file
   std::ifstream file_stream(sSourceFilePathName, std::ios::binary);
@@ -1519,7 +1519,7 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
     std::ostringstream os;
     os << "Failed to open local file: " << sSourceFilePathName;
     LogError(os.str());
-    return kFailure;
+    return kOtherFailure;
   }
 
   // Create a WriteObject stream
@@ -1528,7 +1528,7 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   if (!writer || !writer.IsOpen()) {
     LogBadStatus(writer.metadata().status(),
                  "Error initializing upload stream to remote storage");
-    return kFailure;
+    return kOtherFailure;
   }
 
   // Read from the local file and write to the GCS object
@@ -1542,17 +1542,17 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   // what made the process stop?
   if (!writer) {
     LogBadStatus(writer.last_status(), "Error while copying to remote storage");
-    return kFailure;
+    return kOtherFailure;
   } else if (file_stream.eof()) {
     // copy what remains in the buffer
     const auto rem = file_stream.gcount();
     if (rem > 0 && !writer.write(buf_data, rem)) {
       LogError("Error while copying to remote storage");
-      return kFailure;
+      return kOtherFailure;
     }
   } else if (file_stream.bad()) {
     LogError("Error while reading on local storage");
-    return kFailure;
+    return kOtherFailure;
   }
 
   // Close the GCS WriteObject stream to complete the upload
@@ -1560,21 +1560,21 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
 
   auto &maybe_meta = writer.metadata();
   RETURN_ON_ERROR(maybe_meta, "Error during file upload to remote storage",
-                  kFailure);
+                  kOtherFailure);
 
-  return kSuccess;
+  return kOtherSuccess;
 }
 
 int driver_concat(const char *sDestFilePathName,
                   const char **sSourceFilePathNames, size_t nSourceFileCount) {
   if (!sDestFilePathName || !sSourceFilePathNames) {
     LogError("Error passing null pointers as arguments to driver_concat");
-    return kFailure;
+    return kOtherFailure;
   }
 
   if (nSourceFileCount < 1) {
     LogError("Error passing invalid number of files to driver_concat");
-    return kFailure;
+    return kOtherFailure;
   }
 
   spdlog::debug("driver_concat {} with {} sources:", sDestFilePathName,
@@ -1584,7 +1584,7 @@ int driver_concat(const char *sDestFilePathName,
 
   // Parse destination to get bucket name
   auto maybe_names = GetBucketAndObjectNames(sDestFilePathName);
-  ERROR_ON_NAMES(maybe_names, kFailure);
+  ERROR_ON_NAMES(maybe_names, kOtherFailure);
   const auto &names = *maybe_names;
   const std::string &bucket = names.bucket;
 
@@ -1595,7 +1595,7 @@ int driver_concat(const char *sDestFilePathName,
     auto maybe_source_names = ParseGcsUri(sSourceFilePathNames[i]);
     if (!maybe_source_names) {
       LogBadStatus(maybe_source_names.status(), "Error parsing source URL");
-      return kFailure;
+      return kOtherFailure;
     }
 
     if (maybe_source_names->bucket != bucket) {
@@ -1603,7 +1603,7 @@ int driver_concat(const char *sDestFilePathName,
       os << "Source file bucket '" << maybe_source_names->bucket
          << "' must match destination bucket '" << bucket << "'";
       LogError(os.str());
-      return kFailure;
+      return kOtherFailure;
     }
 
     spdlog::debug("- {}", sSourceFilePathNames[i]);
@@ -1661,10 +1661,10 @@ int driver_concat(const char *sDestFilePathName,
                   names.object);
 
     if (!compose_and_delete(sources, names.object)) {
-      return kFailure;
+      return kOtherFailure;
     }
 
-    return failure_detected ? kFailure : kSuccess;
+    return failure_detected ? kOtherFailure : kOtherSuccess;
   }
 
   // Iterative concatenation strategy:
@@ -1688,7 +1688,7 @@ int driver_concat(const char *sDestFilePathName,
                   first_batch.size(), current_result);
 
     if (!compose_and_delete(first_batch, current_result)) {
-      return kFailure;
+      return kOtherFailure;
     }
 
     files_processed = MAX_COMPOSE_SOURCES;
@@ -1717,7 +1717,7 @@ int driver_concat(const char *sDestFilePathName,
     if (!compose_and_delete(batch, new_result)) {
       // Clean up current_result on failure
       client.DeleteObject(bucket, current_result);
-      return kFailure;
+      return kOtherFailure;
     }
 
     current_result = new_result;
@@ -1733,7 +1733,7 @@ int driver_concat(const char *sDestFilePathName,
     LogBadStatus(maybe_copy.status(),
                  "Error renaming final result to destination");
     client.DeleteObject(bucket, current_result);
-    return kFailure;
+    return kOtherFailure;
   }
 
   // Delete the temporary file
@@ -1744,7 +1744,7 @@ int driver_concat(const char *sDestFilePathName,
     failure_detected = true;
   }
 
-  return failure_detected ? kFailure : kSuccess;
+  return failure_detected ? kOtherFailure : kOtherSuccess;
 }
 
 int driver_composeMultifile(const char *sDestFilePathName,
@@ -1753,13 +1753,13 @@ int driver_composeMultifile(const char *sDestFilePathName,
   if (!sDestFilePathName || !sSourceFilePathNames) {
     LogError(
         "Error passing null pointers as arguments to driver_composeMultifile");
-    return kFailure;
+    return kOtherFailure;
   }
 
   if (nSourceFileCount < 1) {
     LogError(
         "Error passing invalid number of files to driver_composeMultifile");
-    return kFailure;
+    return kOtherFailure;
   }
 
   spdlog::debug("driver_composeMultifile {} with {} sources:",
@@ -1771,7 +1771,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
   auto maybe_pattern = ParseGlobbingPattern(sDestFilePathName);
   if (!maybe_pattern) {
     LogBadStatus(maybe_pattern.status(), "Invalid globbing pattern");
-    return kFailure;
+    return kOtherFailure;
   }
 
   // ✅ C++14: Décomposer manuellement au lieu d'utiliser structured binding
@@ -1784,7 +1784,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
   if (!maybe_dest_names) {
     LogBadStatus(maybe_dest_names.status(),
                  "Error parsing destination pattern");
-    return kFailure;
+    return kOtherFailure;
   }
 
   const std::string &dest_bucket = maybe_dest_names->bucket;
@@ -1797,7 +1797,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
       os << "Source file path must be relative (no gs:// allowed): "
          << sSourceFilePathNames[i];
       LogError(os.str());
-      return kFailure;
+      return kOtherFailure;
     }
     spdlog::debug("- {}", sSourceFilePathNames[i]);
   }
@@ -1846,5 +1846,5 @@ int driver_composeMultifile(const char *sDestFilePathName,
     }
   }
 
-  return failure_detected ? kFailure : kSuccess;
+  return failure_detected ? kOtherFailure : kOtherSuccess;
 }

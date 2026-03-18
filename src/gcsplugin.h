@@ -175,7 +175,7 @@ VISIBLE int driver_concat(const char *destfilename,
 //   - suffix is optional and must not start with a digit
 //   sSourceFilePathNames is an array of relative file paths (no gs:// allowed)
 //   nSourceFileCount is the number of source files
-// returns kSuccess on success, kFailure on error
+// returns kOtherSuccess on success, kOtherFailure on error
 VISIBLE int driver_composeMultifile(const char *sDestFilePathName,
                                     const char **sSourceFilePathNames,
                                     size_t nSourceFileCount);

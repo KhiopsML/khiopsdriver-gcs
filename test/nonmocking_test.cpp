@@ -30,7 +30,7 @@ using LOReturnType = gc::StatusOr<gcs::internal::ListObjectsResponse>;
 TEST(GCSDriverTest, DriverConnectMissingCredentialsFailure) {
   auto env = boost::this_process::environment();
   env["GCP_TOKEN"] = "/tmp/notoken.json";
-  ASSERT_EQ(driver_connect(), kFailure);
+  ASSERT_EQ(driver_connect(), kOtherFailure);
   env.erase("GCP_TOKEN");
 }
 
@@ -57,12 +57,12 @@ void cleanup_bad_credentials() {
 
 TEST(GCSDriverTest, GetFileSizeInvalidCredentialsFailure) {
   setup_bad_credentials();
-  ASSERT_EQ(driver_connect(), kSuccess);
+  ASSERT_EQ(driver_connect(), kOtherSuccess);
   ASSERT_EQ(driver_getFileSize("gs://data-test-khiops-driver-gcs/khiops_data/"
                                "samples/Adult/Adult.txt"),
             -1);
   ASSERT_STRNE(driver_getlasterror(), NULL);
-  ASSERT_EQ(driver_disconnect(), kSuccess);
+  ASSERT_EQ(driver_disconnect(), kOtherSuccess);
   cleanup_bad_credentials();
 }
 #endif
@@ -94,7 +94,7 @@ TEST(GCSDriverTest, Concat) {
   const char *reference = "gs://data-test-khiops-driver-gcs/khiops_data/"
                           "samples/Adult/Adult.txt";
 
-  ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
+  ASSERT_EQ(driver_connect(), kOtherSuccess) << "Failed to connect";
 
   // Copy source files to temporary location using test_copyObject
   std::vector<std::string> relative_temp_paths;
@@ -136,7 +136,7 @@ TEST(GCSDriverTest, Concat) {
       << "The output file exists before concatenation";
 
   // Concatenate using relative paths
-  ASSERT_EQ(driver_concat(output, temp_path_ptrs.data(), nsources), kSuccess)
+  ASSERT_EQ(driver_concat(output, temp_path_ptrs.data(), nsources), kOtherSuccess)
       << "Concatenation failed";
 
   // Verify source files were deleted after concatenation
@@ -155,12 +155,12 @@ TEST(GCSDriverTest, Concat) {
       << "Incorrect output file size";
 
   // Clean up: remove output file
-  ASSERT_EQ(driver_remove(output), kSuccess) << "Failed to remove output file";
+  ASSERT_EQ(driver_remove(output), kOtherSuccess) << "Failed to remove output file";
 
   ASSERT_EQ(driver_fileExists(output), kFalse)
       << "Output file still exists after removal";
 
-  ASSERT_EQ(driver_disconnect(), kSuccess) << "Failed to disconnect";
+  ASSERT_EQ(driver_disconnect(), kOtherSuccess) << "Failed to disconnect";
 }
 
 TEST(GCSDriverTest, ComposeMultifile) {
@@ -189,7 +189,7 @@ TEST(GCSDriverTest, ComposeMultifile) {
 
   const char *output_pattern = outputPattern.c_str();
 
-  ASSERT_EQ(driver_connect(), kSuccess) << "Failed to connect";
+  ASSERT_EQ(driver_connect(), kOtherSuccess) << "Failed to connect";
 
   // Copy source files to temporary location using test_copyObject
   std::vector<std::string> relative_temp_paths;
@@ -229,7 +229,7 @@ TEST(GCSDriverTest, ComposeMultifile) {
   // Call composeMultifile to rename files according to pattern
   ASSERT_EQ(driver_composeMultifile(output_pattern,
                                     relative_temp_path_ptrs.data(), nsources),
-            kSuccess)
+            kOtherSuccess)
       << "ComposeMultifile failed";
 
   // Verify that source files were deleted after renaming
@@ -287,7 +287,7 @@ TEST(GCSDriverTest, ComposeMultifile) {
   // Clean up: remove all renamed files
   for (const auto &renamed_file : expected_renamed_files) {
     std::string full_path = std::string("gs://") + bucket + "/" + renamed_file;
-    ASSERT_EQ(driver_remove(full_path.c_str()), kSuccess)
+    ASSERT_EQ(driver_remove(full_path.c_str()), kOtherSuccess)
         << "Failed to remove renamed file " << full_path;
   }
 
@@ -302,5 +302,5 @@ TEST(GCSDriverTest, ComposeMultifile) {
   std::string temp_dir_pattern = "gs://" + bucket + "/" + temp_prefix + "*";
   driver_remove(temp_dir_pattern.c_str());
 
-  ASSERT_EQ(driver_disconnect(), kSuccess) << "Failed to disconnect";
+  ASSERT_EQ(driver_disconnect(), kOtherSuccess) << "Failed to disconnect";
 }

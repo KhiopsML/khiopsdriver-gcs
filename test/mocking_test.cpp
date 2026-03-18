@@ -101,7 +101,7 @@ public:
   static constexpr const char *mock_object = "mock_object";
   static constexpr const char *mock_uri = "gs://mock_bucket/mock_object";
 
-  static void TearDownTestSuite() { ASSERT_EQ(driver_disconnect(), kSuccess); }
+  static void TearDownTestSuite() { ASSERT_EQ(driver_disconnect(), kOtherSuccess); }
 
   std::shared_ptr<gcs::testing::MockClient> mock_client;
 
@@ -553,24 +553,24 @@ TEST_F(GCSDriverTestFixture, Close) {
 
   // null pointer
   CheckHandlesSize(3);
-  ASSERT_EQ(driver_fclose(nullptr), kCloseEOF);
+  ASSERT_EQ(driver_fclose(nullptr), kFailure);
   CheckHandlesSize(3);
   check_handle(read_h);
 
   // address unknown
-  ASSERT_EQ(driver_fclose(&unknown), kCloseEOF);
+  ASSERT_EQ(driver_fclose(&unknown), kFailure);
   CheckHandlesSize(3);
   check_handle(read_h);
 
   // close read_h
   // additional post-condition: write_h, that was the last handle, must have
   // been swapped to the front
-  ASSERT_EQ(driver_fclose(read_h), kCloseSuccess);
+  ASSERT_EQ(driver_fclose(read_h), kSuccess);
   CheckHandlesSize(2);
   check_handle(write_h);
 
   // try to close read_h handle again
-  ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
+  ASSERT_EQ(driver_fclose(read_h), kFailure);
   CheckHandlesSize(2);
   check_handle(write_h);
 
@@ -581,16 +581,16 @@ TEST_F(GCSDriverTestFixture, Close) {
           /*.committed_size=*/absl::nullopt,
           /*.object_metadata=*/expected_metadata}));
 
-  ASSERT_EQ(driver_fclose(write_h), kCloseSuccess);
+  ASSERT_EQ(driver_fclose(write_h), kSuccess);
   CheckHandlesSize(1);
   check_handle(another_read_h);
 
   // close last handle
-  ASSERT_EQ(driver_fclose(another_read_h), kCloseSuccess);
+  ASSERT_EQ(driver_fclose(another_read_h), kSuccess);
   CheckHandlesEmpty();
 
   // try closing a handle again while container is empty
-  ASSERT_EQ(driver_fclose(read_h), kCloseEOF);
+  ASSERT_EQ(driver_fclose(read_h), kFailure);
   CheckHandlesEmpty();
 }
 
@@ -1557,7 +1557,7 @@ TEST_F(GCSDriverTestFixture, Remove_NonExistingFile) {
       .WillOnce(Return(gc::Status(gc::StatusCode::kNotFound, "not found")));
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
 
-  ASSERT_EQ(driver_remove("gs://mock_bucket/missing.txt"), kSuccess);
+  ASSERT_EQ(driver_remove("gs://mock_bucket/missing.txt"), kOtherSuccess);
 }
 
 static void
@@ -1582,7 +1582,7 @@ TEST_F(GCSDriverTestFixture, Remove_SingleFile) {
 
   ExpectDelete(*mock_client, "mock_bucket", "file1.txt");
 
-  ASSERT_EQ(driver_remove("gs://mock_bucket/file1.txt"), kSuccess);
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file1.txt"), kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
@@ -1595,7 +1595,7 @@ TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
   ExpectDelete(*mock_client, "mock_bucket", "file2.txt");
   ExpectDelete(*mock_client, "mock_bucket", "file3.txt");
 
-  ASSERT_EQ(driver_remove("gs://mock_bucket/file*.txt"), kSuccess);
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file*.txt"), kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_Success) {
@@ -1632,7 +1632,7 @@ TEST_F(GCSDriverTestFixture, Concat_Success) {
 
   ASSERT_EQ(
       driver_concat("gs://mock_bucket/output/concatenated.txt", sources, 3),
-      kSuccess);
+      kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
@@ -1646,7 +1646,7 @@ TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
   // DeleteObject should NOT be called since compose failed
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
@@ -1668,7 +1668,7 @@ TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
   ExpectDelete(*mock_client, bucket, "file2.txt",
                gc::Status(gc::StatusCode::kUnknown, "Delete failed"));
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
@@ -1690,23 +1690,23 @@ TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
   ExpectDelete(*mock_client, bucket, "file2.txt",
                gc::Status(gc::StatusCode::kNotFound, "Not found"));
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_NullPointers) {
   const char *sources[1] = {"gs://bucket/file.txt"};
 
-  ASSERT_EQ(driver_concat(nullptr, sources, 1), kFailure);
-  ASSERT_EQ(driver_concat("gs://bucket/output.txt", nullptr, 1), kFailure);
+  ASSERT_EQ(driver_concat(nullptr, sources, 1), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://bucket/output.txt", nullptr, 1), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_InvalidDestinationURI) {
   const char *sources[1] = {"gs://bucket/file.txt"};
 
   // Invalid URI formats
-  ASSERT_EQ(driver_concat("invalid_uri", sources, 1), kFailure);
-  ASSERT_EQ(driver_concat("gs://bucket_only/", sources, 1), kFailure);
-  ASSERT_EQ(driver_concat("gs:///no_bucket", sources, 1), kFailure);
+  ASSERT_EQ(driver_concat("invalid_uri", sources, 1), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://bucket_only/", sources, 1), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs:///no_bucket", sources, 1), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SourceDifferentBucket_Fails) {
@@ -1717,7 +1717,7 @@ TEST_F(GCSDriverTestFixture, Concat_SourceDifferentBucket_Fails) {
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
   EXPECT_CALL(*mock_client, CopyObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SourceRelativePath_Fails) {
@@ -1727,7 +1727,7 @@ TEST_F(GCSDriverTestFixture, Concat_SourceRelativePath_Fails) {
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
   EXPECT_CALL(*mock_client, CopyObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
@@ -1751,7 +1751,7 @@ TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
   // Expect delete of the single source
   ExpectDelete(*mock_client, bucket, "single.txt");
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 1), kSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 1), kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
@@ -1780,7 +1780,7 @@ TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
     ExpectDelete(*mock_client, bucket, filename);
   }
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 5), kSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 5), kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ManyFiles_Batching) {
@@ -1932,7 +1932,7 @@ TEST_F(GCSDriverTestFixture, Concat_ManyFiles_Batching) {
 
   ASSERT_EQ(
       driver_concat("gs://mock_bucket/output.txt", sources.data(), num_files),
-      kSuccess);
+      kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_Success) {
@@ -1970,7 +1970,7 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_Success) {
 
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output/data_*.txt", sources, 3),
-      kSuccess);
+      kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_InvalidPattern) {
@@ -1978,22 +1978,22 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_InvalidPattern) {
 
   // No '*' in pattern
   ASSERT_EQ(driver_composeMultifile("gs://mock_bucket/output.txt", sources, 1),
-            kFailure);
+            kOtherFailure);
 
   // Multiple '*'
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output_*_*.txt", sources, 1),
-      kFailure);
+      kOtherFailure);
 
   // Prefix ends with digit
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output1*.txt", sources, 1),
-      kFailure);
+      kOtherFailure);
 
   // Suffix starts with digit
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output_*1.txt", sources, 1),
-      kFailure);
+      kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_NonRelativePath) {
@@ -2002,18 +2002,18 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_NonRelativePath) {
 
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output_*.txt", sources, 2),
-      kFailure);
+      kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_NullPointers) {
   const char *sources[1] = {"file.txt"};
 
-  ASSERT_EQ(driver_composeMultifile(nullptr, sources, 1), kFailure);
-  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", nullptr, 1), kFailure);
+  ASSERT_EQ(driver_composeMultifile(nullptr, sources, 1), kOtherFailure);
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", nullptr, 1), kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_EmptyList) {
   const char *sources[1] = {"file.txt"};
 
-  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", sources, 0), kFailure);
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", sources, 0), kOtherFailure);
 }
