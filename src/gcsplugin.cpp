@@ -767,7 +767,7 @@ SelectObjectsSubset(std::vector<std::string> const &all_objects) {
   // Random selection without duplicate
   if (random_count > 0 && !remaining.empty()) {
     std::random_device rd;
-    std::ranlux24 gen(rd());
+    std::mt19937 gen(rd());
     std::shuffle(remaining.begin(), remaining.end(), gen);
 
     size_t to_take = std::min(random_count, remaining.size());
