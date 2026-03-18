@@ -541,6 +541,7 @@ int driver_connect() {
 
   spdlog::debug("Connect driver {} version {} loglevel", driver_name, version,
                 loglevel);
+
   // Initialize CURL globally
   curl_global_init(CURL_GLOBAL_ALL);
 
@@ -1235,16 +1236,7 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   // end of overflow prevention
 
   // normal cases
-  /*
-  if (offset + to_read > total_size) {
-    to_read = total_size - offset;
-    spdlog::debug(
-        "offset {}, req len {} exceeds file size ({}) -> reducing len to {}",
-        offset, to_read, total_size, to_read);
-  } else {
-   */
   spdlog::debug("offset = {} to_read = {}", offset, to_read);
-  //}
 
   auto maybe_read = ReadBytesInFile(h, reinterpret_cast<char *>(ptr), to_read);
   RETURN_ON_ERROR(maybe_read, "Error while reading from file", -1);
