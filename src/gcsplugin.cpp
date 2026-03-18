@@ -1322,6 +1322,15 @@ int driver_remove(const char *filename) {
   spdlog::debug("remove {}", filename);
   assert(driver_isConnected());
 
+  const std::string file_to_remove(filename);
+  if (file_to_remove.find('*') != std::string::npos) {
+    auto maybe_pattern = ParseGlobbingPattern(file_to_remove);
+    if (!maybe_pattern) {
+      LogBadStatus(maybe_pattern.status(), "Invalid globbing pattern");
+      return kOtherFailure;
+    }
+  }
+
   auto maybe_names = ParseGcsUri(filename);
   ERROR_ON_NAMES(maybe_names, kOtherFailure);
   const auto &names = *maybe_names;

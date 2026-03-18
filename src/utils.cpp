@@ -3,6 +3,12 @@
 // Helper function to validate globbing pattern
 gc::StatusOr<std::pair<std::string, std::string>>
 ParseGlobbingPattern(const std::string &pattern) {
+  // Reject slash-star patterns (e.g. ".../*" or ".../*suffix")
+  if (pattern.find("/*") != std::string::npos) {
+    return gc::Status{gc::StatusCode::kInvalidArgument,
+                      "Globbing pattern must not contain '/*'"};
+  }
+
   // Find the '*' character
   size_t star_pos = pattern.find('*');
   if (star_pos == std::string::npos) {
@@ -25,6 +31,12 @@ ParseGlobbingPattern(const std::string &pattern) {
   if (prefix.length() < 6 || prefix.substr(0, 5) != "gs://") {
     return gc::Status{gc::StatusCode::kInvalidArgument,
                       "Prefix must start with 'gs://' and contain bucket name"};
+  }
+
+  // Prefix must not end with '/'
+  if (!prefix.empty() && prefix.back() == '/') {
+    return gc::Status{gc::StatusCode::kInvalidArgument,
+                      "Prefix must not end with '/'"};
   }
 
   // Check that prefix doesn't end with a digit

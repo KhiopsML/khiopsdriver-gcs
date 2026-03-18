@@ -1600,6 +1600,20 @@ TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
   ASSERT_EQ(driver_remove("gs://mock_bucket/file*.txt"), kOtherSuccess);
 }
 
+TEST_F(GCSDriverTestFixture, Remove_InvalidGlobbingPattern) {
+  EXPECT_CALL(*mock_client, ListObjects).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file_*_*.txt"), kOtherFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Remove_InvalidGlobbingPatternFolder) {
+  EXPECT_CALL(*mock_client, ListObjects).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/folder/*"), kOtherFailure);
+}
+
 TEST_F(GCSDriverTestFixture, Concat_Success) {
   const char *sources[3] = {"gs://mock_bucket/input/file_a.txt",
                             "gs://mock_bucket/input/file_b.txt",
@@ -2003,6 +2017,10 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_InvalidPattern) {
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output_*1.txt", sources, 1),
       kOtherFailure);
+
+  // Slash-star is forbidden
+  ASSERT_EQ(driver_composeMultifile("gs://mock_bucket/folder/*", sources, 1),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_NonRelativePath) {
