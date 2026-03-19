@@ -25,6 +25,12 @@
 #include <boost/uuid/uuid_generators.hpp> // generators
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <curl/curl.h>
+
+#include "oauth2_token_manager.h"
 #include "spdlog/spdlog.h"
 #include "utils.h"
 
@@ -476,10 +482,9 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
   if (!create_with_mock_client) {
     if (appendMode) {
       return InsertHandle<WriterPtr, HandleType::kAppend>(
-          WriterPtr(new WriteFile));
+          WriterPtr(new Writer));
     }
-    return InsertHandle<WriterPtr, HandleType::kWrite>(
-        WriterPtr(new WriteFile));
+    return InsertHandle<WriterPtr, HandleType::kWrite>(WriterPtr(new Writer));
   }
 
   auto writer = client.WriteObject(bucketname, objectname);
@@ -487,7 +492,7 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
     return nullptr;
   }
 
-  WriterPtr writer_struct{new WriteFile};
+  WriterPtr writer_struct{new Writer};
   writer_struct->bucketname_ = std::move(bucketname);
   writer_struct->filename_ = std::move(objectname);
   writer_struct->writer_ = std::move(writer);
@@ -537,6 +542,9 @@ int driver_connect() {
   spdlog::debug("Connect driver {} version {} loglevel", driver_name, version,
                 loglevel);
 
+  // Initialize CURL globally
+  curl_global_init(CURL_GLOBAL_ALL);
+
   // Initialize variables from environment
   globalBucketName = GetEnvironmentVariableOrDefault("GCS_BUCKET_NAME", "");
 
@@ -555,6 +563,7 @@ int driver_connect() {
     options.set<gc::UserProjectOption>(std::move(project));
   }
 
+  // Allow authentication via service account JSON key
   std::string gcp_token_filename =
       GetEnvironmentVariableOrDefault("GCP_TOKEN", "");
   if (!gcp_token_filename.empty()) {
@@ -568,6 +577,17 @@ int driver_connect() {
     }
     std::shared_ptr<gc::Credentials> creds =
         gc::MakeServiceAccountCredentials(buffer.str());
+    options.set<gc::UnifiedCredentialsOption>(std::move(creds));
+  }
+
+  // Allow authentication via OAuth token
+  std::string gcp_oauth_token_filename =
+      GetEnvironmentVariableOrDefault("GCP_OAUTH_TOKEN", "");
+  if (!gcp_oauth_token_filename.empty()) {
+    // Create our token manager
+    OAuth2TokenManager token_manager(gcp_oauth_token_filename);
+    // Create credentials using the token manager
+    std::shared_ptr<gc::Credentials> creds = token_manager.MakeCredentials();
     options.set<gc::UnifiedCredentialsOption>(std::move(creds));
   }
 
@@ -593,6 +613,9 @@ int driver_disconnect() {
     }
   }
   active_handles.clear();
+
+  // Clean up CURL
+  curl_global_cleanup();
 
   bIsConnected = false;
 
@@ -931,7 +954,7 @@ gc::StatusOr<WriterPtr> MakeWriterPtr(std::string bucketname,
   if (!writer) {
     return writer.last_status();
   }
-  WriterPtr writer_struct{new WriteFile};
+  WriterPtr writer_struct{new Writer};
   writer_struct->bucketname_ = std::move(bucketname);
   writer_struct->filename_ = std::move(objectname);
   writer_struct->writer_ = std::move(writer);
@@ -1112,7 +1135,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
 
   spdlog::debug("fseek {} {} {}", stream, offset, whence);
 
-  MultiPartFile &h = stream_h->GetReader();
+  Reader &h = stream_h->GetReader();
 
   tOffset computed_offset{0};
 
@@ -1190,7 +1213,7 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
 
   spdlog::debug("fread {} {} {} {}", ptr, size, count, stream);
 
-  MultiPartFile &h = stream_h->GetReader();
+  Reader &h = stream_h->GetReader();
 
   const tOffset offset = h.offset_;
 
@@ -1213,16 +1236,7 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   // end of overflow prevention
 
   // normal cases
-  /*
-  if (offset + to_read > total_size) {
-    to_read = total_size - offset;
-    spdlog::debug(
-        "offset {}, req len {} exceeds file size ({}) -> reducing len to {}",
-        offset, to_read, total_size, to_read);
-  } else {
-   */
   spdlog::debug("offset = {} to_read = {}", offset, to_read);
-  //}
 
   auto maybe_read = ReadBytesInFile(h, reinterpret_cast<char *>(ptr), to_read);
   RETURN_ON_ERROR(maybe_read, "Error while reading from file", -1);
@@ -1302,10 +1316,20 @@ int driver_fflush(void *stream) {
 }
 
 int driver_remove(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to remove", kOtherFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to remove",
+                    kOtherFailure);
 
   spdlog::debug("remove {}", filename);
   assert(driver_isConnected());
+
+  const std::string file_to_remove(filename);
+  if (file_to_remove.find('*') != std::string::npos) {
+    auto maybe_pattern = ParseGlobbingPattern(file_to_remove);
+    if (!maybe_pattern) {
+      LogBadStatus(maybe_pattern.status(), "Invalid globbing pattern");
+      return kOtherFailure;
+    }
+  }
 
   auto maybe_names = ParseGcsUri(filename);
   ERROR_ON_NAMES(maybe_names, kOtherFailure);
@@ -1340,7 +1364,8 @@ int driver_remove(const char *filename) {
 }
 
 int driver_rmdir(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to rmdir", kOtherFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to rmdir",
+                    kOtherFailure);
 
   spdlog::debug("rmdir {}", filename);
 
@@ -1350,7 +1375,8 @@ int driver_rmdir(const char *filename) {
 }
 
 int driver_mkdir(const char *filename) {
-  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to mkdir", kOtherFailure);
+  ERROR_ON_NULL_ARG(filename, "Error passing null pointer to mkdir",
+                    kOtherFailure);
 
   spdlog::debug("mkdir {}", filename);
 
@@ -1387,7 +1413,8 @@ int driver_copyToLocal(const char *sSourceFilePathName,
   const std::string &object_name = maybe_names->object;
 
   auto maybe_reader = MakeReaderPtr(bucket_name, object_name);
-  RETURN_ON_ERROR(maybe_reader, "Error while opening Remote file", kOtherFailure);
+  RETURN_ON_ERROR(maybe_reader, "Error while opening Remote file",
+                  kOtherFailure);
 
   ReaderPtr &reader = *maybe_reader;
   const size_t nb_files = reader->filenames_.size();

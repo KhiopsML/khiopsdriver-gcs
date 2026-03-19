@@ -19,8 +19,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 file(READ "src/gcsplugin.h" H_FILE)
 string(REGEX MATCH "#define DRIVER_VERSION KHIOPS_STR\\(([^)]*)\\)" _ ${H_FILE})
 set(DRIVER_VERSION ${CMAKE_MATCH_1})
-string(REGEX REPLACE "-.*" "" VERSION ${DRIVER_VERSION})
-message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${VERSION})")
+# Extract the main version (up to the first hyphen)
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" PROJECT_VERSION "${DRIVER_VERSION}")
+
+message(STATUS "Building Khiops driver version: ${DRIVER_VERSION} (CMake version : ${PROJECT_VERSION})")
 
 project(
   khiops-gcs
@@ -47,6 +49,8 @@ endif()
 # Find dependencies
 find_package(google_cloud_cpp_storage CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(CURL REQUIRED)
+find_package(nlohmann_json REQUIRED)
 if(BUILD_TESTS)
   find_package(fmt CONFIG REQUIRED)
   find_package(Boost REQUIRED)
@@ -97,11 +101,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp src/utils.h
-                                         src/utils.cpp)
+add_library(
+  khiopsdriver_file_gcs SHARED
+  src/gcsplugin.h
+  src/gcsplugin_internal.h
+  src/gcsplugin.cpp
+  src/utils.h
+  src/utils.cpp
+  src/oauth2_token_manager.h
+  src/oauth2_token_manager.cpp)
 
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
-target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog)
+target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog CURL::libcurl
+                                                    nlohmann_json::nlohmann_json)
 
 set_target_properties(
   khiopsdriver_file_gcs

@@ -101,7 +101,9 @@ public:
   static constexpr const char *mock_object = "mock_object";
   static constexpr const char *mock_uri = "gs://mock_bucket/mock_object";
 
-  static void TearDownTestSuite() { ASSERT_EQ(driver_disconnect(), kOtherSuccess); }
+  static void TearDownTestSuite() {
+    ASSERT_EQ(driver_disconnect(), kOtherSuccess);
+  }
 
   std::shared_ptr<gcs::testing::MockClient> mock_client;
 
@@ -205,7 +207,7 @@ public:
   void TestMultifileOpenSuccess(LOReturnType arg,
                                 ReadSimulatorParams &mock_file_1,
                                 ReadSimulatorParams &mock_file_2,
-                                const MultiPartFile &expected) {
+                                const Reader &expected) {
     PrepareListObjects(std::move(arg));
     EXPECT_CALL(*mock_client, ReadObject)
         .WillOnce(READ_MOCK_LAMBDA(GenerateReadSimulator(mock_file_1)))
@@ -1385,7 +1387,7 @@ TEST_F(GCSDriverTestFixture, OpenWriteMode_OK) {
   ON_CALL(*mock_client, CreateResumableUpload)
       .WillByDefault(Return(CreateResumableUploadResponse{upload_id}));
 
-  gcsplugin::WriteFile expected;
+  gcsplugin::Writer expected;
   expected.bucketname_ = mock_bucket;
   expected.filename_ = mock_object;
 
@@ -1598,6 +1600,20 @@ TEST_F(GCSDriverTestFixture, Remove_MultipleFilesByGlob) {
   ASSERT_EQ(driver_remove("gs://mock_bucket/file*.txt"), kOtherSuccess);
 }
 
+TEST_F(GCSDriverTestFixture, Remove_InvalidGlobbingPattern) {
+  EXPECT_CALL(*mock_client, ListObjects).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/file_*_*.txt"), kOtherFailure);
+}
+
+TEST_F(GCSDriverTestFixture, Remove_InvalidGlobbingPatternFolder) {
+  EXPECT_CALL(*mock_client, ListObjects).Times(0);
+  EXPECT_CALL(*mock_client, DeleteObject).Times(0);
+
+  ASSERT_EQ(driver_remove("gs://mock_bucket/folder/*"), kOtherFailure);
+}
+
 TEST_F(GCSDriverTestFixture, Concat_Success) {
   const char *sources[3] = {"gs://mock_bucket/input/file_a.txt",
                             "gs://mock_bucket/input/file_b.txt",
@@ -1646,7 +1662,8 @@ TEST_F(GCSDriverTestFixture, Concat_ComposeFailure) {
   // DeleteObject should NOT be called since compose failed
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
@@ -1668,7 +1685,8 @@ TEST_F(GCSDriverTestFixture, Concat_DeleteFailureAfterCompose) {
   ExpectDelete(*mock_client, bucket, "file2.txt",
                gc::Status(gc::StatusCode::kUnknown, "Delete failed"));
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
@@ -1690,7 +1708,8 @@ TEST_F(GCSDriverTestFixture, Concat_DeleteNotFoundIgnored) {
   ExpectDelete(*mock_client, bucket, "file2.txt",
                gc::Status(gc::StatusCode::kNotFound, "Not found"));
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2),
+            kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_NullPointers) {
@@ -1717,7 +1736,8 @@ TEST_F(GCSDriverTestFixture, Concat_SourceDifferentBucket_Fails) {
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
   EXPECT_CALL(*mock_client, CopyObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SourceRelativePath_Fails) {
@@ -1727,7 +1747,8 @@ TEST_F(GCSDriverTestFixture, Concat_SourceRelativePath_Fails) {
   EXPECT_CALL(*mock_client, DeleteObject).Times(0);
   EXPECT_CALL(*mock_client, CopyObject).Times(0);
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2), kOtherFailure);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 2),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
@@ -1751,7 +1772,8 @@ TEST_F(GCSDriverTestFixture, Concat_SingleFile) {
   // Expect delete of the single source
   ExpectDelete(*mock_client, bucket, "single.txt");
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 1), kOtherSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 1),
+            kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
@@ -1780,7 +1802,8 @@ TEST_F(GCSDriverTestFixture, Concat_ManyFiles) {
     ExpectDelete(*mock_client, bucket, filename);
   }
 
-  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 5), kOtherSuccess);
+  ASSERT_EQ(driver_concat("gs://mock_bucket/output.txt", sources, 5),
+            kOtherSuccess);
 }
 
 TEST_F(GCSDriverTestFixture, Concat_ManyFiles_Batching) {
@@ -1994,6 +2017,10 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_InvalidPattern) {
   ASSERT_EQ(
       driver_composeMultifile("gs://mock_bucket/output_*1.txt", sources, 1),
       kOtherFailure);
+
+  // Slash-star is forbidden
+  ASSERT_EQ(driver_composeMultifile("gs://mock_bucket/folder/*", sources, 1),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_NonRelativePath) {
@@ -2009,11 +2036,13 @@ TEST_F(GCSDriverTestFixture, ComposeMultifile_NullPointers) {
   const char *sources[1] = {"file.txt"};
 
   ASSERT_EQ(driver_composeMultifile(nullptr, sources, 1), kOtherFailure);
-  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", nullptr, 1), kOtherFailure);
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", nullptr, 1),
+            kOtherFailure);
 }
 
 TEST_F(GCSDriverTestFixture, ComposeMultifile_EmptyList) {
   const char *sources[1] = {"file.txt"};
 
-  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", sources, 0), kOtherFailure);
+  ASSERT_EQ(driver_composeMultifile("gs://bucket/*", sources, 0),
+            kOtherFailure);
 }
