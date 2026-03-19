@@ -101,16 +101,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
-add_library(
-  khiopsdriver_file_gcs SHARED
-  src/gcsplugin.h
-  src/gcsplugin_internal.h
-  src/gcsplugin.cpp
-  src/utils.h
-  src/utils.cpp
-  src/oauth2_token_manager.h
-  src/oauth2_token_manager.cpp)
+add_library(khiopsdriver_file_gcs SHARED src/gcsplugin.h src/gcsplugin_internal.h src/gcsplugin.cpp src/utils.h src/utils.cpp
+  src/logging.hpp src/logging.cpp
+  shared/src/khiops_driver_common/logging.hpp shared/src/khiops_driver_common/logging.cpp
+  src/oauth2_token_manager.h src/oauth2_token_manager.cpp)
 
+target_include_directories(khiopsdriver_file_gcs PRIVATE shared/src)
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
 target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage spdlog::spdlog CURL::libcurl
                                                     nlohmann_json::nlohmann_json)
