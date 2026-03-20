@@ -14,14 +14,14 @@ requirements:
     - {{ compiler('cxx') }}
     - cmake
     - ninja
-    - libgoogle-cloud-storage-devel
+    - libgoogle-cloud-storage-devel ==2.37.0
     - libboost-devel
     - libboost-headers
   host:
     - fmt
     - spdlog
-    - libgoogle-cloud-storage
-    - libgoogle-cloud
+    - libgoogle-cloud-storage ==2.37.0
+    - libgoogle-cloud ==2.37.0
 
 files:
   - lib/libkhiopsdriver_file_gcs.so* [linux]
