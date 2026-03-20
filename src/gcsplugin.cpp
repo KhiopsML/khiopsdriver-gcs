@@ -33,7 +33,6 @@
 #include "oauth2_token_manager.h"
 #include "khiops_driver_common/logging.hpp"
 #include "khiops_driver_common/util.hpp"
-#include "logging.hpp"
 #include "utils.h"
 
 using namespace gcsplugin;
@@ -43,7 +42,7 @@ namespace gcs = gc::storage;
 
 using namespace khiops_driver_common::util;
 
-using gcsplugin::logging::getLogger;
+using khiops_driver_common::logging::getLogger;
 
 constexpr const char *version = DRIVER_VERSION;
 constexpr const char *driver_name = "GCS driver";
