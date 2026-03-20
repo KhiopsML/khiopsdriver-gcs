@@ -567,12 +567,14 @@ TEST_F(GCSDriverTestFixture, Close) {
   // close read_h
   // additional post-condition: write_h, that was the last handle, must have
   // been swapped to the front
+  printf(" 1 =================== read_h = %p\n", read_h);
   ASSERT_EQ(driver_fclose(read_h), kSuccess);
   CheckHandlesSize(2);
   check_handle(write_h);
 
   // try to close read_h handle again
   ASSERT_EQ(driver_fclose(read_h), kFailure);
+  printf(" 2 =================== read_h = %p\n", read_h);
   CheckHandlesSize(2);
   check_handle(write_h);
 

@@ -28,7 +28,7 @@
 namespace gc = ::google::cloud;
 namespace gcs = gc::storage;
 
-VISIBLE gc::Status test_copyObject(const std::string &source_bucket,
+VISIBLE int test_copyObject(const std::string &source_bucket,
                                    const std::string &source_object,
                                    const std::string &dest_bucket,
                                    const std::string &dest_object);

@@ -109,15 +109,15 @@ TEST(GCSDriverTest, Concat) {
         temp_prefix + "source_" + std::to_string(i) + ".txt";
 
     // Copy using test helper function
-    auto copy_status = test_copyObject(bucket,        // source bucket
+    int copy_status = test_copyObject(bucket,        // source bucket
                                        source_object, // source object
                                        bucket,     // destination bucket (same)
                                        temp_object // destination object
     );
 
-    ASSERT_TRUE(copy_status.ok())
+    ASSERT_TRUE(!copy_status)
         << "Failed to copy source " << i
-        << " to temporary location: " << copy_status.message();
+        << " to temporary location.";
 
     // Store the source path for concat
     relative_temp_paths.push_back("gs://" + bucket + "/" + temp_object);
@@ -204,15 +204,15 @@ TEST(GCSDriverTest, ComposeMultifile) {
         temp_prefix + "source_" + std::to_string(i) + ".txt";
 
     // Copy using test helper function
-    auto copy_status = test_copyObject(bucket,        // source bucket
+    int copy_status = test_copyObject(bucket,        // source bucket
                                        source_object, // source object
                                        bucket,     // destination bucket (same)
                                        temp_object // destination object
     );
 
-    ASSERT_TRUE(copy_status.ok())
+    ASSERT_TRUE(!copy_status)
         << "Failed to copy source " << i
-        << " to temporary location: " << copy_status.message();
+        << " to temporary location.";
 
     // Store the relative path for composeMultifile
     relative_temp_paths.push_back(temp_object);
