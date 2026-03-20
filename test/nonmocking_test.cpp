@@ -110,14 +110,13 @@ TEST(GCSDriverTest, Concat) {
 
     // Copy using test helper function
     int copy_status = test_copyObject(bucket,        // source bucket
-                                       source_object, // source object
-                                       bucket,     // destination bucket (same)
-                                       temp_object // destination object
+                                      source_object, // source object
+                                      bucket,     // destination bucket (same)
+                                      temp_object // destination object
     );
 
     ASSERT_TRUE(!copy_status)
-        << "Failed to copy source " << i
-        << " to temporary location.";
+        << "Failed to copy source " << i << " to temporary location.";
 
     // Store the source path for concat
     relative_temp_paths.push_back("gs://" + bucket + "/" + temp_object);
@@ -136,7 +135,8 @@ TEST(GCSDriverTest, Concat) {
       << "The output file exists before concatenation";
 
   // Concatenate using relative paths
-  ASSERT_EQ(driver_concat(output, temp_path_ptrs.data(), nsources), kOtherSuccess)
+  ASSERT_EQ(driver_concat(output, temp_path_ptrs.data(), nsources),
+            kOtherSuccess)
       << "Concatenation failed";
 
   // Verify source files were deleted after concatenation
@@ -155,7 +155,8 @@ TEST(GCSDriverTest, Concat) {
       << "Incorrect output file size";
 
   // Clean up: remove output file
-  ASSERT_EQ(driver_remove(output), kOtherSuccess) << "Failed to remove output file";
+  ASSERT_EQ(driver_remove(output), kOtherSuccess)
+      << "Failed to remove output file";
 
   ASSERT_EQ(driver_fileExists(output), kFalse)
       << "Output file still exists after removal";
@@ -205,14 +206,13 @@ TEST(GCSDriverTest, ComposeMultifile) {
 
     // Copy using test helper function
     int copy_status = test_copyObject(bucket,        // source bucket
-                                       source_object, // source object
-                                       bucket,     // destination bucket (same)
-                                       temp_object // destination object
+                                      source_object, // source object
+                                      bucket,     // destination bucket (same)
+                                      temp_object // destination object
     );
 
     ASSERT_TRUE(!copy_status)
-        << "Failed to copy source " << i
-        << " to temporary location.";
+        << "Failed to copy source " << i << " to temporary location.";
 
     // Store the relative path for composeMultifile
     relative_temp_paths.push_back(temp_object);

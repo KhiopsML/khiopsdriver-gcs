@@ -126,7 +126,9 @@ int GetGeneration(int64_t *generation, const std::string &bucket_name,
                   const std::string &filename) {
   auto metadata = client.GetObjectMetadata(bucket_name, filename);
   if (!metadata) {
-    getLogger()->error("Failed to get generation of object (bucket: {}, filename: {}).", bucket_name, filename);
+    getLogger()->error(
+        "Failed to get generation of object (bucket: {}, filename: {}).",
+        bucket_name, filename);
     return -1;
   }
   *generation = metadata->generation();
@@ -134,11 +136,11 @@ int GetGeneration(int64_t *generation, const std::string &bucket_name,
 }
 
 // Definition of helper functions
-int
-DownloadFileRangeToBuffer(long long *sizeresult, const std::string &bucket_name,
-                          const std::string &object_name, char *buffer,
-                          std::int64_t start_range, std::int64_t end_range,
-                          int64_t generation) {
+int DownloadFileRangeToBuffer(long long *sizeresult,
+                              const std::string &bucket_name,
+                              const std::string &object_name, char *buffer,
+                              std::int64_t start_range, std::int64_t end_range,
+                              int64_t generation) {
   auto reader = client.ReadObject(bucket_name, object_name,
                                   gcs::ReadRange(start_range, end_range),
                                   gcs::IfGenerationMatch(generation));
@@ -148,17 +150,17 @@ DownloadFileRangeToBuffer(long long *sizeresult, const std::string &bucket_name,
       getLogger()->error("The file has been updated while reading it.");
       return -1;
     }
-     getLogger()->error("Error while creating reading stream; {}" ,
-                                           o_status.message());
-                                           return -1;
+    getLogger()->error("Error while creating reading stream; {}",
+                       o_status.message());
+    return -1;
   }
 
   reader.read(buffer, end_range - start_range);
   if (reader.bad()) {
     auto &o_status = reader.status();
-     getLogger()->error("Error while creating reading stream; {}" ,
-                                           o_status.message());
-                                          return -1;
+    getLogger()->error("Error while creating reading stream; {}",
+                       o_status.message());
+    return -1;
   }
 
   if (start_range >= end_range) {
@@ -169,8 +171,8 @@ DownloadFileRangeToBuffer(long long *sizeresult, const std::string &bucket_name,
   long long int num_read = static_cast<long long>(reader.gcount());
   getLogger()->debug("read = {}", num_read);
 
-   *sizeresult = num_read;
-   return 0;
+  *sizeresult = num_read;
+  return 0;
 }
 
 struct OffsetChunkLookup {
@@ -203,8 +205,8 @@ OffsetChunkLookup LookupInitialChunk(const std::vector<tOffset> &cumul_sizes,
   return {idx, offset_at_or_past_last_chunk, range_end_for_log};
 }
 
-int ReadBytesInFile(long long *nread,MultiPartFile &multifile, char *buffer,
-                                        tOffset to_read) {
+int ReadBytesInFile(long long *nread, MultiPartFile &multifile, char *buffer,
+                    tOffset to_read) {
   // Start at first usable file chunk
   // Advance through file chunks, advancing buffer pointer
   // Until last requested byte was read
@@ -221,7 +223,8 @@ int ReadBytesInFile(long long *nread,MultiPartFile &multifile, char *buffer,
   tOffset &offset = multifile.offset_;
 
   if (filenames.empty() || cumul_sizes.empty()) {
-    getLogger()->error("Cannot read from an empty multipart file.");return -1;
+    getLogger()->error("Cannot read from an empty multipart file.");
+    return -1;
   }
 
   char *buffer_pos = buffer;
@@ -234,8 +237,8 @@ int ReadBytesInFile(long long *nread,MultiPartFile &multifile, char *buffer,
 
   if (idx >= cumul_sizes.size() || idx >= filenames.size() ||
       idx >= generations.size()) {
-    getLogger()->error(
-                      "Cannot read after end of file.");return -1;
+    getLogger()->error("Cannot read after end of file.");
+    return -1;
   }
 
   // Skip empty chunks (equal cumulative boundaries). They can legitimately
@@ -256,19 +259,18 @@ int ReadBytesInFile(long long *nread,MultiPartFile &multifile, char *buffer,
   }
 
   getLogger()->debug("Use item {} to read @ {} (end = {})", idx, offset,
-                chunk_lookup.range_end_for_log);
+                     chunk_lookup.range_end_for_log);
 
   auto read_range_and_update = [&](const std::string &filename,
                                    int64_t generation, tOffset start,
                                    tOffset end) -> int {
-  tOffset actual_read;
-    if (DownloadFileRangeToBuffer(&actual_read,
-        bucket_name, filename, buffer_pos, static_cast<int64_t>(start),
-        static_cast<int64_t>(end), generation)) {
+    tOffset actual_read;
+    if (DownloadFileRangeToBuffer(&actual_read, bucket_name, filename,
+                                  buffer_pos, static_cast<int64_t>(start),
+                                  static_cast<int64_t>(end), generation)) {
       offset = offset_bak;
       return -1;
     }
-
 
     bytes_read += actual_read;
     buffer_pos += actual_read;
@@ -292,8 +294,8 @@ int ReadBytesInFile(long long *nread,MultiPartFile &multifile, char *buffer,
   const tOffset read_end =
       std::min(file_start + to_read, file_start + cumul_sizes[idx] - offset);
 
-  int read_code = read_range_and_update(
-      filenames[idx], generations[idx], file_start, read_end);
+  int read_code = read_range_and_update(filenames[idx], generations[idx],
+                                        file_start, read_end);
 
   // continue with the next files
   while (!read_code && to_read && (idx + 1) < cumul_sizes.size() &&
@@ -330,25 +332,22 @@ int ParseGcsUri(ParseUriResult *result, const std::string &gcs_uri) {
   const size_t prefix_size{std::strlen(prefix)};
   if (gcs_uri.compare(0, prefix_size, prefix) != 0) {
 
-    getLogger()->error(
-                      "Invalid GCS URI: {}" , gcs_uri);
-                      return -1;
+    getLogger()->error("Invalid GCS URI: {}", gcs_uri);
+    return -1;
   }
 
   const size_t pos = gcs_uri.find('/', prefix_size);
   if (pos == std::string::npos) {
-     getLogger()->error(
-                      "Invalid GCS URI, missing object name: {}" , gcs_uri);return -1;
+    getLogger()->error("Invalid GCS URI, missing object name: {}", gcs_uri);
+    return -1;
   }
 
-  *result = std::move(ParseUriResult{gcs_uri.substr(prefix_size, pos - prefix_size),
-                        gcs_uri.substr(pos + 1)});
-                        return 0;
+  *result = std::move(ParseUriResult{
+      gcs_uri.substr(prefix_size, pos - prefix_size), gcs_uri.substr(pos + 1)});
+  return 0;
 }
 
-int GetBucketAndObjectNames(ParseUriResult *result,
-    const char *sFilePathName)
-{
+int GetBucketAndObjectNames(ParseUriResult *result, const char *sFilePathName) {
   if (ParseGcsUri(result, sFilePathName)) {
     return -1;
   }
@@ -356,9 +355,8 @@ int GetBucketAndObjectNames(ParseUriResult *result,
   // fallback to default bucket if bucket empty
   if (result->bucket.empty()) {
     if (globalBucketName.empty()) {
-      getLogger()->error(
-                     "No bucket specified and GCS_BUCKET_NAME is not set!");
-                     return -1;
+      getLogger()->error("No bucket specified and GCS_BUCKET_NAME is not set!");
+      return -1;
     } else {
       result->bucket = globalBucketName;
     }
@@ -366,24 +364,23 @@ int GetBucketAndObjectNames(ParseUriResult *result,
   return 0;
 }
 
-
 bool WillSizeCountProductOverflow(size_t size, size_t count) {
   constexpr size_t max_prod_usable{
       static_cast<size_t>(std::numeric_limits<tOffset>::max())};
   return (max_prod_usable / size < count || max_prod_usable / count < size);
 }
 
-int
-ListObjects(gcs::ListObjectsReader *result,const std::string &bucket_name, const std::string &object_name) {
+int ListObjects(gcs::ListObjectsReader *result, const std::string &bucket_name,
+                const std::string &object_name) {
   auto list = client.ListObjects(bucket_name, gcs::MatchGlob{object_name});
   auto first = list.begin();
   if (first == list.end()) {
-    getLogger()->error(
-                      "Error while searching object : not found");
-                      return -2;
+    getLogger()->error("Error while searching object : not found");
+    return -2;
   }
   if (!first->ok()) {
-    if(first->status().code() == gc::StatusCode::kNotFound) return -2;
+    if (first->status().code() == gc::StatusCode::kNotFound)
+      return -2;
     return -1;
   }
   *result = std::move(list);
@@ -429,7 +426,8 @@ int CloseWriterStream(Handle &stream) {
   }
 
   err_msg_os << ": " << maybe_meta.status().message();
-  getLogger()->error( err_msg_os.str());return -1;
+  getLogger()->error(err_msg_os.str());
+  return -1;
 }
 
 // Implementation of driver functions
@@ -458,8 +456,7 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
                            std::string bucketname, std::string objectname) {
   if (!create_with_mock_client) {
     if (appendMode) {
-      return InsertAppenderHandle(
-          WriterPtr(new Writer));
+      return InsertAppenderHandle(WriterPtr(new Writer));
     }
     return InsertWriterHandle(WriterPtr(new Writer));
   }
@@ -475,16 +472,15 @@ void *test_addWriterHandle(bool appendMode, bool create_with_mock_client,
   writer_struct->writer_ = std::move(writer);
 
   if (appendMode) {
-    return InsertAppenderHandle(
-        std::move(writer_struct));
+    return InsertAppenderHandle(std::move(writer_struct));
   }
   return InsertWriterHandle(std::move(writer_struct));
 }
 
 int test_copyObject(const std::string &source_bucket,
-                           const std::string &source_object,
-                           const std::string &dest_bucket,
-                           const std::string &dest_object) {
+                    const std::string &source_object,
+                    const std::string &dest_bucket,
+                    const std::string &dest_object) {
   auto result =
       client.CopyObject(source_bucket, source_object, dest_bucket, dest_object);
   if (!result) {
@@ -524,15 +520,13 @@ int driver_connect() {
               std::chrono::seconds(failure_timeout));
 
   // Add project ID if defined
-  std::string project =
-      env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
+  std::string project = env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
   if (!project.empty()) {
     options.set<gc::UserProjectOption>(std::move(project));
   }
 
   // Allow authentication via service account JSON key
-  std::string gcp_token_filename =
-      env::GetEnvVarOrDefault("GCP_TOKEN", "");
+  std::string gcp_token_filename = env::GetEnvVarOrDefault("GCP_TOKEN", "");
   if (!gcp_token_filename.empty()) {
     // Initialize from token file
     std::ifstream t(gcp_token_filename);
@@ -608,7 +602,10 @@ long long int driver_getSystemPreferredBufferSize() {
 }
 
 int driver_exist(const char *filename) {
-  if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kFalse); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kFalse);
+  };
 
   getLogger()->debug("exist {}", filename);
 
@@ -624,21 +621,25 @@ int driver_exist(const char *filename) {
 }
 
 int driver_fileExists(const char *sFilePathName) {
-  if (!(sFilePathName)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kFalse); };
+  if (!(sFilePathName)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kFalse);
+  };
 
   getLogger()->debug("fileExist {}", sFilePathName);
 
   ParseUriResult parsedUri;
-    if (GetBucketAndObjectNames(&parsedUri, sFilePathName)) {
-      getLogger()->error (ERR_URL_PARSING);
-      return kFalse;
-    }
+  if (GetBucketAndObjectNames(&parsedUri, sFilePathName)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kFalse;
+  }
 
-    google::cloud::storage::v2_37::ListObjectsReader objects;
-    int code;
-  if ((code =ListObjects(&objects, parsedUri.bucket, parsedUri.object))) {
-    if (code == -2) return kFalse;
-      getLogger()->error("Error checking if file exists");
+  google::cloud::storage::v2_37::ListObjectsReader objects;
+  int code;
+  if ((code = ListObjects(&objects, parsedUri.bucket, parsedUri.object))) {
+    if (code == -2)
+      return kFalse;
+    getLogger()->error("Error checking if file exists");
     return kFalse;
   }
 
@@ -647,7 +648,10 @@ int driver_fileExists(const char *sFilePathName) {
 }
 
 int driver_dirExists(const char *sFilePathName) {
-  if (!(sFilePathName)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kFalse); };
+  if (!(sFilePathName)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kFalse);
+  };
 
   getLogger()->debug("dirExist {}", sFilePathName);
   return kTrue;
@@ -656,9 +660,9 @@ int driver_dirExists(const char *sFilePathName) {
 // Khiops allows header length to be max 8MB
 constexpr int KHIOPS_MAX_HEADERLENGTH = 8 * 1024 * 1024;
 
-int
-ReadHeader(std::string *headerResult, const std::string &bucket_name, const std::string &filename,
-           int64_t max_length = KHIOPS_MAX_HEADERLENGTH) {
+int ReadHeader(std::string *headerResult, const std::string &bucket_name,
+               const std::string &filename,
+               int64_t max_length = KHIOPS_MAX_HEADERLENGTH) {
   getLogger()->debug("ReadHeader {} max_length {}", filename, max_length);
   gcs::ObjectReadStream stream =
       client.ReadObject(bucket_name, filename, gcs::ReadRange(0, max_length));
@@ -672,7 +676,8 @@ ReadHeader(std::string *headerResult, const std::string &bucket_name, const std:
     line.push_back('\n');
   }
   if (line.empty()) {
-     getLogger()->error( "Got an empty header");return -1;
+    getLogger()->error("Got an empty header");
+    return -1;
   }
   *headerResult = line;
   return 0;
@@ -744,7 +749,7 @@ SelectObjectsSubset(std::vector<std::string> const &all_objects) {
 }
 
 int GetFileSize(long long *sizeresult, const std::string &bucket_name,
-                                    const std::string &object_name) {
+                const std::string &object_name) {
   google::cloud::storage::v2_37::ListObjectsReader objects;
   if (ListObjects(&objects, bucket_name, object_name)) {
     return -1;
@@ -799,8 +804,8 @@ int GetFileSize(long long *sizeresult, const std::string &bucket_name,
         }
       } else {
         // Only check filesize
-        getLogger()->debug("Skip header detect {} {} expect min {}", filenames[i],
-                      filesizes[i], header_size);
+        getLogger()->debug("Skip header detect {} {} expect min {}",
+                           filenames[i], filesizes[i], header_size);
         same_header = (header_size <= filesizes[i]);
         if (same_header) {
           header_to_subtract++;
@@ -826,22 +831,22 @@ long long int driver_getFileSize(const char *filename) {
   getLogger()->debug("getFileSize {}", filename);
 
   ParseUriResult parsedUri;
-    if (ParseGcsUri(&parsedUri, filename)) {
-      getLogger()->error (ERR_URL_PARSING);
-      return kFailure;
-    }
+  if (ParseGcsUri(&parsedUri, filename)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kFailure;
+  }
 
-    long long size;
-    if (GetFileSize(&size, parsedUri.bucket, parsedUri.object)) {
-      getLogger()->error("Error getting file size");
-      return kFailure;
-    }
+  long long size;
+  if (GetFileSize(&size, parsedUri.bucket, parsedUri.object)) {
+    getLogger()->error("Error getting file size");
+    return kFailure;
+  }
 
   return size;
 }
 
 int MakeReaderPtr(ReaderPtr *result, std::string bucketname,
-                                      std::string objectname) {
+                  std::string objectname) {
   std::vector<std::string> filenames;
   std::vector<long long> cumulative_sizes;
 
@@ -853,7 +858,7 @@ int MakeReaderPtr(ReaderPtr *result, std::string bucketname,
   const auto list_end = objects.end();
 
   std::vector<long long> filesizes;
-  auto list_it =objects.begin();
+  auto list_it = objects.begin();
   for (; list_it != list_end; list_it++) {
     if (!(*list_it)) {
       return -1;
@@ -905,8 +910,8 @@ int MakeReaderPtr(ReaderPtr *result, std::string bucketname,
           same_header = (header == curr_header);
         } else {
           // Only check filesize
-          getLogger()->debug("Skip header detect {} {} expect min {}", filenames[i],
-                        filesizes[i], header_size);
+          getLogger()->debug("Skip header detect {} {} expect min {}",
+                             filenames[i], filesizes[i], header_size);
           same_header = (header_size <= filesizes[i]);
         }
       }
@@ -922,15 +927,15 @@ int MakeReaderPtr(ReaderPtr *result, std::string bucketname,
   }
 
   tOffset total_size = cumulative_sizes.back();
-  *result =  ReaderPtr(new MultiPartFile{
+  *result = ReaderPtr(new MultiPartFile{
       std::move(bucketname), std::move(objectname), 0, common_header_size,
       std::move(filenames), std::move(cumulative_sizes), total_size,
       std::move(generations)});
-      return 0;
+  return 0;
 }
 
 int MakeWriterPtr(WriterPtr *result, std::string bucketname,
-                                      std::string objectname) {
+                  std::string objectname) {
   auto writer = client.WriteObject(bucketname, objectname);
   if (!writer) {
     getLogger()->error("Failed to get object writer.");
@@ -944,33 +949,30 @@ int MakeWriterPtr(WriterPtr *result, std::string bucketname,
   return 0;
 }
 
-int
-RegisterReaderStream(Handle **result,
-               std::string &&bucket, std::string &&object) {
+int RegisterReaderStream(Handle **result, std::string &&bucket,
+                         std::string &&object) {
   ReaderPtr readerPtr;
-  if (MakeReaderPtr(&readerPtr,std::move(bucket), std::move(object))) {
+  if (MakeReaderPtr(&readerPtr, std::move(bucket), std::move(object))) {
     return -1;
   }
 
   *result = InsertReaderHandle(std::move(readerPtr));
   return 0;
 }
-int
-RegisterWriterStream(Handle **result,
-               std::string &&bucket, std::string &&object) {
+int RegisterWriterStream(Handle **result, std::string &&bucket,
+                         std::string &&object) {
   WriterPtr writerPtr;
-  if (MakeWriterPtr(&writerPtr,std::move(bucket), std::move(object))) {
+  if (MakeWriterPtr(&writerPtr, std::move(bucket), std::move(object))) {
     return -1;
   }
 
   *result = InsertWriterHandle(std::move(writerPtr));
   return 0;
 }
-int
-RegisterAppenderStream(Handle **result,
-               std::string &&bucket, std::string &&object) {
+int RegisterAppenderStream(Handle **result, std::string &&bucket,
+                           std::string &&object) {
   WriterPtr writerPtr;
-  if (MakeWriterPtr(&writerPtr,std::move(bucket), std::move(object))) {
+  if (MakeWriterPtr(&writerPtr, std::move(bucket), std::move(object))) {
     return -1;
   }
 
@@ -979,39 +981,39 @@ RegisterAppenderStream(Handle **result,
 }
 
 int RegisterReader(Handle **result, std::string &&bucket,
-                                      std::string &&object) {
-  return RegisterReaderStream(result,
-       std::move(bucket), std::move(object));
+                   std::string &&object) {
+  return RegisterReaderStream(result, std::move(bucket), std::move(object));
 }
 
 int RegisterWriter(Handle **result, std::string &&bucket,
-                                      std::string &&object) {
-  return RegisterWriterStream(
-      result, std::move(bucket), std::move(object));
+                   std::string &&object) {
+  return RegisterWriterStream(result, std::move(bucket), std::move(object));
 }
 
-int RegisterWriterForAppend(Handle **result,std::string &&bucket,
-                                               std::string &&tmp,
-                                               std::string append_target) {
-  if (RegisterAppenderStream(
-      result, std::move(bucket), std::move(tmp))) {return -1;
-      }
-      (*result)->GetWriter().append_target_ = std::move(append_target);
+int RegisterWriterForAppend(Handle **result, std::string &&bucket,
+                            std::string &&tmp, std::string append_target) {
+  if (RegisterAppenderStream(result, std::move(bucket), std::move(tmp))) {
+    return -1;
+  }
+  (*result)->GetWriter().append_target_ = std::move(append_target);
   return 0;
 }
 
 void *driver_fopen(const char *filename, char mode) {
   assert(driver_isConnected());
 
-  if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (nullptr); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (nullptr);
+  };
 
   getLogger()->debug("fopen {} {}", filename, mode);
 
   ParseUriResult names;
-    if (GetBucketAndObjectNames(&names, filename)) {
-      getLogger()->error(ERR_URL_PARSING);
-      return nullptr;
-    }
+  if (GetBucketAndObjectNames(&names, filename)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return nullptr;
+  }
 
   Handle *handle;
   int registration_code;
@@ -1019,13 +1021,14 @@ void *driver_fopen(const char *filename, char mode) {
 
   switch (mode) {
   case 'r': {
-        registration_code = RegisterReader(&handle, std::move(names.bucket), std::move(names.object));
+    registration_code = RegisterReader(&handle, std::move(names.bucket),
+                                       std::move(names.object));
     err_msg = "Error while opening reader stream";
     break;
   }
   case 'w': {
-    registration_code =
-        RegisterWriter(&handle, std::move(names.bucket), std::move(names.object));
+    registration_code = RegisterWriter(&handle, std::move(names.bucket),
+                                       std::move(names.object));
     err_msg = "Error while opening writer stream";
     break;
   }
@@ -1039,13 +1042,13 @@ void *driver_fopen(const char *filename, char mode) {
     //
     // The actual composition will happen on closing of the append stream
 
-      google::cloud::storage::v2_37::ListObjectsReader objects;
-      int c;
-    if ((c=ListObjects(&objects, names.bucket, names.object))) {
+    google::cloud::storage::v2_37::ListObjectsReader objects;
+    int c;
+    if ((c = ListObjects(&objects, names.bucket, names.object))) {
       if (c == -2) {
         // file doesn't exist, fallback to write mode
-        registration_code=
-            RegisterWriter(&handle, std::move(names.bucket), std::move(names.object));
+        registration_code = RegisterWriter(&handle, std::move(names.bucket),
+                                           std::move(names.object));
       } else {
         // genuine error
         registration_code = -1;
@@ -1071,8 +1074,8 @@ void *driver_fopen(const char *filename, char mode) {
     }
 
     // get a writer handle
-    registration_code = RegisterWriterForAppend(&handle,
-        std::move(names.bucket),
+    registration_code = RegisterWriterForAppend(
+        &handle, std::move(names.bucket),
         std::string("tmp_object_to_append_") +
             boost::uuids::to_string(boost::uuids::random_generator()()),
         to_last_item->value().name());
@@ -1084,10 +1087,10 @@ void *driver_fopen(const char *filename, char mode) {
     return nullptr;
   }
 
-    if (registration_code) {
-      getLogger()->error(err_msg);
-      return nullptr;
-    }
+  if (registration_code) {
+    getLogger()->error(err_msg);
+    return nullptr;
+  }
 
   return handle;
 }
@@ -1128,11 +1131,17 @@ int driver_fclose(void *stream) {
 int driver_fseek(void *stream, long long int offset, int whence) {
   constexpr long long max_val = std::numeric_limits<long long>::max();
 
-  if (!(stream)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
+  if (!(stream)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
 
   // confirm stream's presence
   auto to_stream = FindHandle(stream);
-  if ((to_stream) == active_handles.end()) { getLogger()->error("Cannot identify stream"); return (-1); };
+  if ((to_stream) == active_handles.end()) {
+    getLogger()->error("Cannot identify stream");
+    return (-1);
+  };
 
   auto &stream_h = *to_stream;
 
@@ -1180,7 +1189,8 @@ int driver_fseek(void *stream, long long int offset, int whence) {
   }
 
   if (computed_offset < 0) {
-    getLogger()->error("Invalid seek offset " + std::to_string(computed_offset));
+    getLogger()->error("Invalid seek offset " +
+                       std::to_string(computed_offset));
     return kFailure;
   }
   h.offset_ = computed_offset;
@@ -1197,8 +1207,14 @@ const char *driver_getlasterror() {
 }
 
 long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
-  if (!(stream)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
-  if (!(ptr)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
+  if (!(stream)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
+  if (!(ptr)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
 
   if (0 == size) {
     getLogger()->error("Error passing size of 0");
@@ -1247,18 +1263,24 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   getLogger()->debug("offset = {} to_read = {}", offset, to_read);
 
   long long nread;
-    if (ReadBytesInFile(&nread, h, reinterpret_cast<char *>(ptr), to_read)) {
-      getLogger()->error("Error while reading from file");
-      return -1;
-    }
+  if (ReadBytesInFile(&nread, h, reinterpret_cast<char *>(ptr), to_read)) {
+    getLogger()->error("Error while reading from file");
+    return -1;
+  }
 
   return nread;
 }
 
 long long int driver_fwrite(const void *ptr, size_t size, size_t count,
                             void *stream) {
-  if (!(stream)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
-  if (!(ptr)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
+  if (!(stream)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
+  if (!(ptr)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
 
   if (0 == size) {
     getLogger()->error("Error passing size 0 to fwrite");
@@ -1268,7 +1290,10 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
   getLogger()->debug("fwrite {} {} {} {}", ptr, size, count, stream);
 
   auto stream_it = FindHandle(stream);
-  if ((stream_it) == active_handles.end()) { getLogger()->error("Cannot identify stream"); return (-1); };
+  if ((stream_it) == active_handles.end()) {
+    getLogger()->error("Cannot identify stream");
+    return (-1);
+  };
   Handle &stream_h = **stream_it;
 
   const HandleType type = stream_h.type;
@@ -1299,16 +1324,22 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
     return kFailure;
   }
   getLogger()->debug("Write status after write: good {}, bad {}, fail {}",
-                writer.good(), writer.bad(), writer.fail());
+                     writer.good(), writer.bad(), writer.fail());
 
   return to_write;
 }
 
 int driver_fflush(void *stream) {
-  if (!(stream)) { getLogger()->error(ERR_NULL_ARG, __func__); return (-1); };
+  if (!(stream)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (-1);
+  };
 
   auto stream_it = FindHandle(stream);
-  if ((stream_it) == active_handles.end()) { getLogger()->error("Cannot identify stream"); return (-1); };
+  if ((stream_it) == active_handles.end()) {
+    getLogger()->error("Cannot identify stream");
+    return (-1);
+  };
   Handle &stream_h = **stream_it;
 
   if (HandleType::kWrite != stream_h.type &&
@@ -1327,7 +1358,10 @@ int driver_fflush(void *stream) {
 }
 
 int driver_remove(const char *filename) {
-  if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kOtherFailure); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kOtherFailure);
+  };
 
   getLogger()->debug("remove {}", filename);
   assert(driver_isConnected());
@@ -1340,16 +1374,16 @@ int driver_remove(const char *filename) {
       return kOtherFailure;
     }
   }
-ParseUriResult names;
-    if (ParseGcsUri(&names, filename)) {
-      getLogger()->error(ERR_URL_PARSING);
-      return kOtherFailure;
-    }
+  ParseUriResult names;
+  if (ParseGcsUri(&names, filename)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
 
-    google::cloud::storage::v2_37::ListObjectsReader objects;
-    int c;
-  if ((c=ListObjects(&objects, names.bucket, names.object))) {
-    if (c==-2) {
+  google::cloud::storage::v2_37::ListObjectsReader objects;
+  int c;
+  if ((c = ListObjects(&objects, names.bucket, names.object))) {
+    if (c == -2) {
       return kOtherSuccess; // aucun objet correspondant : rien à faire
     }
     getLogger()->error("Error listing objects to delete");
@@ -1357,7 +1391,7 @@ ParseUriResult names;
   }
 
   bool failure_detected = false;
-  for (auto it = objects.begin(); it !=objects.end(); ++it) {
+  for (auto it = objects.begin(); it != objects.end(); ++it) {
     if (!*it) {
       getLogger()->error("Error iterating objects to delete");
       failure_detected = true;
@@ -1367,7 +1401,7 @@ ParseUriResult names;
     const std::string &object_name = (*it)->name();
     const auto status = client.DeleteObject(names.bucket, object_name);
     if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
-      getLogger()->error("Error deleting object '{}'" , object_name);
+      getLogger()->error("Error deleting object '{}'", object_name);
       failure_detected = true;
     }
   }
@@ -1376,7 +1410,10 @@ ParseUriResult names;
 }
 
 int driver_rmdir(const char *filename) {
- if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kOtherFailure); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kOtherFailure);
+  };
 
   getLogger()->debug("rmdir {}", filename);
 
@@ -1386,7 +1423,10 @@ int driver_rmdir(const char *filename) {
 }
 
 int driver_mkdir(const char *filename) {
- if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kOtherFailure); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kOtherFailure);
+  };
 
   getLogger()->debug("mkdir {}", filename);
 
@@ -1395,7 +1435,10 @@ int driver_mkdir(const char *filename) {
 }
 
 long long int driver_diskFreeSpace(const char *filename) {
- if (!(filename)) { getLogger()->error(ERR_NULL_ARG, __func__); return (kOtherFailure); };
+  if (!(filename)) {
+    getLogger()->error(ERR_NULL_ARG, __func__);
+    return (kOtherFailure);
+  };
 
   getLogger()->debug("diskFreeSpace {}", filename);
 
@@ -1413,23 +1456,23 @@ int driver_copyToLocal(const char *sSourceFilePathName,
     return kOtherFailure;
   }
 
-  getLogger()->debug("copyToLocal {} {}", sSourceFilePathName, sDestFilePathName);
+  getLogger()->debug("copyToLocal {} {}", sSourceFilePathName,
+                     sDestFilePathName);
 
   ParseUriResult parsedUri;
-    if (GetBucketAndObjectNames(&parsedUri, sSourceFilePathName)) {
-      getLogger()->error(ERR_URL_PARSING);
-      return kOtherFailure;
-    }
+  if (GetBucketAndObjectNames(&parsedUri, sSourceFilePathName)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
 
   const std::string &bucket_name = parsedUri.bucket;
   const std::string &object_name = parsedUri.object;
 
-  ReaderPtr reader ;
-    if (MakeReaderPtr(&reader, bucket_name, object_name)) {
-      getLogger()->error(
-                   "Error while opening Remote file");
-      return kOtherFailure;
-    }
+  ReaderPtr reader;
+  if (MakeReaderPtr(&reader, bucket_name, object_name)) {
+    getLogger()->error("Error while opening Remote file");
+    return kOtherFailure;
+  }
 
   const size_t nb_files = reader->filenames_.size();
 
@@ -1470,7 +1513,7 @@ int driver_copyToLocal(const char *sSourceFilePathName,
         } else if (from.bad()) {
           err_msg = "Error reading header. Read failed";
         }
-        getLogger()->error( err_msg);
+        getLogger()->error(err_msg);
         return false;
       }
     }
@@ -1543,19 +1586,21 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 int driver_copyFromLocal(const char *sSourceFilePathName,
                          const char *sDestFilePathName) {
   if (!sSourceFilePathName || !sDestFilePathName) {
-    getLogger()->error("Error passing null pointers as arguments to copyFromLocal");
+    getLogger()->error(
+        "Error passing null pointers as arguments to copyFromLocal");
     return kOtherFailure;
   }
 
-  getLogger()->debug("copyFromLocal {} {}", sSourceFilePathName, sDestFilePathName);
+  getLogger()->debug("copyFromLocal {} {}", sSourceFilePathName,
+                     sDestFilePathName);
 
   assert(driver_isConnected());
 
   ParseUriResult names;
-    if (GetBucketAndObjectNames(&names, sDestFilePathName)) {
-      getLogger()->error(ERR_URL_PARSING);
-      return kOtherFailure;
-    }
+  if (GetBucketAndObjectNames(&names, sDestFilePathName)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
 
   // Open the local file
   std::ifstream file_stream(sSourceFilePathName, std::ios::binary);
@@ -1569,8 +1614,7 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   // Create a WriteObject stream
   auto writer = client.WriteObject(names.bucket, names.object);
   if (!writer || !writer.IsOpen()) {
-    getLogger()->error(
-                 "Error initializing upload stream to remote storage");
+    getLogger()->error("Error initializing upload stream to remote storage");
     return kOtherFailure;
   }
 
@@ -1602,11 +1646,10 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
   writer.Close();
 
   auto &maybe_meta = writer.metadata();
-    if (!(maybe_meta)) {
-      getLogger()->error
-                   ("Error during file upload to remote storage");
-      return kOtherFailure;
-    }
+  if (!(maybe_meta)) {
+    getLogger()->error("Error during file upload to remote storage");
+    return kOtherFailure;
+  }
 
   return kOtherSuccess;
 }
@@ -1614,26 +1657,28 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
 int driver_concat(const char *sDestFilePathName,
                   const char **sSourceFilePathNames, size_t nSourceFileCount) {
   if (!sDestFilePathName || !sSourceFilePathNames) {
-    getLogger()->error("Error passing null pointers as arguments to driver_concat");
+    getLogger()->error(
+        "Error passing null pointers as arguments to driver_concat");
     return kOtherFailure;
   }
 
   if (nSourceFileCount < 1) {
-    getLogger()->error("Error passing invalid number of files to driver_concat");
+    getLogger()->error(
+        "Error passing invalid number of files to driver_concat");
     return kOtherFailure;
   }
 
   getLogger()->debug("driver_concat {} with {} sources:", sDestFilePathName,
-                nSourceFileCount);
+                     nSourceFileCount);
 
   assert(driver_isConnected());
 
   // Parse destination to get bucket name
   ParseUriResult names;
-    if (GetBucketAndObjectNames(&names, sDestFilePathName)) {
-      getLogger()->error(ERR_URL_PARSING);
-      return kOtherFailure;
-    }
+  if (GetBucketAndObjectNames(&names, sDestFilePathName)) {
+    getLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
   const std::string &bucket = names.bucket;
 
   // Validate all source paths belong to the destination bucket
@@ -1683,8 +1728,7 @@ int driver_concat(const char *sDestFilePathName,
     auto maybe_compose =
         client.ComposeObject(bucket, sourceObjects, dest_object);
     if (!maybe_compose) {
-      getLogger()->error(
-                   "Error during composition to {}" , dest_object);
+      getLogger()->error("Error during composition to {}", dest_object);
       return false;
     }
 
@@ -1693,7 +1737,7 @@ int driver_concat(const char *sDestFilePathName,
       auto delete_status = client.DeleteObject(bucket, source);
       if (!delete_status.ok() &&
           delete_status.code() != gc::StatusCode::kNotFound) {
-        getLogger()->error("Error deleting source file '{}'",source );
+        getLogger()->error("Error deleting source file '{}'", source);
         failure_detected = true;
       }
     }
@@ -1704,7 +1748,7 @@ int driver_concat(const char *sDestFilePathName,
   // Special case: if we have <= 32 files, compose directly to destination
   if (sources.size() <= MAX_COMPOSE_SOURCES) {
     getLogger()->debug("Direct composition: {} files to {}", sources.size(),
-                  names.object);
+                       names.object);
 
     if (!compose_and_delete(sources, names.object)) {
       return kOtherFailure;
@@ -1731,7 +1775,7 @@ int driver_concat(const char *sDestFilePathName,
     current_result = generate_temp_name();
 
     getLogger()->debug("Initial batch: composing {} files into {}",
-                  first_batch.size(), current_result);
+                       first_batch.size(), current_result);
 
     if (!compose_and_delete(first_batch, current_result)) {
       return kOtherFailure;
@@ -1758,7 +1802,7 @@ int driver_concat(const char *sDestFilePathName,
     std::string new_result = generate_temp_name();
 
     getLogger()->debug("Iterative batch: composing {} files ({} new) into {}",
-                  batch.size(), batch_size, new_result);
+                       batch.size(), batch_size, new_result);
 
     if (!compose_and_delete(batch, new_result)) {
       // Clean up current_result on failure
@@ -1771,7 +1815,8 @@ int driver_concat(const char *sDestFilePathName,
   }
 
   // Rename final temp file to destination using CopyObject + Delete
-  getLogger()->debug("Final step: renaming {} to {}", current_result, names.object);
+  getLogger()->debug("Final step: renaming {} to {}", current_result,
+                     names.object);
 
   auto maybe_copy =
       client.CopyObject(bucket, current_result, bucket, names.object);
@@ -1808,7 +1853,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
   }
 
   getLogger()->debug("driver_composeMultifile {} with {} sources:",
-                sDestFilePathName, nSourceFileCount);
+                     sDestFilePathName, nSourceFileCount);
 
   assert(driver_isConnected());
 
@@ -1827,8 +1872,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
   // Extract bucket and base object path from prefix using ParseGcsUri
   ParseUriResult parsedUri;
   if (ParseGcsUri(&parsedUri, prefix)) {
-    getLogger()->error(
-                 "Error parsing destination pattern");
+    getLogger()->error("Error parsing destination pattern");
     return kOtherFailure;
   }
 
@@ -1860,7 +1904,7 @@ int driver_composeMultifile(const char *sDestFilePathName,
     std::string new_object_name = new_name_oss.str();
 
     getLogger()->debug("Renaming {} to {}", sSourceFilePathNames[i],
-                  new_object_name);
+                       new_object_name);
 
     // Use CopyObject instead of ComposeObject for better performance
     auto maybe_copy =
@@ -1871,7 +1915,8 @@ int driver_composeMultifile(const char *sDestFilePathName,
         );
 
     if (!maybe_copy) {
-      getLogger()->error("Error renaming '{}' to '{}'", sSourceFilePathNames[i] ,new_object_name);
+      getLogger()->error("Error renaming '{}' to '{}'", sSourceFilePathNames[i],
+                         new_object_name);
       failure_detected = true;
       continue;
     }
@@ -1881,7 +1926,8 @@ int driver_composeMultifile(const char *sDestFilePathName,
         client.DeleteObject(dest_bucket, sSourceFilePathNames[i]);
     if (!delete_status.ok() &&
         delete_status.code() != gc::StatusCode::kNotFound) {
-      getLogger()->error("Error deleting original file '{}'", sSourceFilePathNames[i]);
+      getLogger()->error("Error deleting original file '{}'",
+                         sSourceFilePathNames[i]);
       failure_detected = true;
     }
   }
