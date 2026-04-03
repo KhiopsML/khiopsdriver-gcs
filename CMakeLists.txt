@@ -69,7 +69,11 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 #
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<1:${CMAKE_BINARY_DIR}/lib/>)
+if(WIN32)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<CONFIG:${CMAKE_BINARY_DIR}/bin/>)
+else()
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $<CONFIG:${CMAKE_BINARY_DIR}/lib/>)
+endif()
 message(STATUS "Executables will be stored in ${CMAKE_BINARY_DIR}/lib/")
 message(STATUS "Libraries will be stored in ${CMAKE_BINARY_DIR}/lib/")
 
@@ -139,10 +143,9 @@ target_compile_options(
   PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/wd4365;/wd5045>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
 
-target_compile_definitions(khiopsdriver_file_gcs PRIVATE
-  LOGGERNAME="gcsdriver"
-  LOGLEVEL_ENVVARNAME="GCS_DRIVER_LOGLEVEL"
-  LOGFILE_ENVVARNAME="GCS_DRIVER_LOGFILE")
+target_compile_definitions(
+  khiopsdriver_file_gcs PRIVATE LOGGERNAME="gcsdriver" LOGLEVEL_ENVVARNAME="GCS_DRIVER_LOGLEVEL"
+                                LOGFILE_ENVVARNAME="GCS_DRIVER_LOGFILE")
 
 option(BUILD_TESTS "Build test programs" OFF)
 
