@@ -1265,9 +1265,8 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
   if (ReadBytesInFile(&nread, h, reinterpret_cast<char *>(ptr), to_read)) {
     getLogger()->error("Error while reading from file");
     return -1;
-  }
-
-  return nread;
+  } else
+    return nread /= size; // convert to count of items read
 }
 
 long long int driver_fwrite(const void *ptr, size_t size, size_t count,
@@ -1325,7 +1324,7 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
   getLogger()->debug("Write status after write: good {}, bad {}, fail {}",
                      writer.good(), writer.bad(), writer.fail());
 
-  return to_write;
+  return count;
 }
 
 int driver_fflush(void *stream) {
