@@ -51,7 +51,10 @@ constexpr const char *driver_scheme = "gs";
 // ref https://github.com/googleapis/google-cloud-cpp/issues/2657
 // Default value below can be overriden by setting GCS_PREFERRED_BUFFER_SIZE
 constexpr long long preferred_buffer_size = 4 * 1024 * 1024;
-constexpr int failure_timeout = 30; // 30s
+// Increased timeouts for cloud operations to handle network latency and rate
+// limiting
+constexpr int failure_timeout = 120; // 120s
+constexpr int retry_timeout = 300;   // 300s (5 minutes)
 
 bool bIsConnected = false;
 
@@ -392,17 +395,30 @@ int CloseWriterStream(Handle &stream) {
   std::ostringstream err_msg_os;
 
   // close the stream to flush all remaining bytes in the put area
-  auto &writer = stream.GetWriter().writer_;
+  auto &writer_h = stream.GetWriter();
+  auto &writer = writer_h.writer_;
+
+  getLogger()->debug("Closing writer stream for object: {}",
+                     writer_h.filename_);
+
   writer.Close();
   maybe_meta = writer.metadata();
   if (!maybe_meta) {
-    err_msg_os << "Error during upload";
+    err_msg_os << "Error during upload to gs://" << writer_h.bucketname_ << "/"
+               << writer_h.filename_;
+    // Log additional details about the error
+    getLogger()->error("Upload failed with status code: {}, message: {}",
+                       static_cast<int>(maybe_meta.status().code()),
+                       maybe_meta.status().message());
   } else if (HandleType::kAppend == stream.type) {
     // the tmp file is valid and ready for composition with the source
-    const auto &writer_h = stream.GetWriter();
     const std::string &bucket = writer_h.bucketname_;
     const std::string &append_source = writer_h.filename_;
     const std::string &dest = writer_h.append_target_;
+
+    getLogger()->debug("Composing object: {} with tmp: {}", dest,
+                       append_source);
+
     std::vector<gcs::ComposeSourceObject> source_objects = {
         {dest, {}, {}}, {append_source, {}, {}}};
     maybe_meta = client.ComposeObject(bucket, std::move(source_objects), dest);
@@ -410,13 +426,19 @@ int CloseWriterStream(Handle &stream) {
     // whatever happened, delete the tmp file
     gc::Status delete_status = client.DeleteObject(bucket, append_source);
 
-    // TODO: what to do with an error on Delete?
-    (void)delete_status;
+    // Log delete errors but don't fail the operation
+    if (!delete_status.ok()) {
+      getLogger()->warn("Failed to delete temporary object: {}, status: {}",
+                        append_source, delete_status.message());
+    }
 
     // if composition failed, nothing is written, the source did not change.
     // signal it
     if (!maybe_meta) {
       err_msg_os << "Error while uploading the data to append";
+      getLogger()->error("Compose failed with status code: {}, message: {}",
+                         static_cast<int>(maybe_meta.status().code()),
+                         maybe_meta.status().message());
     }
   }
 
@@ -513,19 +535,18 @@ int driver_connect() {
 #if defined(__linux__)
   // CA bundle path
   std::string certificate_path;
-  if (FindCertificate(&certificate_path) != 0) return kOtherFailure;
+  if (FindCertificate(&certificate_path) != 0)
+    return kOtherFailure;
 #endif
 
-  // Base options
-  gc::Options options;
-  options
-      .set<gcs::RetryPolicyOption>(
-          gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
-      .set<gcs::TransferStallTimeoutOption>(
-          std::chrono::seconds(failure_timeout));
-#if defined(__linux__)
-  options.set<gc::CARootsFilePathOption>(certificate_path);
-#endif
+  // Set options with timeout (e.g., 30 seconds)
+  auto options =
+      gc::Options{}
+          .set<gcs::RetryPolicyOption>(
+              gcs::LimitedTimeRetryPolicy(std::chrono::seconds(retry_timeout))
+                  .clone())
+          .set<gcs::TransferStallTimeoutOption>(
+              std::chrono::seconds(failure_timeout));
 
   // Optional project
   std::string project = env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
@@ -542,7 +563,8 @@ int driver_connect() {
     std::stringstream buffer;
     buffer << t.rdbuf();
     if (t.fail()) {
-      getLogger()->error("Error reading GCP_TOKEN file: {}", gcp_token_filename);
+      getLogger()->error("Error reading GCP_TOKEN file: {}",
+                         gcp_token_filename);
       return kOtherFailure;
     }
 
@@ -561,7 +583,8 @@ int driver_connect() {
     if (!gcp_oauth_token_filename.empty()) {
       try {
 #if defined(__linux__)
-        OAuth2TokenManager token_manager(gcp_oauth_token_filename, certificate_path);
+        OAuth2TokenManager token_manager(gcp_oauth_token_filename,
+                                         certificate_path);
 #else
         OAuth2TokenManager token_manager(gcp_oauth_token_filename);
 #endif
