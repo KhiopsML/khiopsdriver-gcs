@@ -29,6 +29,33 @@ project(
   LANGUAGES CXX
   VERSION ${DRIVER_VERSION})
 
+# CMake policy for MSVC runtime selection
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW)
+endif()
+
+# Automatic choice of MSVC runtime to match VCPKG triplet.
+if(MSVC)
+  if(DEFINED VCPKG_TARGET_TRIPLET)
+    string(TOLOWER "${VCPKG_TARGET_TRIPLET}" _vcpkg_triplet_lc)
+    # vcpkg convention:
+    # - triplets *-static      => static CRT (/MT, /MTd)
+    # - triplets sans -static  => dynamic CRT (/MD, /MDd)
+    if(_vcpkg_triplet_lc MATCHES "-static$")
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+      message(STATUS "MSVC runtime: /MT (derived from VCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET})")
+    else()
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+      message(STATUS "MSVC runtime: /MD (derived from VCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET})")
+    endif()
+  else()
+    message(WARNING
+      "VCPKG_TARGET_TRIPLET undefined; runtime MSVC not forced. "
+      "To avoid LNK2038 conflicts, pass -DVCPKG_TARGET_TRIPLET=..."
+    )
+  endif()
+endif()
+
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules/)
 
 # Exclude googletest from the installation and packages
@@ -126,8 +153,7 @@ target_link_libraries(khiopsdriver_file_gcs PRIVATE google-cloud-cpp::storage sp
 
 set_target_properties(
   khiopsdriver_file_gcs
-  PROPERTIES PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/gcsplugin.h"
-             SOVERSION ${PROJECT_VERSION_MAJOR}
+  PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR}
              VERSION ${PROJECT_VERSION})
 
 # For consistent naming across platforms
@@ -170,12 +196,20 @@ if(BUILD_TESTS)
   add_subdirectory("shared/integrationtests")
 endif(BUILD_TESTS)
 
-install(
-  TARGETS khiopsdriver_file_gcs
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib # lib on windows
-  RUNTIME DESTINATION bin # dll on windows
-  PUBLIC_HEADER DESTINATION include)
+if(DEFINED SKBUILD)
+  # These paths are needed so that Khiops finds the driver.
+  install(
+    TARGETS khiopsdriver_file_gcs
+    LIBRARY DESTINATION ${SKBUILD_DATA_DIR}/lib
+    ARCHIVE DESTINATION ${SKBUILD_DATA_DIR}/lib # lib on windows
+    RUNTIME DESTINATION ${SKBUILD_SCRIPTS_DIR}) # dll on windows
+else()
+  install(
+    TARGETS khiopsdriver_file_gcs
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib # lib on windows
+    RUNTIME DESTINATION bin) # dll on windows
+endif()
 
 set(CPACK_PACKAGE_VENDOR Orange)
 set(CPACK_PACKAGE_HOMEPAGE_URL https://khiops.org)

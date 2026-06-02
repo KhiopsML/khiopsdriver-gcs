@@ -34,6 +34,11 @@ cmake.define.CMAKE_BINARY_DIR = "build/ninja-rel"
 build-dir = "build/ninja-rel"
 ninja.make-fallback = false
 
+[[tool.scikit-build.overrides]]
+if.platform-system = "^win32"
+if.platform-machine = "AMD64"
+cmake.define.VCPKG_TARGET_TRIPLET="x64-windows-static"
+
 [tool.scikit-build.metadata]
 version.provider = "scikit_build_core.metadata.regex"
 version.input = "src/gcsplugin.h"
