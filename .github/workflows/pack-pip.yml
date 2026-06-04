@@ -83,15 +83,81 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: Install Khiops Core
-        ##### CHANGE PKG REPO TO OFFICIAL PYPI.ORG WHEN KHIOPS WILL BE OFFICIALLY AVAILABLE ON THAT REPO
-        run: python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
-      
-      - name: Install package
-        run: python -m pip install -i https://test.pypi.org/simple/ khiops-driver-gcs
+      - name: Create a virtual environment
+        run: python -m venv venv
 
-      - name: Check that the driver is detected by Khiops Core
-        run: python -m khiops -s | grep 'GCS driver'
+      - name: Create an environment variable pointing at the directory containing the executables (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: echo "ENVBIN=venv/bin" >> "$GITHUB_ENV"
+
+      - name: Create an environment variable pointing at the directory containing the executables (Windows)
+        if: runner.os == 'Windows'
+        run: echo "ENVBIN=venv/Scripts" >> "$GITHUB_ENV"
+
+      - name: Install Khiops Core
+        run: $ENVBIN/pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
+
+      - name: Install driver
+        run: $ENVBIN/pip install -i https://test.pypi.org/simple/ khiops-driver-gcs
+
+      - name: Check that the driver is detected by Khiops Core (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: $ENVBIN/khiops -s | grep 'GCS driver'
+
+      - name: Add Intel MPI runtime to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $venvRoot = Resolve-Path "venv"
+          Write-Host "venv root: $venvRoot"
+
+          $impiDll = Get-ChildItem -Path $venvRoot -Recurse -Filter "impi.dll" -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+
+          if (-not $impiDll) {
+            Write-Error "impi.dll not found in venv"
+            exit 1
+          }
+
+          $impiDir = $impiDll.DirectoryName
+          Write-Host "Found impi.dll in: $impiDir"
+
+          "PATH=$impiDir;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        
+      - name: Check that the driver is detected by Khiops Core (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cmd = "$env:ENVBIN\khiops.cmd"
+          $stdout = Join-Path $env:RUNNER_TEMP "khiops_stdout.txt"
+          $stderr = Join-Path $env:RUNNER_TEMP "khiops_stderr.txt"
+
+          $p = Start-Process -FilePath $cmd `
+            -ArgumentList "-s" `
+            -RedirectStandardOutput $stdout `
+            -RedirectStandardError $stderr `
+            -NoNewWindow `
+            -PassThru
+
+          if (-not $p.WaitForExit(60000)) {
+            Stop-Process -Id $p.Id -Force
+            Write-Error "Timeout: khiops -s did not finish within 60s"
+            exit 1
+          }
+
+          $out = Get-Content $stdout -Raw -ErrorAction SilentlyContinue
+          $err = Get-Content $stderr -Raw -ErrorAction SilentlyContinue
+
+          Write-Host "----- STDOUT -----"
+          $out | Out-Host
+          Write-Host "----- STDERR -----"
+          $err | Out-Host
+          Write-Host "ExitCode=$($p.ExitCode)"
+
+          if ($out -notmatch 'GCS driver') {
+            Write-Error "Pattern 'GCS driver' not found in stdout"
+            exit 1
+          }
 
   ##### ENABLE THE FOLLOWING WHEN READY TO PUBLISH TO THE OFFICIAL PYPI.ORG REPOSITORY
   # publish-pypi:
