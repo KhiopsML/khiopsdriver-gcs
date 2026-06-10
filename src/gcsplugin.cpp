@@ -511,7 +511,8 @@ int driver_connect() {
   globalBucketName = env::GetEnvVarOrDefault("GCS_BUCKET_NAME", "");
 
   // CA bundle path
-  const std::string certificate_path = "/somewhere/this-is-a-certificate";
+  std::string certificate_path;
+  if (FindCertificate(&certificate_path) != 0) return kOtherFailure;
 
   // Base options
   gc::Options options;
