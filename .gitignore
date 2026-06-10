@@ -39,3 +39,9 @@
 **/Makefile
 .vscode
 .vs
+/venv
+/dist
+/wheelhouse
+__pycache__
+/test/LearningTest/TestKhiops/Standard/Iris/results
+/test/LearningTest/TestKhiops/Standard/Iris/comparisonResults.log
