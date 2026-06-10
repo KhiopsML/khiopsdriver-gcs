@@ -520,8 +520,8 @@ int driver_connect() {
       .set<gcs::RetryPolicyOption>(
           gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
       .set<gcs::TransferStallTimeoutOption>(
-          std::chrono::seconds(failure_timeout))
-      .set<gc::CARootsFilePathOption>(certificate_path);
+          std::chrono::seconds(failure_timeout));
+  if (!certificate_path.empty()) options.set<gc::CARootsFilePathOption>(certificate_path);
 
   // Optional project
   std::string project = env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
