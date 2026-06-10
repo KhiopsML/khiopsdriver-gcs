@@ -502,7 +502,7 @@ const char *driver_getScheme() { return driver_scheme; }
 int driver_isReadOnly() { return kFalse; }
 
 int driver_connect() {
-  getLogger()->debug("Connect driver {} version", driver_name, version);
+  getLogger()->debug("Connect driver {} version {}", driver_name, version);
 
   // Initialize CURL globally
   curl_global_init(CURL_GLOBAL_ALL);
@@ -510,49 +510,81 @@ int driver_connect() {
   // Initialize variables from environment
   globalBucketName = env::GetEnvVarOrDefault("GCS_BUCKET_NAME", "");
 
-  // Set options with timeout (e.g., 30 seconds)
-  auto options =
-      gc::Options{}
-          .set<gcs::RetryPolicyOption>(
-              gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
-          .set<gcs::TransferStallTimeoutOption>(
-              std::chrono::seconds(failure_timeout));
+  // CA bundle path
+  const std::string certificate_path = "/somewhere/this-is-a-certificate";
 
-  // Add project ID if defined
+  // Base options
+  gc::Options options;
+  options
+      .set<gcs::RetryPolicyOption>(
+          gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
+      .set<gcs::TransferStallTimeoutOption>(
+          std::chrono::seconds(failure_timeout))
+      .set<gc::CARootsFilePathOption>(certificate_path);
+
+  // Optional project
   std::string project = env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
   if (!project.empty()) {
-    options.set<gc::UserProjectOption>(std::move(project));
+    options.set<gc::UserProjectOption>(project);
   }
 
-  // Allow authentication via service account JSON key
+  std::shared_ptr<gc::Credentials> creds;
+
+  // 1) Service account JSON key has priority
   std::string gcp_token_filename = env::GetEnvVarOrDefault("GCP_TOKEN", "");
   if (!gcp_token_filename.empty()) {
-    // Initialize from token file
     std::ifstream t(gcp_token_filename);
     std::stringstream buffer;
     buffer << t.rdbuf();
     if (t.fail()) {
-      getLogger()->error("Error initializing token from file");
+      getLogger()->error("Error reading GCP_TOKEN file: {}", gcp_token_filename);
       return kOtherFailure;
     }
-    std::shared_ptr<gc::Credentials> creds =
-        gc::MakeServiceAccountCredentials(buffer.str());
-    options.set<gc::UnifiedCredentialsOption>(std::move(creds));
+
+    // Pass options so credentials use the same CA config
+    creds = gc::MakeServiceAccountCredentials(buffer.str(), options);
+    if (!creds) {
+      getLogger()->error("MakeServiceAccountCredentials failed");
+      return kOtherFailure;
+    }
   }
 
-  // Allow authentication via OAuth token
-  std::string gcp_oauth_token_filename =
-      env::GetEnvVarOrDefault("GCP_OAUTH_TOKEN", "");
-  if (!gcp_oauth_token_filename.empty()) {
-    // Create our token manager
-    OAuth2TokenManager token_manager(gcp_oauth_token_filename);
-    // Create credentials using the token manager
-    std::shared_ptr<gc::Credentials> creds = token_manager.MakeCredentials();
-    options.set<gc::UnifiedCredentialsOption>(std::move(creds));
+  // 2) Optional custom OAuth token manager fallback
+  if (!creds) {
+    std::string gcp_oauth_token_filename =
+        env::GetEnvVarOrDefault("GCP_OAUTH_TOKEN", "");
+    if (!gcp_oauth_token_filename.empty()) {
+      try {
+        OAuth2TokenManager token_manager(gcp_oauth_token_filename,
+                                         certificate_path);
+        creds = token_manager.MakeCredentials();
+      } catch (std::exception const &ex) {
+        getLogger()->error("OAuth2TokenManager init/credentials failed: {}",
+                           ex.what());
+        return kOtherFailure;
+      }
+    }
   }
 
-  // Create client with configured options
-  client = gcs::Client{std::move(options)};
+  // 3) Default ADC fallback
+  if (!creds) {
+    creds = gc::MakeGoogleDefaultCredentials(options);
+    if (!creds) {
+      getLogger()->error("MakeGoogleDefaultCredentials failed");
+      return kOtherFailure;
+    }
+  }
+
+  // Inject credentials into client options
+  options.set<gc::UnifiedCredentialsOption>(std::move(creds));
+
+  // Create client
+  try {
+    client = gcs::Client(std::move(options));
+  } catch (std::exception const &ex) {
+    getLogger()->error("Failed to create GCS client: {}", ex.what());
+    return kOtherFailure;
+  }
 
   bIsConnected = true;
   return kOtherSuccess;

@@ -16,8 +16,8 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb,
   return newLength;
 }
 
-OAuth2TokenManager::OAuth2TokenManager(const std::string &token_file_path)
-    : token_file_path_(token_file_path) {
+OAuth2TokenManager::OAuth2TokenManager(const std::string &token_file_path, const std::string &certificate_path)
+    : token_file_path_(token_file_path), certificate_path_(certificate_path) {
   // Load the token data
   LoadTokenData();
 }
@@ -82,18 +82,11 @@ bool OAuth2TokenManager::IsTokenExpired() {
 }
 
 void OAuth2TokenManager::RefreshAccessToken() {
-  // Skip refresh if no refresh token is available
-  if (refresh_token_.empty()) {
-    // Optionally, log or handle this case
-    return;
-  }
+  if (refresh_token_.empty()) return;
 
   CURL *curl = curl_easy_init();
-  if (!curl) {
-    throw std::runtime_error("Failed to initialize CURL");
-  }
+  if (!curl) throw std::runtime_error("Failed to initialize CURL");
 
-  // Prepare the token refresh request
   std::string post_fields =
       "client_id=" + client_id_ + "&client_secret=" + client_secret_ +
       "&refresh_token=" + refresh_token_ + "&grant_type=refresh_token";
@@ -105,24 +98,25 @@ void OAuth2TokenManager::RefreshAccessToken() {
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-  CURLcode res = curl_easy_perform(curl);
-  curl_easy_cleanup(curl);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
-  if (res != CURLE_OK) {
-    throw std::runtime_error("Failed to refresh access token");
+  if (!certificate_path_.empty()) {
+    curl_easy_setopt(curl, CURLOPT_CAINFO, certificate_path_.c_str());
   }
 
-  // Parse the response
-  json response_data = json::parse(response);
+  CURLcode res = curl_easy_perform(curl);
+  if (res != CURLE_OK) {
+    std::string err = curl_easy_strerror(res);
+    curl_easy_cleanup(curl);
+    throw std::runtime_error("Failed to refresh access token: " + err);
+  }
+  curl_easy_cleanup(curl);
 
+  json response_data = json::parse(response);
   access_token_ = response_data.value("access_token", "");
   int expires_in = response_data.value("expires_in", 0);
-
-  // Update expiry time
-  token_expiry_ =
-      std::chrono::system_clock::now() + std::chrono::seconds(expires_in);
-
-  // Update the token file with the new token and expiry
+  token_expiry_ = std::chrono::system_clock::now() + std::chrono::seconds(expires_in);
   UpdateTokenFile(expires_in);
 }
 

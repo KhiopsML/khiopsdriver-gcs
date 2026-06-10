@@ -39,6 +39,7 @@ void WriteJsonFile(const std::string &path, const nlohmann::json &content) {
 class OAuth2TokenManagerTest : public ::testing::Test {
 protected:
   std::string token_file_path_;
+  std::string certificate_path_ = "/somewhere/this-is-a-certificate";
 
   void SetUp() override { token_file_path_ = MakeTempTokenFilePath(); }
 
@@ -51,7 +52,7 @@ TEST_F(OAuth2TokenManagerTest, ConstructorMissingFileThrows) {
   std::remove(token_file_path_.c_str());
 
   try {
-    OAuth2TokenManager manager(token_file_path_);
+    OAuth2TokenManager manager(token_file_path_, certificate_path_);
     (void)manager;
     FAIL() << "Expected runtime_error for missing file";
   } catch (const std::runtime_error &e) {
@@ -72,7 +73,7 @@ TEST_F(OAuth2TokenManagerTest, ConstructorInvalidExpiryThrows) {
   WriteJsonFile(token_file_path_, token_data);
 
   try {
-    OAuth2TokenManager manager(token_file_path_);
+    OAuth2TokenManager manager(token_file_path_, certificate_path_);
     (void)manager;
     FAIL() << "Expected runtime_error for invalid expiry";
   } catch (const std::runtime_error &e) {
@@ -92,7 +93,7 @@ TEST_F(OAuth2TokenManagerTest, GetAccessTokenReturnsLoadedTokenWhenNotExpired) {
   };
   WriteJsonFile(token_file_path_, token_data);
 
-  OAuth2TokenManager manager(token_file_path_);
+  OAuth2TokenManager manager(token_file_path_, certificate_path_);
 
   EXPECT_EQ(manager.GetAccessToken(), "token_value");
 }
@@ -108,7 +109,7 @@ TEST_F(OAuth2TokenManagerTest,
   };
   WriteJsonFile(token_file_path_, token_data);
 
-  OAuth2TokenManager manager(token_file_path_);
+  OAuth2TokenManager manager(token_file_path_, certificate_path_);
 
   // With no refresh token available, refresh is skipped and existing token is
   // returned unchanged.
@@ -124,7 +125,7 @@ TEST_F(OAuth2TokenManagerTest, MissingExpiryStillAllowsTokenAccess) {
   };
   WriteJsonFile(token_file_path_, token_data);
 
-  OAuth2TokenManager manager(token_file_path_);
+  OAuth2TokenManager manager(token_file_path_, certificate_path_);
 
   EXPECT_EQ(manager.GetAccessToken(), "token_no_expiry");
 }
@@ -140,7 +141,7 @@ TEST_F(OAuth2TokenManagerTest, MakeCredentialsReturnsNonNull) {
   };
   WriteJsonFile(token_file_path_, token_data);
 
-  OAuth2TokenManager manager(token_file_path_);
+  OAuth2TokenManager manager(token_file_path_, certificate_path_);
 
   auto creds = manager.MakeCredentials();
   EXPECT_NE(creds, nullptr);
