@@ -79,6 +79,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # Fetch Iris test files
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            test/LearningTest
+            test/LearningTestTool
+          sparse-checkout-cone-mode: false
+
       - uses: actions/setup-python@v6
         with:
           python-version: 3.9
