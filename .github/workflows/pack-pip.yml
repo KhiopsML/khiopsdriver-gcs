@@ -159,6 +159,40 @@ jobs:
             exit 1
           }
 
+      - uses: google-github-actions/auth@v2
+        with:
+          service_account: 'khiops-gcs-driver-test-sa@ino-olr-dak-ideal-sbx.iam.gserviceaccount.com'
+          workload_identity_provider: 'projects/322269704080/locations/global/workloadIdentityPools/github/providers/my-repo'   
+
+      - name: Test Khiops+driver on Iris dataset
+        env:
+          KHIOPS_PROC_NUMBER: 4
+          # Use more processes than available CPUs: OpenMPI < 5
+          OMPI_MCA_rmaps_base_oversubscribe: true
+          # Use more processes than available CPUs: OpenMPI >= 5
+          PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe
+          KHIOPS_API_MODE: true
+          KHIOPS_MPI_VERBOSE: true
+          AWS_ENDPOINT_URL: ${{ vars.AWS_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_DRIVER_LOGLEVEL: warning
+          S3_DRIVER_LOGFILE: /dev/stderr
+        run: |
+          cd test/LearningTest/TestKhiops/Standard/Iris/
+          $ENVBIN/khiops -b -i test.prm -e results/err.txt
+          cd -
+          touch test/LearningTest/TestKhiops/Standard/Iris/results/time.log
+          echo "Check test results"
+          cd test/LearningTestTool/py/
+          $ENVBIN/python kht_test.py ../../LearningTest/TestKhiops/Standard/Iris check
+          $ENVBIN/python kht_apply.py ../../LearningTest/TestKhiops/Standard/Iris errors | tee /tmp/khiops-log.txt
+          $ENVBIN/python kht_collect_results.py ../../LearningTest/TestKhiops/Standard/Iris $GITHUB_WORKSPACE/results/khiops --collect-type warnings
+          if (grep -q error /tmp/khiops-log.txt); then
+            echo "::error::Errors in Khiops run"
+            false
+          fi
+
   ##### ENABLE THE FOLLOWING WHEN READY TO PUBLISH TO THE OFFICIAL PYPI.ORG REPOSITORY
   # publish-pypi:
   #   name: Publish to PyPI.org
