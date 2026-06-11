@@ -96,11 +96,11 @@ jobs:
 
       - name: Create an environment variable pointing at the directory containing the executables (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: echo "ENVBIN=venv/bin" >> "$GITHUB_ENV"
+        run: echo "ENVBIN=$(pwd)/venv/bin" >> "$GITHUB_ENV"
 
       - name: Create an environment variable pointing at the directory containing the executables (Windows)
         if: runner.os == 'Windows'
-        run: echo "ENVBIN=venv/Scripts" >> "$GITHUB_ENV"
+        run: echo "ENVBIN=$(pwd)/venv/Scripts" >> "$GITHUB_ENV"
 
       - name: Install Khiops Core
         run: $ENVBIN/pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
@@ -181,11 +181,8 @@ jobs:
           PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe
           KHIOPS_API_MODE: true
           KHIOPS_MPI_VERBOSE: true
-          AWS_ENDPOINT_URL: ${{ vars.AWS_ENDPOINT_URL }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          S3_DRIVER_LOGLEVEL: warning
-          S3_DRIVER_LOGFILE: /dev/stderr
+          GCS_DRIVER_LOGLEVEL: warning
+          GCS_DRIVER_LOGFILE: /dev/stderr
         run: |
           cd test/LearningTest/TestKhiops/Standard/Iris/
           $ENVBIN/khiops -b -i test.prm -e results/err.txt
