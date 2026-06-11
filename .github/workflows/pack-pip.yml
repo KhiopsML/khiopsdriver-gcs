@@ -94,23 +94,40 @@ jobs:
       - name: Create a virtual environment
         run: python -m venv venv
 
-      - name: Create an environment variable pointing at the directory containing the executables (Linux and macOS)
+      - name: Add the directory containing the executables to the PATH (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: echo "ENVBIN=$(pwd)/venv/bin" >> "$GITHUB_ENV"
+        run: echo "$(pwd)/venv/bin" >> "$GITHUB_PATH"
 
-      - name: Create an environment variable pointing at the directory containing the executables (Windows)
+      - name: Add the directory containing the executables to the PATH (Windows)
         if: runner.os == 'Windows'
-        run: echo "ENVBIN=$(pwd)/venv/Scripts" >> "$GITHUB_ENV"
+        shell: pwsh
+        run: |
+          "$((Resolve-Path 'venv/Scripts').Path)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install Khiops Core
-        run: $ENVBIN/pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
+        run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
 
       - name: Install driver
-        run: $ENVBIN/pip install -i https://test.pypi.org/simple/ khiops-driver-gcs
+        run: pip install -i https://test.pypi.org/simple/ khiops-driver-gcs
+
+      - name: Print paths to executables (Linux and macOS)
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        run: |
+          which python
+          which pip
+          which khiops
+
+      - name: Print paths to executables (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo (Get-Command python -ErrorAction Stop).Source
+          echo (Get-Command pip -ErrorAction Stop).Source
+          echo (Get-Command khiops -ErrorAction Stop).Source
 
       - name: Check that the driver is detected by Khiops Core (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
-        run: $ENVBIN/khiops -s | grep 'GCS driver'
+        run: khiops -s | grep 'GCS driver'
 
       - name: Add Intel MPI runtime to PATH (Windows)
         if: runner.os == 'Windows'
@@ -130,13 +147,13 @@ jobs:
           $impiDir = $impiDll.DirectoryName
           Write-Host "Found impi.dll in: $impiDir"
 
-          "PATH=$impiDir;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$impiDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         
       - name: Check that the driver is detected by Khiops Core (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $cmd = "$env:ENVBIN\khiops.cmd"
+          $cmd = (Get-Command khiops -ErrorAction Stop).Source
           $stdout = Join-Path $env:RUNNER_TEMP "khiops_stdout.txt"
           $stderr = Join-Path $env:RUNNER_TEMP "khiops_stderr.txt"
 
@@ -185,14 +202,18 @@ jobs:
           GCS_DRIVER_LOGFILE: /dev/stderr
         run: |
           cd test/LearningTest/TestKhiops/Standard/Iris/
-          $ENVBIN/khiops -b -i test.prm -e results/err.txt
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            khiops.cmd -b -i test.prm -e results/err.txt
+          else
+            khiops -b -i test.prm -e results/err.txt
+          fi
           cd -
           touch test/LearningTest/TestKhiops/Standard/Iris/results/time.log
           echo "Check test results"
           cd test/LearningTestTool/py/
-          $ENVBIN/python kht_test.py ../../LearningTest/TestKhiops/Standard/Iris check
-          $ENVBIN/python kht_apply.py ../../LearningTest/TestKhiops/Standard/Iris errors | tee /tmp/khiops-log.txt
-          $ENVBIN/python kht_collect_results.py ../../LearningTest/TestKhiops/Standard/Iris $GITHUB_WORKSPACE/results/khiops --collect-type warnings
+          python kht_test.py ../../LearningTest/TestKhiops/Standard/Iris check
+          python kht_apply.py ../../LearningTest/TestKhiops/Standard/Iris errors | tee /tmp/khiops-log.txt
+          python kht_collect_results.py ../../LearningTest/TestKhiops/Standard/Iris $GITHUB_WORKSPACE/results/khiops --collect-type warnings
           if (grep -q error /tmp/khiops-log.txt); then
             echo "::error::Errors in Khiops run"
             false
