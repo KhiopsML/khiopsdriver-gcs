@@ -78,6 +78,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    permissions:
+      id-token: 'write'
     steps:
       # Fetch Iris test files
       - uses: actions/checkout@v6
