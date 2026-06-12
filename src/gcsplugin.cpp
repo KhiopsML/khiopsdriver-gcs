@@ -510,9 +510,11 @@ int driver_connect() {
   // Initialize variables from environment
   globalBucketName = env::GetEnvVarOrDefault("GCS_BUCKET_NAME", "");
 
+#if defined(__linux__)
   // CA bundle path
   std::string certificate_path;
   if (FindCertificate(&certificate_path) != 0) return kOtherFailure;
+#endif
 
   // Base options
   gc::Options options;
@@ -521,7 +523,9 @@ int driver_connect() {
           gcs::LimitedTimeRetryPolicy(std::chrono::seconds(1)).clone())
       .set<gcs::TransferStallTimeoutOption>(
           std::chrono::seconds(failure_timeout));
-  if (!certificate_path.empty()) options.set<gc::CARootsFilePathOption>(certificate_path);
+#if defined(__linux__)
+  options.set<gc::CARootsFilePathOption>(certificate_path);
+#endif
 
   // Optional project
   std::string project = env::GetEnvVarOrDefault("CLOUD_ML_PROJECT_ID", "");
@@ -556,8 +560,11 @@ int driver_connect() {
         env::GetEnvVarOrDefault("GCP_OAUTH_TOKEN", "");
     if (!gcp_oauth_token_filename.empty()) {
       try {
-        OAuth2TokenManager token_manager(gcp_oauth_token_filename,
-                                         certificate_path);
+#if defined(__linux__)
+        OAuth2TokenManager token_manager(gcp_oauth_token_filename, certificate_path);
+#else
+        OAuth2TokenManager token_manager(gcp_oauth_token_filename);
+#endif
         creds = token_manager.MakeCredentials();
       } catch (std::exception const &ex) {
         getLogger()->error("OAuth2TokenManager init/credentials failed: {}",

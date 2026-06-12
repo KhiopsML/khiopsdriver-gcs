@@ -16,7 +16,7 @@ public:
    *
    * @param token_file_path Path to the JSON file containing OAuth2 tokens
    */
-  explicit OAuth2TokenManager(const std::string &token_file_path, const std::string &certificate_path);
+  explicit OAuth2TokenManager(const std::string &token_file_path, const std::string &certificate_path = "");
 
   /**
    * @brief Get the current access token, refreshing if necessary
