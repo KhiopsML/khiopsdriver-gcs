@@ -1240,7 +1240,7 @@ int driver_fseek(void *stream, long long int offset, int whence) {
 const char *driver_getlasterror() {
   GetLogger()->debug("getlasterror");
   static std::string last_error;
-  last_error = GetLastError();
+  last_error = khiops_driver_common::GetLastError();
   return last_error.empty() ? nullptr : last_error.c_str();
 }
 
