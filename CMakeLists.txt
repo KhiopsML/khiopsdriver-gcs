@@ -133,6 +133,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release
   endif()
 endif()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/shared/import_khiops_driver_common.cmake")
+list(TRANSFORM KhiopsDriverCommonSources PREPEND shared/)
+
 add_library(
   khiopsdriver_file_gcs SHARED
   src/gcsplugin.h
@@ -140,11 +143,9 @@ add_library(
   src/gcsplugin.cpp
   src/utils.h
   src/utils.cpp
-  shared/src/khiops_driver_common/logging.hpp
-  shared/src/khiops_driver_common/logging.cpp
-  shared/src/khiops_driver_common/util.hpp
   src/oauth2_token_manager.h
-  src/oauth2_token_manager.cpp)
+  src/oauth2_token_manager.cpp
+  ${KhiopsDriverCommonSources})
 
 target_include_directories(khiopsdriver_file_gcs PRIVATE shared/src)
 target_link_options(khiopsdriver_file_gcs PRIVATE $<$<CONFIG:RELEASE>:-s>) # stripping
@@ -169,10 +170,6 @@ target_compile_options(
   khiopsdriver_file_gcs
   PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4582;/wd4583;/wd4625;/wd4626;/wd4710;/wd4711;/wd4820;/wd4868;/wd4365;/wd5045>
   PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall;-Wextra;-pedantic>)
-
-target_compile_definitions(
-  khiopsdriver_file_gcs PRIVATE LOGGERNAME="gcsdriver" LOGLEVEL_ENVVARNAME="GCS_DRIVER_LOGLEVEL"
-                                LOGFILE_ENVVARNAME="GCS_DRIVER_LOGFILE")
 
 option(BUILD_TESTS "Build test programs" OFF)
 
