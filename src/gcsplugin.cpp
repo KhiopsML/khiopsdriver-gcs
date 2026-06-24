@@ -641,25 +641,6 @@ long long int driver_getSystemPreferredBufferSize() {
   return std::stoi(configured_preferred_size);
 }
 
-int driver_exist(const char *filename) {
-  if (!(filename)) {
-    GetLogger()->error(ERR_NULL_ARG, __func__);
-    return (kFalse);
-  };
-
-  GetLogger()->debug("exist {}", filename);
-
-  std::string file_uri = filename;
-  GetLogger()->debug("exist file_uri {}", file_uri);
-  GetLogger()->debug("exist last char {}", file_uri.back());
-
-  if (file_uri.back() == '/') {
-    return driver_dirExists(filename);
-  } else {
-    return driver_fileExists(filename);
-  }
-}
-
 int driver_fileExists(const char *sFilePathName) {
   if (!(sFilePathName)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);

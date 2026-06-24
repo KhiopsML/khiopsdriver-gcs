@@ -75,14 +75,6 @@ VISIBLE int driver_isConnected();
 // 1 Mb)
 VISIBLE long long int driver_getSystemPreferredBufferSize();
 
-///////////////////////////////////////////////////////////////////////////////////
-// The following read-only functions are mandatory and they need to be
-// implemented
-
-// Returns 1 if the file exists, 0 otherwise
-// DEPRECATED see driver_FileExists and driver_DirExists
-VISIBLE int driver_exist(const char *filename);
-
 // Returns 1 if the file exists, 0 otherwise
 VISIBLE int driver_fileExists(const char *sFilePathName);
 
