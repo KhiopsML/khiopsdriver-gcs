@@ -375,7 +375,6 @@ int ListObjects(gcs::ListObjectsReader *result, const std::string &bucket_name,
   auto list = client.ListObjects(bucket_name, gcs::MatchGlob{object_name});
   auto first = list.begin();
   if (first == list.end()) {
-    GetLogger()->error("Error while searching object : not found");
     return -2;
   }
   if (!first->ok()) {
