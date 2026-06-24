@@ -40,7 +40,7 @@
                 echo "$CONDA_PREFIX/bin" >> "$GITHUB_PATH"
               fi
           - name: Checkout sources
-            uses: actions/checkout@v4
+            uses: actions/checkout@v7
           - name: Test that the executables are installed
             uses: ./.github/actions/test-khiops-install
           # Retrieve google credentials through WIF

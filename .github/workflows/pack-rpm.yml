@@ -25,7 +25,7 @@ jobs:
           curl -LO "https://github.com/Kitware/CMake/releases/download/v3.26.5/cmake-3.26.5-linux-x86_64.sh"
           sh cmake-3.26.5-linux-x86_64.sh --prefix=/usr/local/ --exclude-subdir
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
      
@@ -54,7 +54,7 @@ jobs:
             mv -v $filename ${filename%.${ARCH}*}.${{ env.VERSION_CODENAME }}.${ARCH}.rpm
           done
       - name: Upload the packages as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # We add a `rpm-` prefix so we can later recover all artifacts with the pattern `rpm-*`
           # Note: The more natural pattern `*-rpm` or `*` does not work
@@ -83,7 +83,7 @@ jobs:
       image: rockylinux:${{ matrix.rocky_version }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set environment variables
         run: |
           source /etc/os-release
@@ -96,7 +96,7 @@ jobs:
           curl -L https://github.com/KhiopsML/khiops/releases/download/11.0.0-rc.2/khiops-core-${{ env.MPI_IMPLEMENTATION }}-11.0.0_rc.2-1.${{ env.VERSION }}.x86_64.rpm --output ./khiops-core.rpm
           yum install -y ./khiops-core*
       - name: Download artifacts (driver package)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rpm-${{ env.ID }}-${{ env.VERSION }}
           path: artifacts
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # See the upload-artifact step in the build job for the explanation of this pattern
           pattern: rpm-*

@@ -61,7 +61,7 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
@@ -113,7 +113,7 @@ jobs:
       #     cmake --build --preset ninja-vcpkg-debug --target khiops-gcs_coverage --target khiops-gcs_cobertura
 
       # - name: Upload coverage results
-      #   uses: actions/upload-artifact@v4
+      #   uses: actions/upload-artifact@v7
       #   if: matrix.os == 'ubuntu-latest'
       #   with:
       #     name: coverage
@@ -153,7 +153,7 @@ jobs:
           paths: ${{ github.workspace }}/build/release/test_results.xml
 
       - name: Upload the packages as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.os }}
           path: |

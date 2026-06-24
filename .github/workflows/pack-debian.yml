@@ -32,7 +32,7 @@ jobs:
           apt-get -y install ninja-build 
           apt-get -y install zip pkg-config # for vcpkkg
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
@@ -58,7 +58,7 @@ jobs:
             mv -v $filename ${filename%_*}-${VERSION_CODENAME}.${filename##*_}
           done
       - name: Upload the packages as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # We add a `deb-` prefix so we can later recover all artifacts with the pattern `deb-*`
           # Note: The more natural pattern `*-deb` or `*` does not work
@@ -98,7 +98,7 @@ jobs:
       id-token: 'write'            
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set environment variables
         run: |
           source /etc/os-release
@@ -117,7 +117,7 @@ jobs:
           dpkg -i ./khiops-core* || true
           apt-get -f install -y
       - name: Download artifacts (driver package)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: deb-${{ env.ID }}-${{ env.VERSION_CODENAME }}-${{ env.ARCH }}
           path: artifacts
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # See the upload-artifact step in the build job for the explanation of this pattern
           pattern: deb-*

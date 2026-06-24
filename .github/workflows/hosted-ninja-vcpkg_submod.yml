@@ -54,7 +54,7 @@ jobs:
       STORAGE_DRIVER_TEST_URL_PREFIX: gs://data-test-khiops-driver-gcs
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload coverage results (unit)
         if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-unit-${{ matrix.os }}
           path: |
@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload coverage results (full)
         if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-full-${{ matrix.os }}
           path: |
@@ -272,7 +272,7 @@ jobs:
           paths: ${{ github.workspace }}/build/release/test_results.xml
   
       - name: Upload the packages as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.os }}
           path: |
