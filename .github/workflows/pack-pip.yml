@@ -6,7 +6,14 @@
 # - (DISABLED FOR NOW) Publish the package to pypi.org
 
 name: pip Packaging
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      python_repository:
+        description: python repository
+        type: choice
+        default: None  # no publishing to any Package Index by default
+        options: [None, testpypi, pypi]
 
 defaults:
   run:
@@ -34,7 +41,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - windows-2025-vs2026
+          - macos-15-intel
+          - macos-15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,6 +64,7 @@ jobs:
 
   publish-testpypi:
     name: Publish to Test.PyPI.org
+    if: github.ref_type == 'tag' && github.repository_owner == 'KhiopsML' && inputs.python_repository == 'testpypi'
     needs: [build-sdist, build-wheel]
     runs-on: ubuntu-latest
     environment:
@@ -71,13 +84,18 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
-  test-pkg-from-testpypi:
-    name: Test package from Test.PyPI.org on ${{ matrix.os }}
-    needs: [publish-testpypi]
+  test-wheel:
+    name: Test wheel on ${{ matrix.os }}
+    needs: [build-sdist, build-wheel]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - windows-2025-vs2026
+          - macos-15-intel
+          - macos-15
     permissions:
       id-token: 'write'
     steps:
@@ -88,6 +106,12 @@ jobs:
             test/LearningTest
             test/LearningTestTool
           sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: pkg-*
+          path: wheelhouse
+          merge-multiple: true
 
       - uses: actions/setup-python@v6
         with:
@@ -110,7 +134,7 @@ jobs:
         run: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple khiops-core
 
       - name: Install driver
-        run: pip install -i https://test.pypi.org/simple/ khiops-driver-gcs
+        run: pip install --find-links=wheelhouse khiops-driver-gcs
 
       - name: Print paths to executables (Linux and macOS)
         if: runner.os == 'Linux' || runner.os == 'macOS'
@@ -221,21 +245,21 @@ jobs:
             false
           fi
 
-  ##### ENABLE THE FOLLOWING WHEN READY TO PUBLISH TO THE OFFICIAL PYPI.ORG REPOSITORY
-  # publish-pypi:
-  #   name: Publish to PyPI.org
-  #   needs: [test-pkg-from-testpypi]
-  #   runs-on: ubuntu-latest
-  #   environment:
-  #     name: pypi
-  #     url: https://pypi.org/p/khiops-driver-gcs
-  #   permissions:
-  #     id-token: write
-  #   steps:
-  #     - uses: actions/download-artifact@v8
-  #       with:
-  #         pattern: cibw-*
-  #         path: dist
-  #         merge-multiple: true
+  publish-pypi:
+    name: Publish to PyPI.org
+    if: github.ref_type == 'tag' && github.repository_owner == 'KhiopsML' && inputs.python_repository == 'pypi'
+    needs: [test-wheel]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/khiops-driver-gcs
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: pkg-*
+          path: dist
+          merge-multiple: true
 
-  #     - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1
