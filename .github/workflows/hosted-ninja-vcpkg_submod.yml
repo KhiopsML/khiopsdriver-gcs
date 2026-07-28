@@ -269,15 +269,15 @@ jobs:
         if: always()
         uses: test-summary/action@v2
         with:
-          paths: ${{ github.workspace }}/build/release/test_results.xml
+          paths: ${{ github.workspace }}/build/ninja-rel/test_results.xml
   
       - name: Upload the packages as artifacts
         uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.os }}
           path: |
-            build/release/lib/*.dylib
-            build/release/lib/*.so
-            build/release/bin/*.dll
-            build/release/bin/*.lib
+            build/ninja-rel/lib/*.dylib
+            build/ninja-rel/lib/*.so
+            build/ninja-rel/bin/*.dll
+            build/ninja-rel/bin/*.lib
           if-no-files-found: ignore
