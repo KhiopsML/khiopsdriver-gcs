@@ -2,22 +2,30 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "ninja-dbg",
+      "hidden": true,
+      "name": "ninja",
       "generator": "Ninja",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      },
-      "binaryDir": "${sourceDir}/build/debug",
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
     {
+      "name": "ninja-dbg",
+      "inherits": [
+        "ninja"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
       "name": "ninja-rel",
-      "generator": "Ninja",
+      "inherits": [
+        "ninja"
+      ],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
-      },
-      "binaryDir": "${sourceDir}/build/release",
-      "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+      }
     }
   ],
   "buildPresets": [

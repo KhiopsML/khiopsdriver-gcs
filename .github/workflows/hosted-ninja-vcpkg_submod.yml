@@ -99,7 +99,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         continue-on-error: true
         run: |
-          find build/debug -name '*.gcda' -delete
+          find build/ninja-dbg -name '*.gcda' -delete
           export GCOV=gcov
           cmake --build --preset ninja-dbg --target khiops-gcs_coverage_unit --target khiops-gcs_cobertura_unit --target khiops-gcs_coverage_full --target khiops-gcs_cobertura_full
 
@@ -112,11 +112,11 @@ jobs:
           unit_ready=false
           full_ready=false
 
-          if [[ -f build/debug/coverage-unit/index.html && -f build/debug/coverage-unit.xml ]]; then
+          if [[ -f build/ninja-dbg/coverage-unit/index.html && -f build/ninja-dbg/coverage-unit.xml ]]; then
             unit_ready=true
           fi
 
-          if [[ -f build/debug/coverage-full/index.html && -f build/debug/coverage-full.xml ]]; then
+          if [[ -f build/ninja-dbg/coverage-full/index.html && -f build/ninja-dbg/coverage-full.xml ]]; then
             full_ready=true
           fi
 
@@ -128,12 +128,12 @@ jobs:
       - name: Coverage unit upload skipped
         if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready != 'true'
         run: |
-          echo "Skipping unit coverage upload: expected files not generated (build/debug/coverage-unit/index.html, build/debug/coverage-unit.xml)."
+          echo "Skipping unit coverage upload: expected files not generated (build/ninja-dbg/coverage-unit/index.html, build/ninja-dbg/coverage-unit.xml)."
 
       - name: Coverage full upload skipped
         if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.full_ready != 'true'
         run: |
-          echo "Skipping full coverage upload: expected files not generated (build/debug/coverage-full/index.html, build/debug/coverage-full.xml)."
+          echo "Skipping full coverage upload: expected files not generated (build/ninja-dbg/coverage-full/index.html, build/ninja-dbg/coverage-full.xml)."
 
       - name: Upload coverage results (unit)
         if: matrix.os == 'ubuntu-latest' && steps.coverage_probe.outputs.unit_ready == 'true'
@@ -141,8 +141,8 @@ jobs:
         with:
           name: coverage-unit-${{ matrix.os }}
           path: |
-            build/debug/coverage-unit/**
-            build/debug/coverage-unit.xml
+            build/ninja-dbg/coverage-unit/**
+            build/ninja-dbg/coverage-unit.xml
           if-no-files-found: error
 
       - name: Upload coverage results (full)
@@ -151,8 +151,8 @@ jobs:
         with:
           name: coverage-full-${{ matrix.os }}
           path: |
-            build/debug/coverage-full/**
-            build/debug/coverage-full.xml
+            build/ninja-dbg/coverage-full/**
+            build/ninja-dbg/coverage-full.xml
           if-no-files-found: error
 
       - name: Coverage summary
@@ -177,15 +177,15 @@ jobs:
             echo ""
             echo "### Report Paths"
             if [[ "${unit_status}" == "true" ]]; then
-              echo "- Unit HTML: build/debug/coverage-unit/index.html"
-              echo "- Unit XML: build/debug/coverage-unit.xml"
+              echo "- Unit HTML: build/ninja-dbg/coverage-unit/index.html"
+              echo "- Unit XML: build/ninja-dbg/coverage-unit.xml"
             else
               echo "- Unit report not generated"
             fi
 
             if [[ "${full_status}" == "true" ]]; then
-              echo "- Full HTML: build/debug/coverage-full/index.html"
-              echo "- Full XML: build/debug/coverage-full.xml"
+              echo "- Full HTML: build/ninja-dbg/coverage-full/index.html"
+              echo "- Full XML: build/ninja-dbg/coverage-full.xml"
             else
               echo "- Full report not generated"
             fi
@@ -218,10 +218,10 @@ jobs:
               `- coverage-full-${{ matrix.os }}`,
               '',
               unitReady
-                ? '- Unit report: `build/debug/coverage-unit/index.html` and `build/debug/coverage-unit.xml`'
+                ? '- Unit report: `build/ninja-dbg/coverage-unit/index.html` and `build/ninja-dbg/coverage-unit.xml`'
                 : '- Unit report skipped or not generated.',
               fullReady
-                ? '- Full report: `build/debug/coverage-full/index.html` and `build/debug/coverage-full.xml`'
+                ? '- Full report: `build/ninja-dbg/coverage-full/index.html` and `build/ninja-dbg/coverage-full.xml`'
                 : '- Full report skipped or not generated.'
             ];
 
