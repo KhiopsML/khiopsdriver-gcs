@@ -62,7 +62,7 @@ std::string globalBucketName;
 HandleContainer active_handles;
 
 // Error strings
-// static const char *ERR_NOT_CONNECTED = "Error: Driver is not connected.";
+static const char *ERR_NOT_CONNECTED = "Driver is not connected";
 static const char *ERR_NULL_ARG = "Error passing null pointer to {}";
 static const char *ERR_URL_PARSING = "Error parsing URL";
 
@@ -502,6 +502,11 @@ const char *driver_getScheme() { return driver_scheme; }
 int driver_isReadOnly() { return kFalse; }
 
 int driver_connect() {
+  if (bIsConnected) {
+    GetLogger()->error("Driver is already connected");
+    return kOtherFailure;
+  }
+
   GetLogger()->debug("Connect driver {} version {}", driver_name, version);
 
   // Initialize CURL globally
@@ -641,6 +646,11 @@ long long int driver_getSystemPreferredBufferSize() {
 }
 
 int driver_fileExists(const char *sFilePathName) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kFalse;
+  }
+
   if (!(sFilePathName)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kFalse);
@@ -668,6 +678,11 @@ int driver_fileExists(const char *sFilePathName) {
 }
 
 int driver_dirExists(const char *sFilePathName) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kFalse;
+  }
+
   if (!(sFilePathName)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kFalse);
@@ -843,6 +858,11 @@ int GetFileSize(long long *sizeresult, const std::string &bucket_name,
 }
 
 long long int driver_getFileSize(const char *filename) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return -1;
+  }
+
   if (!(filename)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return -1;
@@ -1020,7 +1040,10 @@ int RegisterWriterForAppend(Handle **result, std::string &&bucket,
 }
 
 void *driver_fopen(const char *filename, char mode) {
-  assert(driver_isConnected());
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return nullptr;
+  }
 
   if (!(filename)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
@@ -1116,7 +1139,10 @@ void *driver_fopen(const char *filename, char mode) {
 }
 
 int driver_fclose(void *stream) {
-  assert(driver_isConnected());
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kFailure;
+  }
 
   if (!stream) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
@@ -1149,6 +1175,11 @@ int driver_fclose(void *stream) {
 }
 
 int driver_fseek(void *stream, long long int offset, int whence) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return -1;
+  }
+
   constexpr long long max_val = std::numeric_limits<long long>::max();
 
   if (!(stream)) {
@@ -1225,6 +1256,11 @@ const char *driver_getlasterror() {
 }
 
 long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return -1;
+  }
+
   if (!(stream)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (-1);
@@ -1291,6 +1327,11 @@ long long int driver_fread(void *ptr, size_t size, size_t count, void *stream) {
 
 long long int driver_fwrite(const void *ptr, size_t size, size_t count,
                             void *stream) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return -1;
+  }
+
   if (!(stream)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (-1);
@@ -1348,6 +1389,11 @@ long long int driver_fwrite(const void *ptr, size_t size, size_t count,
 }
 
 int driver_fflush(void *stream) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return -1;
+  }
+
   if (!(stream)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (-1);
@@ -1376,13 +1422,17 @@ int driver_fflush(void *stream) {
 }
 
 int driver_remove(const char *filename) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!(filename)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kOtherFailure);
   };
 
   GetLogger()->debug("remove {}", filename);
-  assert(driver_isConnected());
 
   const std::string file_to_remove(filename);
   if (file_to_remove.find('*') != std::string::npos) {
@@ -1428,27 +1478,33 @@ int driver_remove(const char *filename) {
 }
 
 int driver_rmdir(const char *filename) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!(filename)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kOtherFailure);
   };
 
   GetLogger()->debug("rmdir {}", filename);
-
-  assert(driver_isConnected());
   GetLogger()->debug("Remove dir (does nothing...)");
   return kOtherSuccess;
 }
 
 int driver_mkdir(const char *filename) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!(filename)) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kOtherFailure);
   };
 
   GetLogger()->debug("mkdir {}", filename);
-
-  assert(driver_isConnected());
   return kOtherSuccess;
 }
 
@@ -1460,14 +1516,16 @@ long long int driver_diskFreeSpace(const char *filename) {
 
   GetLogger()->debug("diskFreeSpace {}", filename);
 
-  assert(driver_isConnected());
   constexpr long long free_space{5LL * 1024LL * 1024LL * 1024LL * 1024LL};
   return free_space;
 }
 
 int driver_copyToLocal(const char *sSourceFilePathName,
                        const char *sDestFilePathName) {
-  assert(driver_isConnected());
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
 
   if (!sSourceFilePathName || !sDestFilePathName) {
     GetLogger()->error("Error passing null pointer to driver_copyToLocal");
@@ -1603,6 +1661,11 @@ int driver_copyToLocal(const char *sSourceFilePathName,
 
 int driver_copyFromLocal(const char *sSourceFilePathName,
                          const char *sDestFilePathName) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!sSourceFilePathName || !sDestFilePathName) {
     GetLogger()->error(
         "Error passing null pointers as arguments to copyFromLocal");
@@ -1611,8 +1674,6 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
 
   GetLogger()->debug("copyFromLocal {} {}", sSourceFilePathName,
                      sDestFilePathName);
-
-  assert(driver_isConnected());
 
   ParseUriResult names;
   if (GetBucketAndObjectNames(&names, sDestFilePathName)) {
@@ -1674,6 +1735,11 @@ int driver_copyFromLocal(const char *sSourceFilePathName,
 
 int driver_concat(const char *sDestFilePathName,
                   const char **sSourceFilePathNames, size_t nSourceFileCount) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!sDestFilePathName || !sSourceFilePathNames) {
     GetLogger()->error(
         "Error passing null pointers as arguments to driver_concat");
@@ -1688,8 +1754,6 @@ int driver_concat(const char *sDestFilePathName,
 
   GetLogger()->debug("driver_concat {} with {} sources:", sDestFilePathName,
                      nSourceFileCount);
-
-  assert(driver_isConnected());
 
   // Parse destination to get bucket name
   ParseUriResult names;
@@ -1858,6 +1922,11 @@ int driver_concat(const char *sDestFilePathName,
 int driver_composeMultifile(const char *sDestFilePathName,
                             const char **sSourceFilePathNames,
                             size_t nSourceFileCount) {
+  if (!bIsConnected) {
+    GetLogger()->error(ERR_NOT_CONNECTED);
+    return kOtherFailure;
+  }
+
   if (!sDestFilePathName || !sSourceFilePathNames) {
     GetLogger()->error(
         "Error passing null pointers as arguments to driver_composeMultifile");
@@ -1872,8 +1941,6 @@ int driver_composeMultifile(const char *sDestFilePathName,
 
   GetLogger()->debug("driver_composeMultifile {} with {} sources:",
                      sDestFilePathName, nSourceFileCount);
-
-  assert(driver_isConnected());
 
   // Parse and validate the globbing pattern
   auto maybe_pattern = ParseGlobbingPattern(sDestFilePathName);
