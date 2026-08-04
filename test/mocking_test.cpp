@@ -279,7 +279,15 @@ TEST_F(GCSDriverTestFixture, FileExists) {
 
 TEST_F(GCSDriverTestFixture, DirExists) {
   ASSERT_EQ(driver_dirExists(nullptr), kFalse);
-  ASSERT_EQ(driver_dirExists("any_name"), kTrue);
+  ASSERT_EQ(driver_dirExists("any_name"), kFalse);
+
+  ASSERT_EQ(driver_dirExists("gs://mock_bucket/dir/"), kTrue);
+
+  EXPECT_CALL(*mock_client, GetObjectMetadata)
+      .WillOnce(Return(gc::Status(gc::StatusCode::kNotFound, "not found")));
+  EXPECT_CALL(*mock_client, ListObjects)
+      .WillOnce(Return<LOReturnType>(gcs::internal::ListObjectsResponse{}));
+  ASSERT_EQ(driver_dirExists("gs://mock_bucket/missing_dir/"), kFalse);
 }
 
 // lambda to simulate the answer to a reading request

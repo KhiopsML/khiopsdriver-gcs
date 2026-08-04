@@ -386,6 +386,18 @@ int ListObjects(gcs::ListObjectsReader *result, const std::string &bucket_name,
   return 0;
 }
 
+std::string NormalizeDirectoryObjectPath(std::string object_path) {
+  if (object_path.empty() || object_path.back() != '/') {
+    object_path.push_back('/');
+  }
+  return object_path;
+}
+
+bool HasDirectoryTrailingSlash(const char *sFilePathName) {
+  return sFilePathName != nullptr && std::strlen(sFilePathName) > 0 &&
+         sFilePathName[std::strlen(sFilePathName) - 1] == '/';
+}
+
 // pre condition: stream is of a writing type. do not call otherwise.
 int CloseWriterStream(Handle &stream) {
   gc::StatusOr<gcs::ObjectMetadata> maybe_meta;
@@ -687,8 +699,46 @@ int driver_dirExists(const char *sFilePathName) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kFalse);
   };
+  if (!HasDirectoryTrailingSlash(sFilePathName)) {
+    GetLogger()->error("Directory URL must end with '/'");
+    return kFalse;
+  }
 
   GetLogger()->debug("dirExist {}", sFilePathName);
+
+  ParseUriResult parsedUri;
+  if (GetBucketAndObjectNames(&parsedUri, sFilePathName)) {
+    GetLogger()->error(ERR_URL_PARSING);
+    return kFalse;
+  }
+
+  const std::string dir_prefix = NormalizeDirectoryObjectPath(parsedUri.object);
+  auto maybe_dir = client.GetObjectMetadata(parsedUri.bucket, dir_prefix);
+  if (maybe_dir) {
+    return kTrue;
+  }
+  if (maybe_dir.status().code() != gc::StatusCode::kNotFound) {
+    GetLogger()->debug("Slash directory object lookup failed: {}",
+                       maybe_dir.status().message());
+  }
+
+  auto objects =
+      client.ListObjects(parsedUri.bucket, gcs::Prefix(dir_prefix),
+                         gcs::MaxResults(1));
+
+  auto it = objects.begin();
+  if (it == objects.end()) {
+    return kFalse;
+  }
+
+  if (!(*it)) {
+    if (it->status().code() == gc::StatusCode::kNotFound) {
+      return kFalse;
+    }
+    GetLogger()->error("Error checking if directory exists");
+    return kFalse;
+  }
+
   return kTrue;
 }
 
@@ -1487,10 +1537,44 @@ int driver_rmdir(const char *filename) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kOtherFailure);
   };
+  if (!HasDirectoryTrailingSlash(filename)) {
+    GetLogger()->error("Directory URL must end with '/'");
+    return kOtherFailure;
+  }
 
   GetLogger()->debug("rmdir {}", filename);
-  GetLogger()->debug("Remove dir (does nothing...)");
-  return kOtherSuccess;
+
+  ParseUriResult names;
+  if (GetBucketAndObjectNames(&names, filename)) {
+    GetLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
+
+  const std::string dir_prefix = NormalizeDirectoryObjectPath(names.object);
+  auto objects = client.ListObjects(names.bucket, gcs::Prefix(dir_prefix));
+
+  bool failure_detected = false;
+
+  for (auto it = objects.begin(); it != objects.end(); ++it) {
+    if (!(*it)) {
+      if (it->status().code() == gc::StatusCode::kNotFound) {
+        break;
+      }
+      GetLogger()->error("Error iterating objects to delete in directory");
+      failure_detected = true;
+      continue;
+    }
+
+    const std::string &object_name = (*it)->name();
+    const auto status = client.DeleteObject(names.bucket, object_name);
+    if (!status.ok() && status.code() != gc::StatusCode::kNotFound) {
+      GetLogger()->error("Error deleting object '{}' while removing directory",
+                         object_name);
+      failure_detected = true;
+    }
+  }
+
+  return failure_detected ? kOtherFailure : kOtherSuccess;
 }
 
 int driver_mkdir(const char *filename) {
@@ -1503,8 +1587,33 @@ int driver_mkdir(const char *filename) {
     GetLogger()->error(ERR_NULL_ARG, __func__);
     return (kOtherFailure);
   };
+  if (!HasDirectoryTrailingSlash(filename)) {
+    GetLogger()->error("Directory URL must end with '/'");
+    return kOtherFailure;
+  }
 
   GetLogger()->debug("mkdir {}", filename);
+
+  ParseUriResult names;
+  if (GetBucketAndObjectNames(&names, filename)) {
+    GetLogger()->error(ERR_URL_PARSING);
+    return kOtherFailure;
+  }
+
+  const std::string dir_object_name = NormalizeDirectoryObjectPath(names.object);
+
+  auto writer = client.WriteObject(names.bucket, dir_object_name);
+  if (!writer || !writer.IsOpen()) {
+    GetLogger()->error("Failed to create slash directory object");
+    return kOtherFailure;
+  }
+
+  writer.Close();
+  if (!writer.metadata()) {
+    GetLogger()->error("Failed to finalize slash directory object");
+    return kOtherFailure;
+  }
+
   return kOtherSuccess;
 }
 
