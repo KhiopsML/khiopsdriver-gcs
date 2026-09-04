@@ -1,4 +1,6 @@
-# Khiops driver for Google Cloud Storage aka GCS
+# [DEPRECATED] Khiops driver for Google Cloud Storage aka GCS
+
+__This repo is deprecated: see the new repo unifying all Khiops cloud storage drivers at: <https://github.com/KhiopsML/khiops-drivers>.__
 
 This repository hosts the source code for the Khiops filesystem driver enabling transparent manipulation for data stored in GCS buckets.
 
